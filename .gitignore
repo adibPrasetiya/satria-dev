@@ -1,0 +1,7 @@
+# Rahasia tingkat root
+/API_KEY
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log

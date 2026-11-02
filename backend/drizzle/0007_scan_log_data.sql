@@ -1,0 +1,1 @@
+ALTER TABLE `scan_logs` ADD `data` json;

@@ -1,0 +1,46 @@
+{
+  "name": "satya-backend",
+  "version": "0.1.0",
+  "description": "API SATYA — Sistem Asesmen Kelaikan Keamanan Aplikasi (Per-BSSN No. 4 Th. 2021)",
+  "private": true,
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "test": "node --test test/**/*.test.js",
+    "dev": "node --watch-path=src --watch-path=.env src/main.js serve",
+    "start": "node src/main.js serve",
+    "db:create": "node src/db/create.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node src/main.js migrate",
+    "db:studio": "drizzle-kit studio",
+    "admin:create": "node src/main.js create-admin",
+    "catalog:seed": "node src/main.js seed-catalog",
+    "scan-target:seed": "node scripts/seed-scan-target.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "2.8.6",
+    "dotenv": "18.0.6",
+    "drizzle-orm": "0.45.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "8.7.1",
+    "helmet": "8.3.0",
+    "joi": "^18.2.9",
+    "js-yaml": "^5.5.0",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "3.24.5",
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.11"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.0"
+    }
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "scan_id": "scan-contoh-1",
+  "aplikasi_id": "app-contoh-1",
+  "base_url": "http://127.0.0.1:8081",
+  "titik_uji": {
+    "registrasi": {
+      "tersedia": true,
+      "url": "http://127.0.0.1:8081/auth/register",
+      "metode_http": "POST"
+    }
+  },
+  "form": {
+    "registrasi": {
+      "field_dasar": {
+        "nama": "Uji Satya",
+        "nrp": "199001011234567890",
+        "satuan_id": 1,
+        "email": "uji@contoh.go.id"
+      },
+      "field_sandi": "password",
+      "field_unik": ["email", "nrp"],
+      "tipe_body": "json",
+      "status_sukses": [200, 201, 202]
+    }
+  },
+  "akun_uji": [],
+  "metode": [
+    {
+      "id": "AUTH-1.3-T01",
+      "check_id": "auth.password_policy.min_length",
+      "titik_uji": "registrasi",
+      "nama": "Panjang minimum kata sandi saat registrasi",
+      "kriteria_lulus": "Kata sandi di bawah panjang minimum ditolak.",
+      "parameter": { "panjang_minimum": 8, "wajib": ["huruf_besar", "huruf_kecil", "angka", "simbol"] }
+    },
+    {
+      "id": "AUTH-1.3-T02",
+      "check_id": "auth.password_policy.complexity",
+      "titik_uji": "registrasi",
+      "nama": "Kombinasi jenis karakter saat registrasi",
+      "kriteria_lulus": "Kata sandi tanpa kombinasi yang disyaratkan ditolak.",
+      "parameter": { "panjang_minimum": 8, "wajib": ["huruf_besar", "huruf_kecil", "angka", "simbol"] }
+    }
+  ]
+}

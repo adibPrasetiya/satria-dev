@@ -1,0 +1,87 @@
+Autentikasi
+1.1.      menggunakan manajemen kata sandi untuk proses autentikasi
+1.2.      menerapkan verifikasi kata sandi pada sisi server
+1.3.      mengatur jumlah karakter, kombinasi jenis karakter, dan masa berlaku dari kata sandi
+1.4.      mengatur jumlah maksimum kesalahan dalam pemasukan kata sandi
+1.5.      mengatur mekanisme pemulihan kata sandi
+1.6.      menjaga kerahasiaan kata sandi yang disimpan melalui mekanisme kriptografi
+1.7.      menggunakan jalur komunikasi yang diamankan untuk proses autentikasi
+Manajemen Sesi
+2.1.      menggunakan pengendali sesi untuk proses manajemen sesi
+2.2.      menggunakan pengendali sesi yang disediakan oleh kerangka kerja aplikasi
+2.3.      mengatur pembuatan dan keacakan token sesi yang dihasilkan oleh pengendali sesi
+2.4.      mengatur kondisi dan jangka waktu habis sesi
+2.5.      validasi dan pencantuman session id
+2.6.      pelindungan terhadap lokasi dan pengiriman token untuk sesi terautentikasi
+2.7.      pelindungan terhadap duplikasi dan mekanisme persetujuan pengguna
+Kontrol Akses
+3.1.      menetapkan otorisasi pengguna untuk membatasi kontrol akses
+3.2.      mengatur peringatan terhadap bahaya serangan otomatis apabila terjadi akses yang bersamaan atau akses yang terus-menerus pada fungsi
+3.3.      mengatur antarmuka pada sisi administrator
+3.4.      mengatur verifikasi kebenaran token ketika mengakses data dan informasi yang dikecualikan
+Validasi Input
+4.1.      menerapkan fungsi validasi input pada sisi server
+4.2.      menerapkan mekanisme penolakan input jika terjadi kesalahan validasi
+4.3.      memastikan runtime environment aplikasi tidak rentan terhadap serangan validasi input
+4.4.      melakukan validasi positif pada seluruh input
+4.5.      melakukan filter terhadap data yang tidak dipercaya
+4.6.      menggunakan fitur kode dinamis
+4.7.      melakukan pelindungan terhadap akses yang mengandung konten skrip
+4.8.      melakukan pelindungan dari serangan injeksi basis data
+Kriptografi pada verifikasi statis
+5.1.      menggunakan algoritma kriptografi, modul kriptografi, protokol kriptografi, dan kunci kriptografi sesuai dengan ketentuan peraturan perundang-undangan 
+5.2.      melakukan autentikasi data yang dienkripsi
+5.3.      menerapkan manajemen kunci kriptografi
+5.4.      membuat angka acak yang menggunakan generator angka acak kriptografi
+Penanganan Error dan Pencatatan Log
+6.1.      mengatur konten pesan yang ditampilkan ketika terjadi kesalahan
+6.2.      menggunakan metode penanganan eror untuk mencegah kesalahan terprediksi dan tidak terduga serta menangani seluruh pengecualian yang tidak ditangani
+6.3.      tidak mencantumkan informasi yang dikecualikan dalam pencatatan log
+6.4.      mengatur cakupan log yang dicatat untuk mendukung upaya penyelidikan ketika terjadi insiden
+6.5.      mengatur pelindungan log aplikasi dari akses dan modifikasi yang tidak sah
+6.6.      melakukan enkripsi pada data yang disimpan untuk mencegah injeksi log
+6.7.      melakukan sinkronisasi sumber waktu sesuai dengan zona waktu dan waktu yang benar
+Proteksi Data
+7.1.      melakukan identifikasi dan penyimpanan salinan informasi yang dikecualikan
+7.2.      melakukan pelindungan dari akses yang tidak sah terhadap informasi yang dikecualikan yang disimpan sementara dalam aplikasi
+7.3.      melakukan pertukaran, penghapusan, dan audit informasi yang dikecualikan
+7.4.      melakukan penentuan jumlah parameter
+7.5.      memastikan data disimpan dengan aman
+7.6.      menentukan metode untuk menghapus dan mengekspor data sesuai permintaan pengguna
+7.7.      membersihkan memori setelah tidak diperlukan
+Keamanan Komunikasi
+8.1.     menggunakan komunikasi terenkripsi
+8.2.     mengatur koneksi masuk dan keluar yang aman dan terenkripsi dari sisi pengguna
+8.3.     mengatur jenis algoritma yang digunakan dan alat pengujiannya
+8.4.     mengatur aktivasi dan konfigurasi sertifikat elektronik yang diterbitkan oleh penyelenggara sertifikasi elektronik
+9.1.     menggunakan analisis kode dalam kontrol kode berbahaya
+9.2.     memastikan kode sumber aplikasi dan pustaka tidak mengandung kode berbahaya dan fungsionalitas lain yang tidak diinginkan
+9.3.     mengatur izin terkait fitur atau sensor terkait privasi
+9.4.     mengatur pelindungan integritas
+9.5.     mengatur mekanisme fitur pembaruan
+Logika Bisnis
+10.1.   memproses alur logika bisnis dalam urutan langkah dan waktu yang realistis
+10.2.   memastikan logika bisnis memiliki batasan dan validasi
+10.3.   memonitor aktivitas yang tidak biasa
+10.4.   membantu dalam kontrol antiotomatisasi
+10.5.	memberikan peringatan ketika terjadi serangan otomatis atau aktivitas yang tidak biasa
+File
+11.1.   mengatur jumlah file untuk setiap pengguna dan kuota ukuran file yang diunggah
+11.2.   melakukan validasi file sesuai dengan tipe konten yang diharapkan
+11.3.   melakukan pelindungan terhadap metadata input dan metadata file
+11.4.   melakukan pemindaian file yang diperoleh dari sumber yang tidak dipercaya
+11.5.   melakukan konfigurasi server untuk mengunduh file sesuai ekstensi yang ditentukan
+Keamanan API dan Web Service
+12.1.   melakukan konfigurasi layanan web
+12.2.   memverifikasi uniform resource identifier API tidak menampilkan informasi yang berpotensi sebagai celah keamanan
+12.3.   membuat keputusan otorisasi
+12.4.   menampilkan metode RESTful hypertext transfer protocol apabila input pengguna dinyatakan valid
+12.5.   menggunakan validasi skema dan verifikasi sebelum menerima input
+12.6.   menggunakan metode pelindungan layanan berbasis web
+12.7.   menerapkan kontrol antiotomatisasi
+Konfigurasi
+13.1.   mengonfigurasi server sesuai rekomendasi server aplikasi dan kerangka kerja aplikasi yang digunakan
+13.2.   mendokumentasi, menyalin konfigurasi, dan semua dependensi
+13.3.   menghapus fitur, dokumentasi, sampel, dan konfigurasi yang tidak diperlukan
+13.4.   memvalidasi integritas aset jika aset aplikasi diakses secara eksternal
+13.5.   menggunakan respons aplikasi dan konten yang aman

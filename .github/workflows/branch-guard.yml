@@ -1,0 +1,21 @@
+name: Branch source guard
+on:
+  pull_request:
+    branches: [main, dev]
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce source branch
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          echo "PR: $HEAD -> $BASE"
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "dev" ]; then
+            echo "::error::PR ke main hanya boleh dari 'dev' (sekarang dari '$HEAD')"; exit 1
+          fi
+          if [ "$BASE" = "dev" ] && [[ "$HEAD" != feature/* ]]; then
+            echo "::error::PR ke dev hanya boleh dari 'feature/*' (sekarang dari '$HEAD')"; exit 1
+          fi
+          echo "OK"

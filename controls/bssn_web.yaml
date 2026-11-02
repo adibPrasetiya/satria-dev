@@ -1,0 +1,1700 @@
+# =============================================================================
+# Katalog Kontrol Keamanan Aplikasi Berbasis Web
+# Sumber: Peraturan BSSN Nomor 4 Tahun 2021 (Standar Teknis Keamanan Aplikasi
+#         Berbasis Web) — uraian kontrol disalin dari raw.text
+#
+# Hierarki:
+#   fungsi_keamanan  (mis. Autentikasi)
+#     └── kontrol            (butir kontrol, mis. 1.3)
+#           └── metode_pengujian  (bisa > 1: registrasi, reset password, dst.)
+#
+# Ruang lingkup: penilaian pada aplikasi yang BERJALAN (black-box). Kontrol
+# yang tidak dapat dibuktikan dari luar diberi verifiabilitas "manual" dan
+# metode pengujiannya berupa verifikasi asesor.
+#
+# Metode pengujian hanya mendefinisikan APA yang diperiksa dan kriteria
+# lulusnya. Pengujian aktif (profil: intrusif) didelegasikan ke aturan scanner
+# standar (ZAP/Nuclei) dan hanya dijalankan pada target berizin.
+#
+# Nilai enum:
+#   verifiabilitas : otomatis | sebagian | manual
+#   jenis          : otomatis | semi_otomatis | manual
+#   engine         : custom | zap | nuclei | sslyze | playwright | manual
+#   profil         : aman | intrusif   (intrusif butuh persetujuan khusus)
+#   severity       : kritis | tinggi | sedang | rendah | info
+#   agregasi       : semua_lulus  -> kontrol LULUS jika semua metode lulus
+#                    minimal_satu -> kontrol LULUS jika minimal 1 metode lulus
+#   status hasil   : lulus | gagal | tidak_berlaku | tidak_dapat_diverifikasi
+# =============================================================================
+
+schema_version: 1
+
+sumber:
+  peraturan: "Peraturan Badan Siber dan Sandi Negara Nomor 4 Tahun 2021"
+  bagian: "Standar Teknis Keamanan Aplikasi Berbasis Web"
+  berkas_mentah: "raw.text"
+  tanggal_disalin: "2026-10-19"
+  catatan:
+    - "Judul fungsi 9 tidak tercantum di raw.text; diasumsikan 'Pengendalian Kode Berbahaya' — verifikasi dengan lampiran asli."
+
+# Nilai bawaan setiap metode_pengujian; cukup tulis field yang berbeda.
+default_metode:
+  jenis: otomatis
+  engine: custom
+  butuh_autentikasi: false
+  profil: aman
+  bukti: [ request_response ]
+
+# Titik uji standar; saat onboarding aset operator memetakan URL nyatanya.
+titik_uji:
+  - { id: registrasi,          nama: "Form registrasi / pendaftaran akun" }
+  - { id: login,               nama: "Form login" }
+  - { id: reset_password,      nama: "Alur lupa / reset kata sandi" }
+  - { id: ubah_password,       nama: "Form ubah kata sandi" }
+  - { id: logout,              nama: "Fungsi logout" }
+  - { id: area_terautentikasi, nama: "Halaman/fungsi setelah login" }
+  - { id: admin,               nama: "Antarmuka administrator" }
+  - { id: form_input,          nama: "Form & parameter input umum" }
+  - { id: unggah_file,         nama: "Fitur unggah file" }
+  - { id: unduh_file,          nama: "Fitur unduh file" }
+  - { id: api,                 nama: "Endpoint API / web service" }
+  - { id: global,              nama: "Seluruh aplikasi (header, TLS, dsb.)" }
+  - { id: dokumen,             nama: "Dokumen kebijakan / konfigurasi (asesor)" }
+
+fungsi_keamanan:
+
+  # ===========================================================================
+  - id: AUTH
+    nomor: 1
+    nama: Autentikasi
+    kontrol:
+
+      - id: AUTH-1.1
+        nomor_referensi: "1.1"
+        uraian: "menggunakan manajemen kata sandi untuk proses autentikasi"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V2" ]
+        metode_pengujian:
+          - id: AUTH-1.1-T01
+            nama: Mekanisme autentikasi berbasis kata sandi tersedia pada area terbatas
+            titik_uji: login
+            check_id: auth.login_required
+            kriteria_lulus: Halaman/fungsi terbatas tidak dapat diakses tanpa autentikasi.
+          - id: AUTH-1.1-T02
+            nama: Field kata sandi tersamarkan
+            titik_uji: login
+            check_id: auth.password_field_masked
+            kriteria_lulus: Input kata sandi bertipe password di login, registrasi, dan ubah password.
+
+      - id: AUTH-1.2
+        nomor_referensi: "1.2"
+        uraian: "menerapkan verifikasi kata sandi pada sisi server"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V2.1", "CWE-602" ]
+        metode_pengujian:
+          - id: AUTH-1.2-T01
+            nama: Validasi kata sandi tetap berlaku tanpa validasi sisi klien (login)
+            titik_uji: login
+            check_id: auth.server_side_validation
+            efek_samping: Melakukan satu percobaan login dengan kredensial acak.
+            kriteria_lulus: Request langsung ke endpoint (tanpa JavaScript) tetap divalidasi server.
+          - id: AUTH-1.2-T02
+            nama: Validasi kebijakan kata sandi di server (registrasi)
+            titik_uji: registrasi
+            check_id: auth.password_policy.server_side
+            efek_samping: Mengirim registrasi berkata sandi lemah; akun uji terbuat hanya bila aplikasi rentan.
+            kriteria_lulus: Kata sandi lemah yang dikirim langsung ke endpoint ditolak server.
+
+      - id: AUTH-1.3
+        nomor_referensi: "1.3"
+        uraian: "mengatur jumlah karakter, kombinasi jenis karakter, dan masa berlaku dari kata sandi"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V2.1", "CWE-521" ]
+        parameter:
+          panjang_minimum: 8                     # TODO: sesuaikan kebijakan instansi
+          wajib: [ huruf_besar, huruf_kecil, angka, simbol ]
+        metode_pengujian:
+          - id: AUTH-1.3-T01
+            nama: Panjang minimum kata sandi saat registrasi
+            titik_uji: registrasi
+            check_id: auth.password_policy.min_length
+            efek_samping: Mengirim registrasi berkata sandi terlalu pendek; akun uji terbuat hanya bila aplikasi rentan.
+            kriteria_lulus: Kata sandi di bawah panjang minimum ditolak.
+            bukti: [ request_response, screenshot ]
+          - id: AUTH-1.3-T02
+            nama: Kombinasi jenis karakter saat registrasi
+            titik_uji: registrasi
+            check_id: auth.password_policy.complexity
+            efek_samping: Mengirim registrasi tanpa kombinasi karakter; akun uji terbuat hanya bila aplikasi rentan.
+            kriteria_lulus: Kata sandi tanpa kombinasi yang disyaratkan ditolak.
+            bukti: [ request_response, screenshot ]
+          - id: AUTH-1.3-T03
+            nama: Kebijakan kata sandi saat reset password
+            titik_uji: reset_password
+            jenis: semi_otomatis
+            engine: playwright
+            check_id: auth.password_policy.min_length+complexity
+            kriteria_lulus: Kebijakan yang sama dengan registrasi ditegakkan.
+            bukti: [ request_response, screenshot ]
+          - id: AUTH-1.3-T04
+            nama: Kebijakan kata sandi saat ubah password
+            titik_uji: ubah_password
+            check_id: auth.password_policy.min_length+complexity
+            butuh_autentikasi: true
+            efek_samping: Login dengan akun uji lalu mencoba mengubah kata sandinya menjadi lemah.
+            kriteria_lulus: Kata sandi lemah ditolak.
+          - id: AUTH-1.3-T05
+            nama: Masa berlaku kata sandi
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.password_expiry
+            kriteria_lulus: Masa berlaku kata sandi ditetapkan dan ditegakkan (konfigurasi/kebijakan).
+            bukti: [ dokumen, screenshot ]
+
+      - id: AUTH-1.4
+        nomor_referensi: "1.4"
+        uraian: "mengatur jumlah maksimum kesalahan dalam pemasukan kata sandi"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V2.2", "CWE-307" ]
+        parameter:
+          batas_percobaan: 5                     # TODO: sesuaikan kebijakan
+        metode_pengujian:
+          - id: AUTH-1.4-T01
+            nama: Penguncian/penundaan setelah kegagalan login berulang (akun uji)
+            titik_uji: login
+            profil: intrusif                     # dapat mengunci akun uji
+            check_id: auth.lockout_threshold
+            efek_samping: Beberapa percobaan login gagal berturut-turut; DAPAT MENGUNCI akun uji sementara.
+            kriteria_lulus: Setelah melewati batas percobaan, akun dikunci sementara atau login ditunda/diberi CAPTCHA.
+
+      - id: AUTH-1.5
+        nomor_referensi: "1.5"
+        uraian: "mengatur mekanisme pemulihan kata sandi"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V2.5", "CWE-640" ]
+        metode_pengujian:
+          - id: AUTH-1.5-T01
+            nama: Respons reset tidak membedakan akun terdaftar/tidak terdaftar
+            titik_uji: reset_password
+            check_id: auth.reset.no_user_enumeration
+            efek_samping: Mengirim permintaan reset untuk akun uji (dapat memicu email reset).
+            kriteria_lulus: Pesan dan kode status identik untuk akun ada maupun tidak ada.
+          - id: AUTH-1.5-T02
+            nama: Token reset sekali pakai dan memiliki masa berlaku
+            titik_uji: reset_password
+            jenis: semi_otomatis
+            engine: playwright
+            check_id: auth.reset.token_single_use_expiry
+            kriteria_lulus: Token yang sudah dipakai atau kedaluwarsa ditolak.
+          - id: AUTH-1.5-T03
+            nama: Kata sandi lama/baru tidak dikirim dalam bentuk teks asli
+            titik_uji: reset_password
+            jenis: semi_otomatis
+            engine: manual
+            check_id: auth.reset.no_plaintext_password
+            kriteria_lulus: Email/halaman pemulihan tidak memuat kata sandi dalam teks asli.
+            bukti: [ screenshot ]
+
+      - id: AUTH-1.6
+        nomor_referensi: "1.6"
+        uraian: "menjaga kerahasiaan kata sandi yang disimpan melalui mekanisme kriptografi"
+        verifiabilitas: manual
+        severity_default: kritis
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V2.4", "CWE-916" ]
+        metode_pengujian:
+          - id: AUTH-1.6-T01
+            nama: Indikasi penyimpanan teks asli (kata sandi ditampilkan/dikirim balik)
+            titik_uji: area_terautentikasi
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            check_id: auth.password_not_echoed
+            kriteria_lulus: Kata sandi tidak pernah ditampilkan kembali di respons atau profil.
+          - id: AUTH-1.6-T02
+            nama: Verifikasi algoritma hashing kata sandi
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.password_hashing
+            kriteria_lulus: Kata sandi disimpan dengan fungsi hash adaptif bersalt sesuai ketentuan.
+            bukti: [ dokumen ]
+
+      - id: AUTH-1.7
+        nomor_referensi: "1.7"
+        uraian: "menggunakan jalur komunikasi yang diamankan untuk proses autentikasi"
+        verifiabilitas: otomatis
+        severity_default: kritis
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V9.1", "CWE-319" ]
+        metode_pengujian:
+          - id: AUTH-1.7-T01
+            nama: Halaman dan action form login menggunakan HTTPS
+            titik_uji: login
+            check_id: auth.login_over_https
+            kriteria_lulus: Form login dimuat dan dikirim melalui HTTPS.
+          - id: AUTH-1.7-T02
+            nama: Akses HTTP ke halaman login dialihkan ke HTTPS
+            titik_uji: login
+            check_id: tls.http_redirect
+            kriteria_lulus: Request HTTP dialihkan (301/308) ke HTTPS.
+
+  # ===========================================================================
+  - id: SESS
+    nomor: 2
+    nama: Manajemen Sesi
+    kontrol:
+
+      - id: SESS-2.1
+        nomor_referensi: "2.1"
+        uraian: "menggunakan pengendali sesi untuk proses manajemen sesi"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V3" ]
+        metode_pengujian:
+          - id: SESS-2.1-T01
+            nama: Token sesi diterbitkan setelah login berhasil
+            titik_uji: login
+            butuh_autentikasi: true
+            check_id: session.token_issued
+            kriteria_lulus: Sesi dikelola dengan token sesi (cookie/header), bukan parameter identitas statis.
+
+      - id: SESS-2.2
+        nomor_referensi: "2.2"
+        uraian: "menggunakan pengendali sesi yang disediakan oleh kerangka kerja aplikasi"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        metode_pengujian:
+          - id: SESS-2.2-T01
+            nama: Identifikasi pengendali sesi kerangka kerja
+            titik_uji: global
+            check_id: session.framework_fingerprint
+            kriteria_lulus: Pola token sesi sesuai pengendali sesi kerangka kerja yang dikenal.
+          - id: SESS-2.2-T02
+            nama: Konfirmasi penggunaan pengendali sesi bawaan
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.session_framework
+            kriteria_lulus: Pengembang mengonfirmasi tidak ada implementasi sesi buatan sendiri.
+            bukti: [ dokumen ]
+
+      - id: SESS-2.3
+        nomor_referensi: "2.3"
+        uraian: "mengatur pembuatan dan keacakan token sesi yang dihasilkan oleh pengendali sesi"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V3.2", "CWE-330" ]
+        metode_pengujian:
+          - id: SESS-2.3-T01
+            nama: Analisis entropi dan panjang token sesi
+            titik_uji: login
+            check_id: session.token_entropy
+            parameter: { jumlah_sampel: 30, entropi_minimum_bit: 64 }
+            kriteria_lulus: Token cukup panjang, acak, dan tidak berpola/berurutan.
+
+      - id: SESS-2.4
+        nomor_referensi: "2.4"
+        uraian: "mengatur kondisi dan jangka waktu habis sesi"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V3.3", "CWE-613" ]
+        metode_pengujian:
+          - id: SESS-2.4-T01
+            nama: Logout menginvalidasi sesi di server
+            titik_uji: logout
+            butuh_autentikasi: true
+            check_id: session.logout_invalidates
+            kriteria_lulus: Token sesi lama ditolak setelah logout.
+          - id: SESS-2.4-T02
+            nama: Sesi habis setelah idle
+            titik_uji: area_terautentikasi
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            check_id: session.idle_timeout
+            parameter: { batas_idle_menit: 30 }  # TODO: sesuaikan kebijakan
+            kriteria_lulus: Token ditolak setelah melewati batas idle.
+
+      - id: SESS-2.5
+        nomor_referensi: "2.5"
+        uraian: "validasi dan pencantuman session id"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V3.2", "CWE-384" ]
+        metode_pengujian:
+          - id: SESS-2.5-T01
+            nama: Session ID diperbarui setelah login
+            titik_uji: login
+            check_id: session.rotation_on_login
+            kriteria_lulus: Token sesi sebelum dan sesudah login berbeda.
+          - id: SESS-2.5-T02
+            nama: Session ID yang tidak diterbitkan server ditolak
+            titik_uji: area_terautentikasi
+            check_id: session.reject_unknown_id
+            kriteria_lulus: Token yang tidak dikenal tidak menghasilkan sesi baru yang terautentikasi.
+
+      - id: SESS-2.6
+        nomor_referensi: "2.6"
+        uraian: "pelindungan terhadap lokasi dan pengiriman token untuk sesi terautentikasi"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V3.4", "CWE-614", "CWE-1004" ]
+        metode_pengujian:
+          - id: SESS-2.6-T01
+            nama: Atribut cookie sesi (Secure, HttpOnly, SameSite)
+            titik_uji: login
+            check_id: session.cookie_flags
+            kriteria_lulus: Cookie sesi memiliki Secure, HttpOnly, dan SameSite yang sesuai.
+          - id: SESS-2.6-T02
+            nama: Token sesi tidak ditempatkan di URL
+            titik_uji: global
+            engine: zap
+            check_id: session.token_not_in_url
+            kriteria_lulus: Tidak ada token sesi pada URL, Referer, atau riwayat.
+
+      - id: SESS-2.7
+        nomor_referensi: "2.7"
+        uraian: "pelindungan terhadap duplikasi dan mekanisme persetujuan pengguna"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V3.7" ]
+        metode_pengujian:
+          - id: SESS-2.7-T01
+            nama: Penanganan sesi ganda/bersamaan
+            titik_uji: login
+            jenis: semi_otomatis
+            check_id: session.concurrent_sessions
+            kriteria_lulus: Aplikasi membatasi atau memberi tahu adanya sesi ganda sesuai kebijakan.
+          - id: SESS-2.7-T02
+            nama: Persetujuan/re-autentikasi untuk aksi sensitif
+            titik_uji: area_terautentikasi
+            jenis: manual
+            engine: manual
+            butuh_autentikasi: true
+            check_id: manual.reauth_sensitive_action
+            kriteria_lulus: Aksi sensitif (ubah kata sandi/email) meminta konfirmasi atau autentikasi ulang.
+            bukti: [ screenshot ]
+
+  # ===========================================================================
+  - id: ACCS
+    nomor: 3
+    nama: Kontrol Akses
+    kontrol:
+
+      - id: ACCS-3.1
+        nomor_referensi: "3.1"
+        uraian: "menetapkan otorisasi pengguna untuk membatasi kontrol akses"
+        verifiabilitas: sebagian
+        severity_default: kritis
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V4.1", "CWE-285", "CWE-639" ]
+        metode_pengujian:
+          - id: ACCS-3.1-T01
+            nama: Pemisahan akses horizontal antar dua akun uji
+            titik_uji: area_terautentikasi
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            check_id: access.horizontal
+            parameter: { akun_uji: [ "{{akun_uji_1}}", "{{akun_uji_2}}" ] }
+            kriteria_lulus: Akun A tidak dapat membaca/mengubah objek milik akun B.
+          - id: ACCS-3.1-T02
+            nama: Pemisahan akses vertikal (pengguna biasa vs admin)
+            titik_uji: admin
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            check_id: access.vertical
+            kriteria_lulus: Fungsi admin menolak akun dengan peran biasa.
+
+      - id: ACCS-3.2
+        nomor_referensi: "3.2"
+        uraian: "mengatur peringatan terhadap bahaya serangan otomatis apabila terjadi akses yang bersamaan atau akses yang terus-menerus pada fungsi"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V11.1" ]
+        metode_pengujian:
+          - id: ACCS-3.2-T01
+            nama: Pembatasan laju pada fungsi yang diakses terus-menerus
+            titik_uji: form_input
+            profil: intrusif
+            check_id: access.rate_limit
+            kriteria_lulus: Aplikasi membatasi/menolak request berlebih (mis. HTTP 429).
+          - id: ACCS-3.2-T02
+            nama: Peringatan tercatat di sisi pemantauan
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.alert_automated_access
+            kriteria_lulus: Tim pemantau/CSIRT menerima peringatan atas uji T01.
+            bukti: [ dokumen ]
+
+      - id: ACCS-3.3
+        nomor_referensi: "3.3"
+        uraian: "mengatur antarmuka pada sisi administrator"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V4.3" ]
+        metode_pengujian:
+          - id: ACCS-3.3-T01
+            nama: Antarmuka admin tidak terbuka tanpa autentikasi
+            titik_uji: admin
+            engine: custom
+            check_id: access.admin_panel_exposure
+            kriteria_lulus: Panel admin tidak dapat diakses publik tanpa autentikasi.
+          - id: ACCS-3.3-T02
+            nama: Pembatasan jaringan antarmuka admin
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.admin_network_restriction
+            kriteria_lulus: Antarmuka admin dibatasi ke jaringan/IP tertentu atau memakai autentikasi tambahan.
+            bukti: [ dokumen ]
+
+      - id: ACCS-3.4
+        nomor_referensi: "3.4"
+        uraian: "mengatur verifikasi kebenaran token ketika mengakses data dan informasi yang dikecualikan"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V4.2", "CWE-352" ]
+        metode_pengujian:
+          - id: ACCS-3.4-T01
+            nama: Token tidak valid/kedaluwarsa ditolak pada data terbatas
+            titik_uji: area_terautentikasi
+            butuh_autentikasi: true
+            check_id: access.token_validation
+            kriteria_lulus: Request dengan token dimodifikasi/kedaluwarsa ditolak (401/403).
+          - id: ACCS-3.4-T02
+            nama: Perlindungan anti-CSRF pada aksi pengubah data
+            titik_uji: area_terautentikasi
+            engine: zap
+            butuh_autentikasi: true
+            check_id: access.csrf_token
+            kriteria_lulus: Aksi pengubah data mensyaratkan token anti-CSRF atau SameSite yang memadai.
+
+  # ===========================================================================
+  - id: INPV
+    nomor: 4
+    nama: Validasi Input
+    kontrol:
+
+      - id: INPV-4.1
+        nomor_referensi: "4.1"
+        uraian: "menerapkan fungsi validasi input pada sisi server"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V5.1", "CWE-20" ]
+        metode_pengujian:
+          - id: INPV-4.1-T01
+            nama: Validasi tetap berlaku tanpa validasi sisi klien
+            titik_uji: form_input
+            check_id: input.server_side_validation
+            kriteria_lulus: Input tidak valid yang dikirim langsung ke endpoint ditolak server.
+
+      - id: INPV-4.2
+        nomor_referensi: "4.2"
+        uraian: "menerapkan mekanisme penolakan input jika terjadi kesalahan validasi"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V5.1" ]
+        metode_pengujian:
+          - id: INPV-4.2-T01
+            nama: Input tidak valid ditolak dan tidak diproses
+            titik_uji: form_input
+            check_id: input.reject_on_error
+            kriteria_lulus: Respons 4xx/pesan validasi; data tidak tersimpan.
+          - id: INPV-4.2-T02
+            nama: Penolakan input pada API
+            titik_uji: api
+            check_id: input.reject_on_error
+            kriteria_lulus: Endpoint API menolak input tidak valid dengan 400/422.
+
+      - id: INPV-4.3
+        nomor_referensi: "4.3"
+        uraian: "memastikan runtime environment aplikasi tidak rentan terhadap serangan validasi input"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V14.2", "CWE-1104" ]
+        metode_pengujian:
+          - id: INPV-4.3-T01
+            nama: Versi runtime/kerangka kerja bebas kerentanan yang diketahui
+            titik_uji: global
+            engine: custom
+            check_id: input.runtime_known_cves
+            kriteria_lulus: Tidak terdeteksi versi runtime/server dengan CVE yang diketahui.
+
+      - id: INPV-4.4
+        nomor_referensi: "4.4"
+        uraian: "melakukan validasi positif pada seluruh input"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V5.1.3" ]
+        metode_pengujian:
+          - id: INPV-4.4-T01
+            nama: Input di luar tipe/format/rentang yang diizinkan ditolak
+            titik_uji: form_input
+            jenis: semi_otomatis
+            check_id: input.allowlist_validation
+            kriteria_lulus: Field bertipe (angka, tanggal, email, pilihan) hanya menerima nilai yang diizinkan.
+
+      - id: INPV-4.5
+        nomor_referensi: "4.5"
+        uraian: "melakukan filter terhadap data yang tidak dipercaya"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V5.2", "CWE-74" ]
+        metode_pengujian:
+          - id: INPV-4.5-T01
+            nama: Pemindaian aktif kategori injeksi umum
+            titik_uji: form_input
+            engine: zap
+            profil: intrusif
+            check_id: zap.active.injection_policy
+            kriteria_lulus: Tidak ada temuan injeksi berisiko sedang ke atas.
+
+      - id: INPV-4.6
+        nomor_referensi: "4.6"
+        uraian: "menggunakan fitur kode dinamis"
+        verifiabilitas: sebagian
+        severity_default: kritis
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V5.2.4", "CWE-94", "CWE-1336" ]
+        metode_pengujian:
+          - id: INPV-4.6-T01
+            nama: Pemindaian aktif eksekusi kode/template sisi server
+            titik_uji: form_input
+            engine: zap
+            profil: intrusif
+            check_id: zap.active.code_injection_policy
+            kriteria_lulus: Tidak ada temuan eksekusi kode dinamis dari input pengguna.
+          - id: INPV-4.6-T02
+            nama: Tinjauan penggunaan fitur kode dinamis
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.dynamic_code_review
+            kriteria_lulus: Penggunaan eval/kode dinamis dihindari atau input dibatasi ketat.
+            bukti: [ dokumen ]
+
+      - id: INPV-4.7
+        nomor_referensi: "4.7"
+        uraian: "melakukan pelindungan terhadap akses yang mengandung konten skrip"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V5.3", "CWE-79" ]
+        metode_pengujian:
+          - id: INPV-4.7-T01
+            nama: Pemindaian aktif cross-site scripting
+            titik_uji: form_input
+            engine: zap
+            profil: intrusif
+            check_id: zap.active.xss_policy
+            kriteria_lulus: Tidak ada temuan XSS.
+          - id: INPV-4.7-T02
+            nama: Content-Security-Policy diterapkan
+            titik_uji: global
+            check_id: headers.csp
+            kriteria_lulus: Header CSP ada dan tidak mengizinkan unsafe-inline/unsafe-eval tanpa alasan.
+
+      - id: INPV-4.8
+        nomor_referensi: "4.8"
+        uraian: "melakukan pelindungan dari serangan injeksi basis data"
+        verifiabilitas: otomatis
+        severity_default: kritis
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V5.3.4", "CWE-89" ]
+        metode_pengujian:
+          - id: INPV-4.8-T01
+            nama: Pemindaian aktif injeksi basis data pada form
+            titik_uji: form_input
+            engine: zap
+            profil: intrusif
+            check_id: zap.active.sqli_policy
+            kriteria_lulus: Tidak ada temuan injeksi basis data.
+          - id: INPV-4.8-T02
+            nama: Pemindaian aktif injeksi basis data pada API
+            titik_uji: api
+            engine: zap
+            profil: intrusif
+            check_id: zap.active.sqli_policy
+            kriteria_lulus: Tidak ada temuan injeksi basis data.
+
+  # ===========================================================================
+  - id: CRYP
+    nomor: 5
+    nama: Kriptografi pada Verifikasi Statis
+    kontrol:
+
+      - id: CRYP-5.1
+        nomor_referensi: "5.1"
+        uraian: "menggunakan algoritma kriptografi, modul kriptografi, protokol kriptografi, dan kunci kriptografi sesuai dengan ketentuan peraturan perundang-undangan"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V6.2" ]
+        metode_pengujian:
+          - id: CRYP-5.1-T01
+            nama: Algoritma dan panjang kunci pada TLS/sertifikat
+            titik_uji: global
+            engine: sslyze
+            check_id: tls.key_and_algorithms
+            kriteria_lulus: Kunci dan algoritma tanda tangan memenuhi batas minimum yang ditetapkan.
+          - id: CRYP-5.1-T02
+            nama: Kesesuaian modul kriptografi dengan ketentuan
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.crypto_compliance
+            kriteria_lulus: Modul/algoritma yang digunakan sesuai ketentuan peraturan.
+            bukti: [ dokumen ]
+
+      - id: CRYP-5.2
+        nomor_referensi: "5.2"
+        uraian: "melakukan autentikasi data yang dienkripsi"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V6.2.2", "CWE-345" ]
+        metode_pengujian:
+          - id: CRYP-5.2-T01
+            nama: Integritas token sisi klien diverifikasi server
+            titik_uji: area_terautentikasi
+            butuh_autentikasi: true
+            check_id: crypto.client_token_integrity
+            kriteria_lulus: Token/cookie bertanda tangan yang dimodifikasi ditolak server.
+
+      - id: CRYP-5.3
+        nomor_referensi: "5.3"
+        uraian: "menerapkan manajemen kunci kriptografi"
+        verifiabilitas: manual
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V6.4" ]
+        metode_pengujian:
+          - id: CRYP-5.3-T01
+            nama: Kunci/rahasia tidak terekspos di aset publik
+            titik_uji: global
+            engine: nuclei
+            check_id: crypto.exposed_secrets
+            kriteria_lulus: Tidak ada kunci privat/API key/rahasia di JavaScript atau file publik.
+          - id: CRYP-5.3-T02
+            nama: Prosedur manajemen kunci
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.key_management
+            kriteria_lulus: Pembuatan, penyimpanan, rotasi, dan pemusnahan kunci terdokumentasi.
+            bukti: [ dokumen ]
+
+      - id: CRYP-5.4
+        nomor_referensi: "5.4"
+        uraian: "membuat angka acak yang menggunakan generator angka acak kriptografi"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V6.3", "CWE-338" ]
+        metode_pengujian:
+          - id: CRYP-5.4-T01
+            nama: Keacakan token yang diterbitkan aplikasi (sesi, CSRF, reset)
+            titik_uji: global
+            check_id: crypto.token_randomness
+            parameter: { jumlah_sampel: 30 }
+            kriteria_lulus: Token tidak berpola/berurutan dan memiliki entropi memadai.
+
+  # ===========================================================================
+  - id: ERRL
+    nomor: 6
+    nama: Penanganan Error dan Pencatatan Log
+    kontrol:
+
+      - id: ERRL-6.1
+        nomor_referensi: "6.1"
+        uraian: "mengatur konten pesan yang ditampilkan ketika terjadi kesalahan"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V7.4", "CWE-209" ]
+        metode_pengujian:
+          - id: ERRL-6.1-T01
+            nama: Halaman error tidak membocorkan detail teknis
+            titik_uji: global
+            check_id: error.verbose_messages
+            kriteria_lulus: Halaman 4xx/5xx tidak memuat stack trace, query, path, atau versi.
+          - id: ERRL-6.1-T02
+            nama: Pesan error login generik
+            titik_uji: login
+            check_id: error.generic_login_message
+            kriteria_lulus: Pesan sama untuk username salah maupun kata sandi salah.
+
+      - id: ERRL-6.2
+        nomor_referensi: "6.2"
+        uraian: "menggunakan metode penanganan eror untuk mencegah kesalahan terprediksi dan tidak terduga serta menangani seluruh pengecualian yang tidak ditangani"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V7.4", "CWE-755" ]
+        metode_pengujian:
+          - id: ERRL-6.2-T01
+            nama: Input tak terduga menghasilkan respons error terkendali
+            titik_uji: form_input
+            check_id: error.unhandled_exception
+            kriteria_lulus: Input tipe salah/kosong menghasilkan halaman error generik, bukan crash/debug page.
+
+      - id: ERRL-6.3
+        nomor_referensi: "6.3"
+        uraian: "tidak mencantumkan informasi yang dikecualikan dalam pencatatan log"
+        verifiabilitas: manual
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V7.1", "CWE-532" ]
+        metode_pengujian:
+          - id: ERRL-6.3-T01
+            nama: Sampel log tidak memuat kata sandi/token/data dikecualikan
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.log_sensitive_data
+            kriteria_lulus: Sampel log setelah uji login tidak memuat kredensial atau token.
+            bukti: [ dokumen ]
+
+      - id: ERRL-6.4
+        nomor_referensi: "6.4"
+        uraian: "mengatur cakupan log yang dicatat untuk mendukung upaya penyelidikan ketika terjadi insiden"
+        verifiabilitas: manual
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V7.2" ]
+        metode_pengujian:
+          - id: ERRL-6.4-T01
+            nama: Peristiwa uji tercatat di log
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.log_coverage
+            kriteria_lulus: Login gagal/berhasil, akses ditolak, dan error dari sesi scan tercatat dengan waktu, sumber, dan pengguna.
+            bukti: [ dokumen ]
+
+      - id: ERRL-6.5
+        nomor_referensi: "6.5"
+        uraian: "mengatur pelindungan log aplikasi dari akses dan modifikasi yang tidak sah"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V7.3", "CWE-532" ]
+        metode_pengujian:
+          - id: ERRL-6.5-T01
+            nama: File log tidak dapat diakses publik
+            titik_uji: global
+            engine: nuclei
+            check_id: exposure.log_files
+            kriteria_lulus: Tidak ada file log yang dapat diunduh dari web root.
+          - id: ERRL-6.5-T02
+            nama: Kontrol akses dan integritas penyimpanan log
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.log_protection
+            kriteria_lulus: Akses log dibatasi dan modifikasi terdeteksi/dicegah.
+            bukti: [ dokumen ]
+
+      - id: ERRL-6.6
+        nomor_referensi: "6.6"
+        uraian: "melakukan enkripsi pada data yang disimpan untuk mencegah injeksi log"
+        verifiabilitas: manual
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V7.3.1", "CWE-117" ]
+        metode_pengujian:
+          - id: ERRL-6.6-T01
+            nama: Penyandian/pengamanan entri log
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.log_injection_protection
+            kriteria_lulus: Entri log dikodekan/diamankan sehingga input pengguna tidak dapat memalsukan entri.
+            bukti: [ dokumen ]
+
+      - id: ERRL-6.7
+        nomor_referensi: "6.7"
+        uraian: "melakukan sinkronisasi sumber waktu sesuai dengan zona waktu dan waktu yang benar"
+        verifiabilitas: sebagian
+        severity_default: rendah
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V7.3.4" ]
+        metode_pengujian:
+          - id: ERRL-6.7-T01
+            nama: Selisih header Date server terhadap sumber waktu acuan
+            titik_uji: global
+            check_id: time.server_clock_drift
+            parameter: { toleransi_detik: 60 }
+            kriteria_lulus: Selisih waktu server dalam batas toleransi.
+
+  # ===========================================================================
+  - id: DATA
+    nomor: 7
+    nama: Proteksi Data
+    kontrol:
+
+      - id: DATA-7.1
+        nomor_referensi: "7.1"
+        uraian: "melakukan identifikasi dan penyimpanan salinan informasi yang dikecualikan"
+        verifiabilitas: manual
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V8.3" ]
+        metode_pengujian:
+          - id: DATA-7.1-T01
+            nama: Inventaris informasi yang dikecualikan
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.data_classification
+            kriteria_lulus: Informasi dikecualikan teridentifikasi dan lokasi salinannya terdokumentasi.
+            bukti: [ dokumen ]
+
+      - id: DATA-7.2
+        nomor_referensi: "7.2"
+        uraian: "melakukan pelindungan dari akses yang tidak sah terhadap informasi yang dikecualikan yang disimpan sementara dalam aplikasi"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V8.2", "CWE-524" ]
+        metode_pengujian:
+          - id: DATA-7.2-T01
+            nama: Halaman sensitif tidak disimpan di cache
+            titik_uji: area_terautentikasi
+            butuh_autentikasi: true
+            check_id: headers.cache_control_sensitive
+            kriteria_lulus: Cache-Control no-store pada halaman yang memuat data dikecualikan.
+          - id: DATA-7.2-T02
+            nama: Data dikecualikan tidak disimpan di penyimpanan browser
+            titik_uji: area_terautentikasi
+            engine: playwright
+            butuh_autentikasi: true
+            check_id: data.browser_storage
+            kriteria_lulus: localStorage/sessionStorage tidak memuat data dikecualikan atau kredensial.
+
+      - id: DATA-7.3
+        nomor_referensi: "7.3"
+        uraian: "melakukan pertukaran, penghapusan, dan audit informasi yang dikecualikan"
+        verifiabilitas: manual
+        severity_default: sedang
+        agregasi: semua_lulus
+        metode_pengujian:
+          - id: DATA-7.3-T01
+            nama: Prosedur pertukaran, penghapusan, dan audit
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.data_exchange_audit
+            kriteria_lulus: Prosedur terdokumentasi dan jejak audit tersedia.
+            bukti: [ dokumen ]
+
+      - id: DATA-7.4
+        nomor_referensi: "7.4"
+        uraian: "melakukan penentuan jumlah parameter"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V5.1.2", "CWE-915" ]
+        metode_pengujian:
+          - id: DATA-7.4-T01
+            nama: Parameter tambahan yang tidak diharapkan diabaikan/ditolak
+            titik_uji: form_input
+            jenis: semi_otomatis
+            check_id: input.unexpected_parameters
+            kriteria_lulus: Parameter di luar daftar yang diizinkan tidak mengubah data/atribut.
+          - id: DATA-7.4-T02
+            nama: Parameter duplikat ditangani konsisten
+            titik_uji: api
+            check_id: input.duplicate_parameters
+            kriteria_lulus: Parameter duplikat ditolak atau ditangani secara konsisten tanpa efek samping.
+
+      - id: DATA-7.5
+        nomor_referensi: "7.5"
+        uraian: "memastikan data disimpan dengan aman"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V8.1", "CWE-530" ]
+        metode_pengujian:
+          - id: DATA-7.5-T01
+            nama: Berkas cadangan/basis data tidak terekspos di web
+            titik_uji: global
+            engine: nuclei
+            check_id: exposure.backup_files
+            kriteria_lulus: Tidak ada file backup, dump basis data, atau arsip yang dapat diunduh.
+          - id: DATA-7.5-T02
+            nama: Enkripsi data saat disimpan
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.data_at_rest
+            kriteria_lulus: Data dikecualikan disimpan terenkripsi dengan akses terbatas.
+            bukti: [ dokumen ]
+
+      - id: DATA-7.6
+        nomor_referensi: "7.6"
+        uraian: "menentukan metode untuk menghapus dan mengekspor data sesuai permintaan pengguna"
+        verifiabilitas: sebagian
+        severity_default: rendah
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V8.3.2" ]
+        metode_pengujian:
+          - id: DATA-7.6-T01
+            nama: Ketersediaan fitur hapus/ekspor data pengguna
+            titik_uji: area_terautentikasi
+            jenis: manual
+            engine: manual
+            butuh_autentikasi: true
+            check_id: manual.data_export_delete
+            kriteria_lulus: Pengguna dapat meminta hapus/ekspor data melalui mekanisme yang ditetapkan.
+            bukti: [ screenshot, dokumen ]
+
+      - id: DATA-7.7
+        nomor_referensi: "7.7"
+        uraian: "membersihkan memori setelah tidak diperlukan"
+        verifiabilitas: manual
+        severity_default: rendah
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V8.3.6", "CWE-226" ]
+        metode_pengujian:
+          - id: DATA-7.7-T01
+            nama: Tinjauan pembersihan memori data sensitif
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.memory_cleanup
+            kriteria_lulus: Data sensitif di memori dibersihkan setelah tidak digunakan.
+            bukti: [ dokumen ]
+
+  # ===========================================================================
+  - id: COMM
+    nomor: 8
+    nama: Keamanan Komunikasi
+    kontrol:
+
+      - id: COMM-8.1
+        nomor_referensi: "8.1"
+        uraian: "menggunakan komunikasi terenkripsi"
+        verifiabilitas: otomatis
+        severity_default: kritis
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V9.1", "CWE-319" ]
+        metode_pengujian:
+          - id: COMM-8.1-T01
+            nama: Seluruh halaman dilayani melalui HTTPS
+            titik_uji: global
+            check_id: tls.https_enforced
+            kriteria_lulus: HTTP dialihkan ke HTTPS untuk seluruh path.
+          - id: COMM-8.1-T02
+            nama: HTTP Strict Transport Security
+            titik_uji: global
+            check_id: headers.hsts
+            parameter: { max_age_minimum: 31536000 }
+            kriteria_lulus: Header HSTS ada dengan max-age memadai.
+
+      - id: COMM-8.2
+        nomor_referensi: "8.2"
+        uraian: "mengatur koneksi masuk dan keluar yang aman dan terenkripsi dari sisi pengguna"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V9.2", "CWE-311" ]
+        metode_pengujian:
+          - id: COMM-8.2-T01
+            nama: Tidak ada mixed content
+            titik_uji: global
+            engine: zap
+            check_id: tls.mixed_content
+            kriteria_lulus: Halaman HTTPS tidak memuat sumber daya melalui HTTP.
+          - id: COMM-8.2-T02
+            nama: Koneksi keluar server ke layanan lain terenkripsi
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.outbound_tls
+            kriteria_lulus: Koneksi ke basis data/API pihak ketiga memakai TLS.
+            bukti: [ dokumen ]
+
+      - id: COMM-8.3
+        nomor_referensi: "8.3"
+        uraian: "mengatur jenis algoritma yang digunakan dan alat pengujiannya"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V9.1.2", "CWE-327" ]
+        metode_pengujian:
+          - id: COMM-8.3-T01
+            nama: Versi protokol TLS
+            titik_uji: global
+            engine: sslyze
+            check_id: tls.protocol_versions
+            kriteria_lulus: Hanya TLS 1.2 dan 1.3 yang aktif.
+          - id: COMM-8.3-T02
+            nama: Cipher suite lemah dinonaktifkan
+            titik_uji: global
+            engine: sslyze
+            check_id: tls.weak_ciphers
+            kriteria_lulus: Tidak ada cipher NULL/EXPORT/RC4/3DES; forward secrecy didukung.
+
+      - id: COMM-8.4
+        nomor_referensi: "8.4"
+        uraian: "mengatur aktivasi dan konfigurasi sertifikat elektronik yang diterbitkan oleh penyelenggara sertifikasi elektronik"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V9.1.1", "CWE-295" ]
+        metode_pengujian:
+          - id: COMM-8.4-T01
+            nama: Validitas sertifikat (masa berlaku, nama host, rantai)
+            titik_uji: global
+            engine: sslyze
+            check_id: tls.certificate_validity
+            kriteria_lulus: Sertifikat valid, belum kedaluwarsa, cocok dengan host, rantai lengkap.
+          - id: COMM-8.4-T02
+            nama: Rantai sertifikat dipercaya root store web browser
+            titik_uji: global
+            engine: sslyze
+            check_id: tls.certificate_browser_trust
+            parameter:
+              # Diverifikasi 2026-10-19: tidak ada root CA PSrE Indonesia
+              # (C=ID) di keempat root store ini. Sertifikat TLS dari PSrE
+              # akan memunculkan peringatan di browser pengguna umum.
+              # Trust store bawaan sslyze: mozilla, microsoft, apple, android.
+              # Chrome Root Store belum dibundel sslyze; tambahkan dari PEM
+              # resmi bila diperlukan.
+              root_store: [ mozilla, microsoft, apple, android ]
+            kriteria_lulus: Rantai sertifikat tervalidasi terhadap seluruh root store browser.
+          - id: COMM-8.4-T03
+            nama: Penerbit sertifikat adalah PSrE yang diakui Komdigi (informasional)
+            titik_uji: global
+            engine: sslyze
+            check_id: tls.certificate_issuer_psre
+            severity: info                       # tidak memengaruhi status kontrol
+            parameter:
+              # Daftar resmi: https://tte.komdigi.go.id/listpsrenew
+              # TODO: verifikasi status pengakuan & masa berlaku SK sebelum dipakai.
+              daftar_psre:
+                - { nama: "Balai Besar Sertifikasi Elektronik (BSrE) - BSSN", kategori: instansi }
+                - { nama: "Perum Peruri", kategori: non_instansi }
+                - { nama: "PT Privy Identitas Digital (PrivyID)", kategori: non_instansi }
+                - { nama: "PT Solusi Net Internusa (Digisign)", kategori: non_instansi }
+                - { nama: "PT Solusi Identitas Global Net (eSign)", kategori: non_instansi }
+                - { nama: "PT Indonesia Digital Identity (VIDA)", kategori: non_instansi }
+                - { nama: "PT Tilaka Nusa Teknologi (Tilaka)", kategori: non_instansi }
+                - { nama: "PT Vinotek (Vipas)", kategori: non_instansi }
+            kriteria_lulus: Dicatat apakah penerbit termasuk PSrE; hasil hanya informasi bagi asesor.
+
+  # ===========================================================================
+  - id: MALC
+    nomor: 9
+    nama: Pengendalian Kode Berbahaya      # TODO: judul diasumsikan, verifikasi
+    kontrol:
+
+      - id: MALC-9.1
+        nomor_referensi: "9.1"
+        uraian: "menggunakan analisis kode dalam kontrol kode berbahaya"
+        verifiabilitas: manual
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V10.1" ]
+        metode_pengujian:
+          - id: MALC-9.1-T01
+            nama: Bukti analisis kode (SAST) dalam siklus pengembangan
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.code_analysis
+            kriteria_lulus: Laporan analisis kode statis terbaru tersedia dan temuan ditindaklanjuti.
+            bukti: [ dokumen ]
+
+      - id: MALC-9.2
+        nomor_referensi: "9.2"
+        uraian: "memastikan kode sumber aplikasi dan pustaka tidak mengandung kode berbahaya dan fungsionalitas lain yang tidak diinginkan"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V10.2", "CWE-1104" ]
+        metode_pengujian:
+          - id: MALC-9.2-T01
+            nama: Pustaka JavaScript sisi klien bebas kerentanan yang diketahui
+            titik_uji: global
+            engine: zap
+            check_id: deps.vulnerable_js_libraries
+            kriteria_lulus: Tidak ada pustaka klien dengan kerentanan yang diketahui.
+          - id: MALC-9.2-T02
+            nama: Tidak ada skrip pihak ketiga yang tidak dikenal
+            titik_uji: global
+            engine: playwright
+            check_id: deps.unknown_third_party_scripts
+            parameter:
+              # Domain aplikasi itu sendiri (dan subdomainnya) selalu diizinkan.
+              # Daftar global CDN publik yang umum dan bereputasi; dapat
+              # ditambah/dikurangi per aset. Skrip dari domain ini tetap wajib
+              # memakai SRI (lihat MALC-9.4 dan CONF-13.4).
+              domain_diizinkan:
+                cdn_pustaka:
+                  - cdnjs.cloudflare.com
+                  - cdn.jsdelivr.net
+                  - unpkg.com
+                  - code.jquery.com
+                  - ajax.googleapis.com
+                  - cdn.datatables.net
+                  - cdn.ckeditor.com
+                bootstrap_dan_ikon:
+                  - stackpath.bootstrapcdn.com
+                  - maxcdn.bootstrapcdn.com
+                  - use.fontawesome.com
+                  - kit.fontawesome.com
+                  - ka-f.fontawesome.com
+                font:
+                  - fonts.googleapis.com
+                  - fonts.gstatic.com
+                antiotomatisasi:                 # CAPTCHA (lihat BLOG-10.4)
+                  - www.google.com               # reCAPTCHA
+                  - www.gstatic.com
+                  - www.recaptcha.net
+                  - challenges.cloudflare.com    # Turnstile
+                  - hcaptcha.com
+                  - js.hcaptcha.com
+              # Domain yang dilaporkan sebagai temuan walau dikenal: mengirim
+              # data perilaku pengguna ke pihak ketiga (tidak layak untuk
+              # aplikasi di lingkungan TNI AD).
+              domain_ditandai:
+                - www.googletagmanager.com
+                - www.google-analytics.com
+                - connect.facebook.net
+                - static.hotjar.com
+                - script.hotjar.com
+                - cdn.tailwindcss.com            # hanya untuk pengembangan, bukan produksi
+            kriteria_lulus: >
+              Semua skrip dimuat dari domain aplikasi sendiri atau domain_diizinkan,
+              dan tidak ada skrip dari domain_ditandai. Rekomendasi terbaik:
+              host sendiri (self-host) seluruh pustaka.
+          - id: MALC-9.2-T03
+            nama: Hasil pemindaian dependensi (SCA)
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.sca_report
+            kriteria_lulus: Laporan SCA tersedia tanpa temuan kritis terbuka.
+            bukti: [ dokumen ]
+
+      - id: MALC-9.3
+        nomor_referensi: "9.3"
+        uraian: "mengatur izin terkait fitur atau sensor terkait privasi"
+        verifiabilitas: otomatis
+        severity_default: rendah
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V10.2.2" ]
+        metode_pengujian:
+          - id: MALC-9.3-T01
+            nama: Header Permissions-Policy membatasi fitur sensitif
+            titik_uji: global
+            check_id: headers.permissions_policy
+            kriteria_lulus: Kamera, mikrofon, geolokasi, dsb. dinonaktifkan kecuali dibutuhkan.
+          - id: MALC-9.3-T02
+            nama: Aplikasi tidak meminta izin perangkat yang tidak relevan
+            titik_uji: global
+            engine: playwright
+            check_id: privacy.permission_prompts
+            kriteria_lulus: Tidak ada permintaan izin perangkat yang tidak sesuai fungsi aplikasi.
+
+      - id: MALC-9.4
+        nomor_referensi: "9.4"
+        uraian: "mengatur pelindungan integritas"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V10.3", "CWE-353" ]
+        metode_pengujian:
+          - id: MALC-9.4-T01
+            nama: Subresource Integrity pada skrip/stylesheet eksternal
+            titik_uji: global
+            check_id: integrity.sri
+            kriteria_lulus: Aset dari domain eksternal memiliki atribut integrity.
+
+      - id: MALC-9.5
+        nomor_referensi: "9.5"
+        uraian: "mengatur mekanisme fitur pembaruan"
+        verifiabilitas: manual
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V10.3.1" ]
+        metode_pengujian:
+          - id: MALC-9.5-T01
+            nama: Prosedur pembaruan aplikasi dan dependensi
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.update_mechanism
+            kriteria_lulus: Pembaruan diperoleh dari sumber tepercaya melalui kanal aman dan diverifikasi integritasnya.
+            bukti: [ dokumen ]
+
+  # ===========================================================================
+  - id: BLOG
+    nomor: 10
+    nama: Logika Bisnis
+    kontrol:
+
+      - id: BLOG-10.1
+        nomor_referensi: "10.1"
+        uraian: "memproses alur logika bisnis dalam urutan langkah dan waktu yang realistis"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V11.1.1", "CWE-841" ]
+        metode_pengujian:
+          - id: BLOG-10.1-T01
+            nama: Alur bertahap tidak dapat dilompati
+            titik_uji: area_terautentikasi
+            jenis: manual
+            engine: manual
+            butuh_autentikasi: true
+            check_id: manual.workflow_order
+            kriteria_lulus: Langkah akhir alur ditolak bila langkah sebelumnya belum diselesaikan.
+            bukti: [ request_response, screenshot ]
+
+      - id: BLOG-10.2
+        nomor_referensi: "10.2"
+        uraian: "memastikan logika bisnis memiliki batasan dan validasi"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V11.1.2", "CWE-840" ]
+        metode_pengujian:
+          - id: BLOG-10.2-T01
+            nama: Nilai di luar batas bisnis ditolak
+            titik_uji: form_input
+            jenis: manual
+            engine: manual
+            check_id: manual.business_limits
+            kriteria_lulus: Nilai yang melanggar aturan bisnis (mis. jumlah negatif) ditolak server.
+            bukti: [ request_response ]
+
+      - id: BLOG-10.3
+        nomor_referensi: "10.3"
+        uraian: "memonitor aktivitas yang tidak biasa"
+        verifiabilitas: manual
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V11.1.7" ]
+        metode_pengujian:
+          - id: BLOG-10.3-T01
+            nama: Aktivitas sesi scan terdeteksi oleh pemantauan
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.anomaly_monitoring
+            kriteria_lulus: Pemantauan mencatat aktivitas tidak biasa yang dihasilkan sesi uji.
+            bukti: [ dokumen ]
+
+      - id: BLOG-10.4
+        nomor_referensi: "10.4"
+        uraian: "membantu dalam kontrol antiotomatisasi"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: minimal_satu
+        referensi_pendukung: [ "OWASP ASVS V11.1.4", "CWE-799" ]
+        metode_pengujian:
+          - id: BLOG-10.4-T01
+            nama: CAPTCHA/tantangan pada fungsi rawan otomatisasi
+            titik_uji: registrasi
+            check_id: antiauto.challenge_present
+            kriteria_lulus: Registrasi/login/form publik dilindungi tantangan antiotomatisasi.
+          - id: BLOG-10.4-T02
+            nama: Pembatasan laju pada fungsi bisnis
+            titik_uji: form_input
+            profil: intrusif
+            check_id: access.rate_limit
+            kriteria_lulus: Request berlebih dibatasi.
+
+      - id: BLOG-10.5
+        nomor_referensi: "10.5"
+        uraian: "memberikan peringatan ketika terjadi serangan otomatis atau aktivitas yang tidak biasa"
+        verifiabilitas: manual
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V11.1.8" ]
+        metode_pengujian:
+          - id: BLOG-10.5-T01
+            nama: Peringatan diterima admin/CSIRT setelah uji antiotomatisasi
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.alert_on_attack
+            kriteria_lulus: Peringatan terkirim ke pihak berwenang dalam waktu yang ditetapkan.
+            bukti: [ dokumen ]
+
+  # ===========================================================================
+  - id: FILE
+    nomor: 11
+    nama: File
+    kontrol:
+
+      - id: FILE-11.1
+        nomor_referensi: "11.1"
+        uraian: "mengatur jumlah file untuk setiap pengguna dan kuota ukuran file yang diunggah"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V12.1", "CWE-400" ]
+        metode_pengujian:
+          - id: FILE-11.1-T01
+            nama: Batas ukuran file unggahan ditegakkan
+            titik_uji: unggah_file
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            profil: intrusif
+            check_id: file.upload_size_limit
+            parameter: { ukuran_maks_mb: 10 }    # TODO: sesuaikan per aset
+            kriteria_lulus: File di atas batas ditolak server.
+          - id: FILE-11.1-T02
+            nama: Kuota jumlah file per pengguna
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.upload_quota
+            kriteria_lulus: Kuota jumlah/total ukuran per pengguna ditetapkan.
+            bukti: [ dokumen ]
+
+      - id: FILE-11.2
+        nomor_referensi: "11.2"
+        uraian: "melakukan validasi file sesuai dengan tipe konten yang diharapkan"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V12.2", "CWE-434" ]
+        metode_pengujian:
+          - id: FILE-11.2-T01
+            nama: File tak berbahaya dengan tipe tidak sesuai ditolak
+            titik_uji: unggah_file
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            check_id: file.content_type_validation
+            kriteria_lulus: Server memvalidasi isi file, bukan hanya ekstensi/Content-Type dari klien.
+
+      - id: FILE-11.3
+        nomor_referensi: "11.3"
+        uraian: "melakukan pelindungan terhadap metadata input dan metadata file"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V12.3", "CWE-22" ]
+        metode_pengujian:
+          - id: FILE-11.3-T01
+            nama: Nama file dari pengguna tidak dipakai langsung
+            titik_uji: unggah_file
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            check_id: file.filename_sanitization
+            kriteria_lulus: Server mengganti/menyanitasi nama file unggahan.
+          - id: FILE-11.3-T02
+            nama: Metadata sensitif dihapus dari file yang disajikan
+            titik_uji: unduh_file
+            check_id: file.metadata_stripped
+            kriteria_lulus: File gambar/dokumen yang disajikan tidak memuat metadata sensitif (EXIF, penulis, path).
+
+      - id: FILE-11.4
+        nomor_referensi: "11.4"
+        uraian: "melakukan pemindaian file yang diperoleh dari sumber yang tidak dipercaya"
+        verifiabilitas: sebagian
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V12.4.2" ]
+        metode_pengujian:
+          - id: FILE-11.4-T01
+            nama: Unggahan file uji antivirus standar (EICAR) ditolak/dikarantina
+            titik_uji: unggah_file
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            check_id: file.av_scanning
+            kriteria_lulus: File uji EICAR ditolak atau dikarantina.
+
+      - id: FILE-11.5
+        nomor_referensi: "11.5"
+        uraian: "melakukan konfigurasi server untuk mengunduh file sesuai ekstensi yang ditentukan"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V12.5", "CWE-552" ]
+        metode_pengujian:
+          - id: FILE-11.5-T01
+            nama: Header unduhan aman
+            titik_uji: unduh_file
+            check_id: file.download_headers
+            kriteria_lulus: Content-Disposition attachment dan X-Content-Type-Options nosniff pada unduhan.
+          - id: FILE-11.5-T02
+            nama: Hanya ekstensi yang diizinkan yang disajikan
+            titik_uji: unduh_file
+            engine: nuclei
+            check_id: file.extension_allowlist
+            kriteria_lulus: Berkas konfigurasi/sumber (mis. .bak, .config, .sql) tidak disajikan.
+
+  # ===========================================================================
+  - id: APIS
+    nomor: 12
+    nama: Keamanan API dan Web Service
+    kontrol:
+
+      - id: APIS-12.1
+        nomor_referensi: "12.1"
+        uraian: "melakukan konfigurasi layanan web"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V13.1", "CWE-942" ]
+        metode_pengujian:
+          - id: APIS-12.1-T01
+            nama: Kebijakan CORS tidak terlalu longgar
+            titik_uji: api
+            check_id: api.cors_policy
+            kriteria_lulus: Origin tidak dipantulkan bebas; wildcard tidak dikombinasikan dengan credentials.
+          - id: APIS-12.1-T02
+            nama: Metode HTTP yang aktif sesuai kebutuhan
+            titik_uji: api
+            check_id: api.http_methods
+            kriteria_lulus: TRACE dan metode yang tidak digunakan dinonaktifkan.
+
+      - id: APIS-12.2
+        nomor_referensi: "12.2"
+        uraian: "memverifikasi uniform resource identifier API tidak menampilkan informasi yang berpotensi sebagai celah keamanan"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V13.1.3", "CWE-598" ]
+        metode_pengujian:
+          - id: APIS-12.2-T01
+            nama: Tidak ada kredensial/token/data dikecualikan di URI
+            titik_uji: api
+            engine: zap
+            check_id: api.sensitive_in_uri
+            kriteria_lulus: URI tidak memuat API key, token, atau data dikecualikan.
+          - id: APIS-12.2-T02
+            nama: Dokumentasi API/endpoint debug tidak terbuka publik
+            titik_uji: api
+            engine: nuclei
+            check_id: exposure.api_docs_debug
+            kriteria_lulus: Swagger/OpenAPI/endpoint debug tidak dapat diakses tanpa otorisasi.
+
+      - id: APIS-12.3
+        nomor_referensi: "12.3"
+        uraian: "membuat keputusan otorisasi"
+        verifiabilitas: sebagian
+        severity_default: kritis
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V13.1.4", "OWASP API1:2023", "OWASP API5:2023" ]
+        metode_pengujian:
+          - id: APIS-12.3-T01
+            nama: Endpoint API mensyaratkan autentikasi
+            titik_uji: api
+            check_id: api.auth_required
+            kriteria_lulus: Endpoint non-publik menolak request tanpa token (401).
+          - id: APIS-12.3-T02
+            nama: Otorisasi tingkat objek pada API
+            titik_uji: api
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            check_id: access.horizontal
+            parameter: { akun_uji: [ "{{akun_uji_1}}", "{{akun_uji_2}}" ] }
+            kriteria_lulus: Token akun A tidak dapat mengakses objek akun B.
+
+      - id: APIS-12.4
+        nomor_referensi: "12.4"
+        uraian: "menampilkan metode RESTful hypertext transfer protocol apabila input pengguna dinyatakan valid"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V13.2.1" ]
+        metode_pengujian:
+          - id: APIS-12.4-T01
+            nama: Metode yang tidak didukung ditolak dengan benar
+            titik_uji: api
+            check_id: api.method_enforcement
+            kriteria_lulus: Metode HTTP yang tidak sesuai endpoint menghasilkan 405, bukan diproses.
+
+      - id: APIS-12.5
+        nomor_referensi: "12.5"
+        uraian: "menggunakan validasi skema dan verifikasi sebelum menerima input"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V13.2.2" ]
+        metode_pengujian:
+          - id: APIS-12.5-T01
+            nama: Payload tidak sesuai skema ditolak
+            titik_uji: api
+            jenis: semi_otomatis
+            check_id: api.schema_validation
+            parameter: { openapi_spec: "TODO: path/URL spesifikasi API per aset (opsional)" }
+            kriteria_lulus: JSON rusak, tipe salah, atau field wajib hilang menghasilkan 400/422.
+          - id: APIS-12.5-T02
+            nama: Content-Type request diverifikasi
+            titik_uji: api
+            check_id: api.content_type_enforcement
+            kriteria_lulus: Request dengan Content-Type tidak sesuai ditolak (415).
+
+      - id: APIS-12.6
+        nomor_referensi: "12.6"
+        uraian: "menggunakan metode pelindungan layanan berbasis web"
+        verifiabilitas: sebagian
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V13.2" ]
+        metode_pengujian:
+          - id: APIS-12.6-T01
+            nama: Header keamanan pada respons API
+            titik_uji: api
+            check_id: headers.api_security_headers
+            kriteria_lulus: Respons API memiliki Content-Type tepat, nosniff, dan Cache-Control sesuai.
+          - id: APIS-12.6-T02
+            nama: Perlindungan lapisan aplikasi (WAF/gateway)
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.api_gateway_waf
+            kriteria_lulus: Layanan dilindungi API gateway/WAF sesuai arsitektur.
+            bukti: [ dokumen ]
+
+      - id: APIS-12.7
+        nomor_referensi: "12.7"
+        uraian: "menerapkan kontrol antiotomatisasi"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP API4:2023", "CWE-770" ]
+        metode_pengujian:
+          - id: APIS-12.7-T01
+            nama: Pembatasan laju pada endpoint API
+            titik_uji: api
+            profil: intrusif
+            check_id: access.rate_limit
+            kriteria_lulus: Request berlebih dibatasi (HTTP 429 / header rate-limit).
+
+  # ===========================================================================
+  - id: CONF
+    nomor: 13
+    nama: Konfigurasi
+    kontrol:
+
+      - id: CONF-13.1
+        nomor_referensi: "13.1"
+        uraian: "mengonfigurasi server sesuai rekomendasi server aplikasi dan kerangka kerja aplikasi yang digunakan"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V14.1", "CWE-16" ]
+        metode_pengujian:
+          - id: CONF-13.1-T01
+            nama: Banner server tidak mengungkap versi
+            titik_uji: global
+            check_id: headers.server_banner
+            kriteria_lulus: Header Server/X-Powered-By tidak menampilkan produk dan versi detail.
+          - id: CONF-13.1-T02
+            nama: Directory listing dinonaktifkan
+            titik_uji: global
+            engine: zap
+            check_id: conf.directory_listing
+            kriteria_lulus: Tidak ada direktori yang menampilkan daftar isi.
+          - id: CONF-13.1-T03
+            nama: Mode debug kerangka kerja nonaktif
+            titik_uji: global
+            engine: nuclei
+            check_id: conf.debug_mode
+            kriteria_lulus: Tidak ada halaman/endpoint debug kerangka kerja yang aktif.
+
+      - id: CONF-13.2
+        nomor_referensi: "13.2"
+        uraian: "mendokumentasi, menyalin konfigurasi, dan semua dependensi"
+        verifiabilitas: manual
+        severity_default: rendah
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V14.2.5" ]
+        metode_pengujian:
+          - id: CONF-13.2-T01
+            nama: Dokumentasi konfigurasi dan daftar dependensi (SBOM)
+            titik_uji: dokumen
+            jenis: manual
+            engine: manual
+            check_id: manual.config_documentation
+            kriteria_lulus: Konfigurasi dan dependensi terdokumentasi dan dicadangkan.
+            bukti: [ dokumen ]
+
+      - id: CONF-13.3
+        nomor_referensi: "13.3"
+        uraian: "menghapus fitur, dokumentasi, sampel, dan konfigurasi yang tidak diperlukan"
+        verifiabilitas: otomatis
+        severity_default: tinggi
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V14.3", "CWE-1188" ]
+        metode_pengujian:
+          - id: CONF-13.3-T01
+            nama: Halaman default/sampel/dokumentasi server tidak tersedia
+            titik_uji: global
+            engine: nuclei
+            check_id: exposure.default_sample_pages
+            kriteria_lulus: Tidak ada halaman instalasi, sampel, atau dokumentasi bawaan.
+          - id: CONF-13.3-T02
+            nama: Berkas konfigurasi dan repositori tidak terekspos
+            titik_uji: global
+            engine: nuclei
+            check_id: exposure.config_vcs_files
+            kriteria_lulus: Berkas seperti .env, .git, dan konfigurasi tidak dapat diakses.
+
+      - id: CONF-13.4
+        nomor_referensi: "13.4"
+        uraian: "memvalidasi integritas aset jika aset aplikasi diakses secara eksternal"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V14.2.3", "CWE-829" ]
+        metode_pengujian:
+          - id: CONF-13.4-T01
+            nama: Subresource Integrity pada aset dari CDN/eksternal
+            titik_uji: global
+            check_id: integrity.sri
+            kriteria_lulus: Seluruh aset eksternal memiliki atribut integrity yang valid.
+
+      - id: CONF-13.5
+        nomor_referensi: "13.5"
+        uraian: "menggunakan respons aplikasi dan konten yang aman"
+        verifiabilitas: otomatis
+        severity_default: sedang
+        agregasi: semua_lulus
+        referensi_pendukung: [ "OWASP ASVS V14.4" ]
+        metode_pengujian:
+          - id: CONF-13.5-T01
+            nama: Header keamanan respons
+            titik_uji: global
+            check_id: headers.security_baseline
+            kriteria_lulus: X-Content-Type-Options, perlindungan framing (X-Frame-Options/CSP frame-ancestors), dan Referrer-Policy ada.
+          - id: CONF-13.5-T02
+            nama: Content-Type dan charset tepat
+            titik_uji: global
+            check_id: headers.content_type_charset
+            kriteria_lulus: Setiap respons memiliki Content-Type yang benar beserta charset.

@@ -1,0 +1,21 @@
+# Worker pengujian SATYA (Python 3.13)
+httpx==0.28.1
+# Fase penemuan mode eksploratif: parse spec OpenAPI (YAML) — pure-Python.
+ruamel.yaml==0.19.1
+# Klien API OWASP ZAP (engine zap). Butuh daemon ZAP berjalan (ZAP_PROXY/ZAP_API_KEY); daemon bukan paket pip.
+zaproxy==0.6.0
+# Engine playwright (library in-proses) + fallback browser untuk check AUTH/SESS pada SPA/JS.
+# Perlu venv Python 3.13 dan unduh browser sekali: `python -m playwright install chromium`
+# (server Linux tambahan: `python -m playwright install-deps`). greenlet (dep playwright) butuh wheel 3.13.
+playwright==1.64.1
+# MFA/TOTP untuk discovery & check terautentikasi (membangkitkan kode OTP dari totp_secret).
+pyotp==2.9.0
+# Enrichment AI discovery (opsional; diimpor lazy). Gemini utama, Anthropic fallback.
+# Tanpa paket/kunci ini worker tetap jalan (enrichment dilewati).
+google-genai==1.38.0
+anthropic==0.69.0
+# katana (enumerasi endpoint mendalam) BUKAN paket pip — biner Go eksternal, opsional:
+#   go install github.com/projectdiscovery/katana/cmd/katana@latest
+#   lalu set KATANA_BIN bila tidak di PATH. Tanpa katana, tahap ini dilewati.
+# dev
+pytest==9.1.1

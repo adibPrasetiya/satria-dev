@@ -1,0 +1,62 @@
+<script lang="ts">
+	import './layout.css';
+	import favicon from '#lib/assets/favicon.svg';
+	import { ModeWatcher } from 'mode-watcher';
+	import { Toaster } from '#lib/components/ui/sonner/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import AppShell from '#lib/components/AppShell.svelte';
+	import PanggungAuth from '#lib/components/PanggungAuth.svelte';
+	import { auth } from '#lib/stores/auth.svelte.js';
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import type { Peran } from '#lib/types.js';
+	import type { LayoutProps } from './$types';
+
+	let { children }: LayoutProps = $props();
+
+	// Batas akses per awalan route.
+	const AKSES: [string, Peran[]][] = [
+		['/admin', ['admin']],
+		['/asesor', ['asesor', 'admin']],
+		['/aplikasi/baru', ['pemilik', 'admin']]
+	];
+
+	// Halaman publik (tanpa sesi): login, pendaftaran akun, dan lupa kata sandi.
+	const PUBLIK = ['/login', '/daftar', '/lupa-sandi', '/reset-sandi'];
+	const diLogin = $derived(PUBLIK.some((p) => page.url.pathname.startsWith(p)));
+	const diizinkan = $derived(
+		AKSES.every(([awalan, peran]) => !page.url.pathname.startsWith(awalan) || auth.punya(...peran))
+	);
+
+	$effect(() => {
+		if (!auth.pengguna && !diLogin) goto('/login');
+		else if (auth.pengguna && diLogin) goto('/dashboard');
+	});
+</script>
+
+<svelte:head>
+	<link rel="icon" href={favicon} />
+	<title>SATYA — Asesmen Kelaikan Keamanan Aplikasi</title>
+</svelte:head>
+
+<ModeWatcher />
+<Toaster position="top-right" duration={4000} />
+
+<Tooltip.Provider>
+	{#if diLogin}
+		<PanggungAuth>{@render children()}</PanggungAuth>
+	{:else if auth.pengguna}
+		<AppShell>
+			{#if diizinkan}
+				{@render children()}
+			{:else}
+				<div class="rounded-xl border border-dashed p-10 text-center">
+					<p class="font-medium">Akses ditolak</p>
+					<p class="mt-1 text-sm text-muted-foreground">
+						Peran Anda tidak memiliki akses ke halaman ini.
+					</p>
+				</div>
+			{/if}
+		</AppShell>
+	{/if}
+</Tooltip.Provider>

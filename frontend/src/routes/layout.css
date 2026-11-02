@@ -1,0 +1,568 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn-svelte/tailwind.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/oswald';
+@import '@fontsource/saira-stencil-one';
+
+/* Deteksi otomatis Tailwind melewatkan folder route ber-kurung siku ([id], [scanId]). */
+@source '../routes/**/*.svelte';
+@source '../lib/**/*.svelte';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Tema "Army" — palet loreng TNI AD:
+ *   hijau daun #6e7a44 · hijau tua #2c3f26 · cokelat tanah #5f4129 · hitam #1b1d18 · khaki #9c9467
+ * ditambah aksen emas (tanda pangkat/emblem).
+ */
+:root {
+	--background: oklch(0.955 0.018 100);
+	--foreground: oklch(0.22 0.025 125);
+	--card: oklch(0.982 0.012 100);
+	--card-foreground: oklch(0.22 0.025 125);
+	--popover: oklch(0.985 0.01 100);
+	--popover-foreground: oklch(0.22 0.025 125);
+	--primary: oklch(0.42 0.075 128);
+	--primary-foreground: oklch(0.97 0.02 100);
+	--secondary: oklch(0.91 0.03 100);
+	--secondary-foreground: oklch(0.28 0.04 125);
+	--muted: oklch(0.925 0.022 100);
+	--muted-foreground: oklch(0.48 0.03 115);
+	--accent: oklch(0.9 0.04 110);
+	--accent-foreground: oklch(0.28 0.05 125);
+	--destructive: oklch(0.52 0.19 28);
+	--border: oklch(0.84 0.03 105);
+	--input: oklch(0.83 0.03 105);
+	--ring: oklch(0.6 0.08 125);
+	--chart-1: oklch(0.42 0.075 128);
+	--chart-2: oklch(0.45 0.07 55);
+	--chart-3: oklch(0.68 0.06 100);
+	--chart-4: oklch(0.32 0.05 140);
+	--chart-5: oklch(0.72 0.13 85);
+	--radius: 0.375rem;
+
+	/* Sidebar berlatar loreng: warna teks terang di atas lapisan gelap. */
+	--sidebar: oklch(0.24 0.035 130);
+	--sidebar-foreground: oklch(0.94 0.025 100);
+	--sidebar-primary: oklch(0.8 0.13 85);
+	--sidebar-primary-foreground: oklch(0.2 0.03 125);
+	--sidebar-accent: oklch(1 0 0 / 10%);
+	--sidebar-accent-foreground: oklch(0.98 0.02 100);
+	--sidebar-border: oklch(1 0 0 / 12%);
+	--sidebar-ring: oklch(0.8 0.13 85);
+
+	--gold: oklch(0.74 0.135 82);
+	--gold-foreground: oklch(0.25 0.04 80);
+	--khaki: oklch(0.68 0.055 100);
+	--olive-dark: oklch(0.27 0.04 135);
+	--success: oklch(0.5 0.13 145);
+	--warning: oklch(0.7 0.15 70);
+	--warning-foreground: oklch(0.46 0.11 60);
+	--info: oklch(0.5 0.1 235);
+	--critical: oklch(0.5 0.19 28);
+}
+
+.dark {
+	--background: oklch(0.175 0.014 130);
+	--foreground: oklch(0.93 0.02 100);
+	--card: oklch(0.215 0.018 130);
+	--card-foreground: oklch(0.93 0.02 100);
+	--popover: oklch(0.225 0.018 130);
+	--popover-foreground: oklch(0.93 0.02 100);
+	--primary: oklch(0.7 0.1 122);
+	--primary-foreground: oklch(0.17 0.03 130);
+	--secondary: oklch(0.27 0.02 130);
+	--secondary-foreground: oklch(0.93 0.02 100);
+	--muted: oklch(0.26 0.018 130);
+	--muted-foreground: oklch(0.7 0.03 105);
+	--accent: oklch(0.29 0.03 128);
+	--accent-foreground: oklch(0.95 0.02 100);
+	--destructive: oklch(0.68 0.18 25);
+	--border: oklch(0.95 0.03 100 / 11%);
+	--input: oklch(0.95 0.03 100 / 15%);
+	--ring: oklch(0.6 0.09 122);
+	--chart-1: oklch(0.7 0.1 122);
+	--chart-2: oklch(0.62 0.08 55);
+	--chart-3: oklch(0.78 0.06 100);
+	--chart-4: oklch(0.5 0.07 140);
+	--chart-5: oklch(0.8 0.13 85);
+	--sidebar: oklch(0.15 0.015 130);
+	--sidebar-foreground: oklch(0.93 0.02 100);
+	--sidebar-primary: oklch(0.8 0.13 85);
+	--sidebar-primary-foreground: oklch(0.2 0.03 125);
+	--sidebar-accent: oklch(1 0 0 / 9%);
+	--sidebar-accent-foreground: oklch(0.98 0.02 100);
+	--sidebar-border: oklch(1 0 0 / 10%);
+	--sidebar-ring: oklch(0.8 0.13 85);
+
+	--gold: oklch(0.8 0.13 85);
+	--gold-foreground: oklch(0.22 0.04 80);
+	--khaki: oklch(0.72 0.05 100);
+	--olive-dark: oklch(0.2 0.025 135);
+	--success: oklch(0.72 0.14 145);
+	--warning: oklch(0.8 0.14 75);
+	--warning-foreground: oklch(0.86 0.13 80);
+	--info: oklch(0.72 0.11 235);
+	--critical: oklch(0.7 0.18 25);
+}
+
+@theme inline {
+	--font-sans: 'Inter Variable', sans-serif;
+	--font-heading: 'Oswald Variable', 'Inter Variable', sans-serif;
+	--font-stencil: 'Saira Stencil One', 'Oswald Variable', sans-serif;
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar: var(--sidebar);
+	--color-chart-5: var(--chart-5);
+	--color-chart-4: var(--chart-4);
+	--color-chart-3: var(--chart-3);
+	--color-chart-2: var(--chart-2);
+	--color-chart-1: var(--chart-1);
+	--color-ring: var(--ring);
+	--color-gold: var(--gold);
+	--color-gold-foreground: var(--gold-foreground);
+	--color-khaki: var(--khaki);
+	--color-olive-dark: var(--olive-dark);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-warning-foreground: var(--warning-foreground);
+	--color-info: var(--info);
+	--color-critical: var(--critical);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+	--radius-sm: calc(var(--radius) * 0.6);
+	--radius-md: calc(var(--radius) * 0.8);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.4);
+	--radius-2xl: calc(var(--radius) * 1.8);
+	--radius-3xl: calc(var(--radius) * 2.2);
+	--radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	html {
+		@apply font-sans;
+	}
+	body {
+		@apply bg-background text-foreground;
+		/* Tekstur kain seragam halus di latar halaman. */
+		background-image:
+			repeating-linear-gradient(45deg, oklch(0.5 0.04 110 / 3.5%) 0 1px, transparent 1px 4px),
+			repeating-linear-gradient(-45deg, oklch(0.5 0.04 110 / 3.5%) 0 1px, transparent 1px 4px);
+	}
+	h1,
+	h2,
+	h3 {
+		@apply font-heading tracking-wide;
+	}
+	[data-slot='card-title'] {
+		@apply font-heading text-base font-semibold tracking-wide uppercase;
+	}
+}
+
+@layer components {
+	/* Latar loreng; lapisan gelap diatur lewat --loreng-tint. */
+	.bg-loreng {
+		--loreng-tint: oklch(0.2 0.03 130 / 72%);
+		background-color: #2c3f26;
+		background-image:
+			linear-gradient(var(--loreng-tint), var(--loreng-tint)), url('/loreng.svg');
+		background-size:
+			auto,
+			360px 360px;
+	}
+	.bg-loreng-terang {
+		--loreng-tint: oklch(0.2 0.03 130 / 35%);
+	}
+	.bg-loreng-polos {
+		--loreng-tint: transparent;
+	}
+
+	/* Sudut bingkai taktis pada kartu/panel. */
+	.sudut-taktis {
+		position: relative;
+	}
+	.sudut-taktis::before,
+	.sudut-taktis::after {
+		content: '';
+		position: absolute;
+		width: 14px;
+		height: 14px;
+		border-color: var(--gold);
+		pointer-events: none;
+	}
+	.sudut-taktis::before {
+		top: -1px;
+		left: -1px;
+		border-top: 2px solid var(--gold);
+		border-left: 2px solid var(--gold);
+	}
+	.sudut-taktis::after {
+		right: -1px;
+		bottom: -1px;
+		border-right: 2px solid var(--gold);
+		border-bottom: 2px solid var(--gold);
+	}
+
+	/* Label stensil kecil (eyebrow) di atas judul. */
+	.label-stensil {
+		@apply font-heading text-[11px] font-medium tracking-[0.2em] text-gold uppercase;
+	}
+
+	/* Garis pangkat/strip emas di bawah judul halaman. */
+	.strip-pangkat {
+		height: 4px;
+		width: 72px;
+		background: repeating-linear-gradient(
+			-60deg,
+			var(--gold) 0 6px,
+			transparent 6px 10px
+		);
+	}
+
+	/* Cap stempel (mis. "TERBATAS"). */
+	.cap-stempel {
+		@apply font-stencil inline-block rounded-sm border-2 px-2 py-0.5 text-xs tracking-[0.18em] uppercase;
+		transform: rotate(-3deg);
+	}
+}
+
+@media print {
+	.no-print {
+		display: none !important;
+	}
+	body {
+		background: white !important;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+   Transisi login <-> daftar (View Transitions API, dipicu PanggungAuth).
+   Latar dianimasikan langsung oleh PanggungAuth (CSS transition pada DOM hidup), jadi
+   cuplikan lama halaman disembunyikan dan hanya kartu yang diberi animasi di sini.
+   data-arah-auth = "<adegan asal>-<adegan tujuan>", mis. login-daftar, login-lupa. */
+:root[data-arah-auth]::view-transition-old(root) {
+	display: none;
+}
+:root[data-arah-auth]::view-transition-new(root) {
+	animation: none;
+}
+/* Login -> daftar: kartu login keluar ke kanan, kartu daftar meluncur dari kanan ke posisinya di kiri. */
+:root[data-arah-auth='login-daftar']::view-transition-old(kartu-login) {
+	animation: kartu-keluar-kanan 0.45s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+:root[data-arah-auth='login-daftar']::view-transition-new(kartu-daftar) {
+	animation: kartu-dari-kanan 0.95s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Daftar -> login: cerminan — kartu daftar keluar ke kiri, kartu login meluncur dari kiri ke posisinya di kanan. */
+:root[data-arah-auth='daftar-login']::view-transition-old(kartu-daftar) {
+	animation: kartu-keluar-kiri 0.45s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+:root[data-arah-auth='daftar-login']::view-transition-new(kartu-login) {
+	animation: kartu-dari-kiri 0.95s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Login -> lupa: kartu login bergeser ke tengah sambil memudar, kartu lupa menyusul dari kanan ke tengah. */
+:root[data-arah-auth='login-lupa']::view-transition-old(kartu-login) {
+	animation: kartu-keluar-kiri 0.45s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+:root[data-arah-auth='login-lupa']::view-transition-new(kartu-lupa) {
+	animation: kartu-dari-kanan-dekat 0.9s 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Lupa -> login: kebalikannya, kartu kembali ke kanan. */
+:root[data-arah-auth='lupa-login']::view-transition-old(kartu-lupa) {
+	animation: kartu-keluar-kanan 0.45s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+:root[data-arah-auth='lupa-login']::view-transition-new(kartu-login) {
+	animation: kartu-dari-kiri-dekat 0.9s 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Daftar <-> lupa: pudar dengan geser pendek. */
+:root[data-arah-auth='daftar-lupa']::view-transition-old(kartu-daftar),
+:root[data-arah-auth='lupa-daftar']::view-transition-old(kartu-lupa) {
+	animation: kartu-pudar 0.3s ease-in both;
+}
+:root[data-arah-auth='daftar-lupa']::view-transition-new(kartu-lupa) {
+	animation: kartu-dari-kiri-dekat 0.8s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+:root[data-arah-auth='lupa-daftar']::view-transition-new(kartu-daftar) {
+	animation: kartu-dari-kanan-dekat 0.8s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes kartu-dari-kanan-dekat {
+	from {
+		opacity: 0;
+		transform: translateX(min(30vw, 420px));
+	}
+	45% {
+		opacity: 1;
+	}
+}
+@keyframes kartu-dari-kiri-dekat {
+	from {
+		opacity: 0;
+		transform: translateX(max(-30vw, -420px));
+	}
+	45% {
+		opacity: 1;
+	}
+}
+@keyframes kartu-pudar {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes kartu-keluar-kanan {
+	to {
+		opacity: 0;
+		transform: translateX(18vw);
+	}
+}
+@keyframes kartu-keluar-kiri {
+	to {
+		opacity: 0;
+		transform: translateX(-18vw);
+	}
+}
+@keyframes kartu-dari-kanan {
+	from {
+		opacity: 0;
+		transform: translateX(min(60vw, 900px));
+	}
+	40% {
+		opacity: 1;
+	}
+}
+@keyframes kartu-dari-kiri {
+	from {
+		opacity: 0;
+		transform: translateX(max(-60vw, -900px));
+	}
+	40% {
+		opacity: 1;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+   Toast (svelte-sonner, unstyled) bergaya taktis berlatar loreng samar. Jenis dibedakan di tiga tempat agar tetap
+   terbaca di atas motif: tint loreng (hijau gelap / merah tua), strip kiri tebal, dan ikon & label berlatar solid.
+   Toast gagal juga bergetar singkat saat muncul. */
+.satya-toast {
+	--toast-warna: oklch(0.8 0.13 85);
+	--toast-label: 'Info';
+	--toast-tint: oklch(0.17 0.02 120 / 0.8);
+	position: relative;
+	display: flex;
+	align-items: flex-start;
+	gap: 0.75rem;
+	width: var(--width, 356px);
+	overflow: hidden;
+	padding: 0.85rem 2.4rem 1rem 0.9rem;
+	border: 1px solid rgb(255 255 255 / 0.1);
+	border-left: 7px solid var(--toast-warna);
+	border-radius: 0.375rem;
+	/* Motif loreng diredam tint gelap (±30% terlihat) agar teks tetap mudah dibaca. */
+	background-color: #10150e;
+	background-image: linear-gradient(var(--toast-tint), var(--toast-tint)), url('/loreng.svg');
+	background-size:
+		auto,
+		300px 300px;
+	color: #eef3ea;
+	box-shadow:
+		0 18px 40px rgb(0 0 0 / 0.5),
+		inset 0 1px 0 rgb(255 255 255 / 0.05);
+	font-size: 0.875rem;
+}
+.satya-toast[data-type='success'] {
+	--toast-warna: oklch(0.74 0.16 145);
+	--toast-label: 'Berhasil';
+	--toast-tint: oklch(0.18 0.04 140 / 0.76);
+}
+.satya-toast[data-type='error'] {
+	--toast-warna: oklch(0.66 0.21 27);
+	--toast-label: 'Gagal';
+	--toast-tint: oklch(0.2 0.08 25 / 0.8);
+	border-color: oklch(0.66 0.21 27 / 0.45);
+	border-left-color: var(--toast-warna);
+	animation: toast-getar 0.4s 0.25s ease-in-out;
+}
+.satya-toast[data-type='info'] {
+	--toast-warna: oklch(0.72 0.12 235);
+	--toast-label: 'Info';
+}
+.satya-toast[data-type='warning'] {
+	--toast-warna: oklch(0.8 0.14 85);
+	--toast-label: 'Perhatian';
+}
+.satya-toast[data-type='loading'] {
+	--toast-label: 'Memproses';
+}
+
+/* Ikon dalam kotak berwarna solid, ikon gelap di dalamnya. */
+.satya-toast-ikon {
+	display: grid;
+	flex-shrink: 0;
+	place-items: center;
+	width: 2.1rem;
+	height: 2.1rem;
+	border-radius: 0.25rem;
+	background: var(--toast-warna);
+	color: #0d110c;
+	box-shadow: 0 0 14px color-mix(in oklab, var(--toast-warna) 45%, transparent);
+}
+.satya-toast-isi {
+	display: grid;
+	min-width: 0;
+	gap: 0.15rem;
+}
+/* Label jenis seperti pita/cap: blok kecil berlatar warna jenis. */
+.satya-toast-judul::before {
+	content: var(--toast-label);
+	display: block;
+	width: fit-content;
+	margin-bottom: 0.3rem;
+	padding: 0.05rem 0.4rem;
+	border-radius: 0.15rem;
+	background: var(--toast-warna);
+	color: #0d110c;
+	font-family: var(--font-heading);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+}
+.satya-toast-judul {
+	display: block;
+	font-weight: 500;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+	text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+}
+.satya-toast-ket {
+	font-size: 0.75rem;
+	color: rgb(238 243 234 / 0.7);
+}
+.satya-toast-tutup {
+	position: absolute;
+	top: 0.5rem;
+	right: 0.5rem;
+	display: grid;
+	place-items: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	border-radius: 0.25rem;
+	color: rgb(238 243 234 / 0.55);
+	transition:
+		color 0.15s,
+		background-color 0.15s;
+}
+.satya-toast-tutup:hover {
+	background: rgb(0 0 0 / 0.35);
+	color: #fff;
+}
+.satya-toast-tutup svg {
+	width: 0.85rem;
+	height: 0.85rem;
+}
+/* Bilah waktu: menyusut selama durasi toast (4 s, sama dengan Toaster), berhenti saat disorot. */
+.satya-toast::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 2px;
+	background: var(--toast-warna);
+	transform-origin: left;
+	animation: toast-waktu 4s linear forwards;
+}
+.satya-toast[data-type='loading']::after {
+	display: none;
+}
+[data-sonner-toaster]:hover .satya-toast::after {
+	animation-play-state: paused;
+}
+@keyframes toast-waktu {
+	to {
+		transform: scaleX(0);
+	}
+}
+/* Memakai properti `translate` (bukan transform) agar tidak bentrok dengan posisi tumpukan dari sonner. */
+@keyframes toast-getar {
+	20%,
+	60% {
+		translate: -5px 0;
+	}
+	40%,
+	80% {
+		translate: 5px 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.satya-toast::after {
+		display: none;
+	}
+	.satya-toast[data-type='error'] {
+		animation: none;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+   Scrollbar global: tipis, track transparan, batang redup yang menjadi emas saat disorot/ditarik.
+   Warna dari token tema sehingga mengikuti mode terang/gelap. */
+:root {
+	--scroll-batang: color-mix(in oklab, var(--muted-foreground) 40%, transparent);
+	--scroll-batang-aktif: color-mix(in oklab, var(--gold) 80%, transparent);
+}
+/* Chrome/Edge/Safari. Tombol panah disembunyikan; border transparan membuat batang tampak lebih ramping. */
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+::-webkit-scrollbar-button {
+	display: none;
+}
+::-webkit-scrollbar-thumb {
+	background-color: var(--scroll-batang);
+	border: 3px solid transparent;
+	border-radius: 999px;
+	background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+	background-color: var(--scroll-batang-aktif);
+	border-width: 2px;
+}
+/* Firefox (tidak mendukung ::-webkit-scrollbar). Dipisah agar Chrome tetap memakai gaya di atas,
+   karena Chrome mengabaikan ::-webkit-scrollbar bila scrollbar-color diset. */
+@supports not selector(::-webkit-scrollbar) {
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-batang) transparent;
+	}
+}
