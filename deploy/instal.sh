@@ -3,8 +3,9 @@
 # instal.sh — Bootstrap server dev SATYA sekali-jalan (Ubuntu/Debian, apt).
 #
 # Setup frontend + backend + worker: Node 20, Python 3.13, MySQL, PM2,
-# OWASP ZAP (daemon LOKAL — worker tidak lagi akses ZAP via internet),
 # clone repo, isi .env (rahasia dibangkitkan otomatis), build, lalu start via PM2.
+# ZAP TIDAK dipasang skrip ini — worker memakai ZAP yang SUDAH ADA di server
+# (atur ZAP_BASE_URL / ZAP_API_KEY; default ZAP_BASE_URL=http://127.0.0.1:8080).
 #
 # CATATAN: skrip ini TIDAK memasang/mengatur Nginx. Reverse proxy & TLS
 # Anda konfigurasi sendiri — arahkan ke:
@@ -28,8 +29,9 @@ PUBLIC_HOST="${PUBLIC_HOST:-$(curl -fsSL https://api.ipify.org 2>/dev/null || ec
 # URL publik untuk CORS & tautan reset email. Set DOMAIN=... untuk pakai domain + HTTPS.
 DOMAIN="${DOMAIN:-}"
 if [ -n "$DOMAIN" ]; then BASE_URL="https://${DOMAIN}"; else BASE_URL="http://${PUBLIC_HOST}"; fi
-ZAP_VERSION="2.17.0"
-ZAP_DIR="$HOME/ZAP_${ZAP_VERSION}"
+# ZAP eksternal (sudah ada di server). Worker memakainya; skrip tak memasang ZAP.
+ZAP_BASE_URL="${ZAP_BASE_URL:-http://127.0.0.1:8080}"
+ZAP_API_KEY="${ZAP_API_KEY:-}"
 
 log() { echo -e "\n\033[1;32m==> $*\033[0m"; }
 
@@ -37,7 +39,7 @@ log() { echo -e "\n\033[1;32m==> $*\033[0m"; }
 log "Update apt & paket dasar"
 sudo apt-get update -y
 sudo apt-get install -y curl git unzip ca-certificates gnupg build-essential \
-  software-properties-common default-jre mysql-server
+  software-properties-common mysql-server
 
 # --- 1. Node.js 20 (NodeSource) ---------------------------------------------
 if ! command -v node >/dev/null || [ "$(node -v | cut -c2-3)" -lt 20 ]; then
@@ -56,14 +58,6 @@ fi
 
 # --- 3. PM2 global ----------------------------------------------------------
 command -v pm2 >/dev/null || { log "Pasang PM2"; sudo npm install -g pm2; }
-
-# --- 4. OWASP ZAP (daemon LOKAL) --------------------------------------------
-if [ ! -x "$ZAP_DIR/zap.sh" ]; then
-  log "Unduh OWASP ZAP $ZAP_VERSION"
-  curl -fsSL "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Crossplatform.zip" -o /tmp/zap.zip
-  unzip -q -o /tmp/zap.zip -d "$HOME"
-  rm -f /tmp/zap.zip
-fi
 
 # --- 5. Clone / update repo -------------------------------------------------
 if [ ! -d "$APP_DIR/.git" ]; then
@@ -85,7 +79,6 @@ if [ ! -f backend/.env ]; then
   JWT_SECRET="$(gen 48)"
   WORKER_TOKEN="$(gen 24)"
   DB_PASS="$(gen 18)"
-  ZAP_API_KEY="$(gen 16)"
 
   # MySQL: buat database + user (fresh mysql pakai socket auth → sudo mysql)
   sudo mysql <<SQL
@@ -128,8 +121,8 @@ WORKER_TOKEN=${WORKER_TOKEN}
 WORKER_ID=worker-1
 WORKER_ENGINES=custom,discovery,zap,playwright
 POLL_INTERVAL=2
-# ZAP LOKAL di server ini (tidak lagi via internet)
-ZAP_BASE_URL=http://127.0.0.1:8080
+# ZAP yang sudah ada di server (eksternal; isi ZAP_API_KEY sesuai daemon Anda)
+ZAP_BASE_URL=${ZAP_BASE_URL}
 ZAP_API_KEY=${ZAP_API_KEY}
 ZAP_TIMEOUT_SPIDER=120
 ZAP_TIMEOUT_ASCAN=300
@@ -143,7 +136,6 @@ ENV
   echo "   .env dibuat. Edit manual bila perlu Resend/AI (RESEND_API_KEY, GEMINI_API_KEY, dst)."
 else
   log ".env sudah ada — dipertahankan (rahasia tidak diubah)"
-  ZAP_API_KEY="$(grep -E '^ZAP_API_KEY=' worker/.env | cut -d= -f2-)"
 fi
 
 # --- 7. Install & build tiap komponen ---------------------------------------
@@ -163,13 +155,6 @@ sudo .venv/bin/python -m playwright install-deps
 cd ..
 
 # --- 8. Start proses via PM2 -------------------------------------------------
-log "Start ZAP (daemon lokal) via PM2"
-pm2 describe satya-zap >/dev/null 2>&1 || \
-  pm2 start "$ZAP_DIR/zap.sh" --name satya-zap -- \
-    -daemon -host 127.0.0.1 -port 8080 \
-    -config api.key="$ZAP_API_KEY" \
-    -config api.addrs.addr.name=127.0.0.1 -config api.addrs.addr.regex=false
-
 log "Start backend + worker via PM2"
 pm2 reload ecosystem.config.cjs --update-env || pm2 start ecosystem.config.cjs
 pm2 save
@@ -182,11 +167,11 @@ pm2 save
 log "SELESAI (frontend+backend+worker siap; Nginx diatur sendiri)"
 cat <<DONE
 
-  Proses PM2 : pm2 ls   (satya-backend, satya-worker, satya-zap)
+  Proses PM2 : pm2 ls   (satya-backend, satya-worker)
   Backend    : http://127.0.0.1:3000   (arahkan reverse proxy: /api/ -> sini)
   Frontend   : ${APP_DIR}/frontend/build   (file statis SPA; arahkan reverse proxy: / -> sini,
                fallback ke /index.html untuk adapter-static)
-  ZAP lokal  : http://127.0.0.1:8080
+  ZAP        : ${ZAP_BASE_URL}   (eksternal; set ZAP_API_KEY di worker/.env sesuai daemon Anda)
 
   Langkah manual tersisa:
    1. Konfigurasi reverse proxy (Nginx) Anda ke dua lokasi di atas + TLS domain.
