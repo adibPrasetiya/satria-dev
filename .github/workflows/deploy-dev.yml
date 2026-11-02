@@ -1,0 +1,32 @@
+name: Deploy ke server dev
+
+# Berjalan otomatis setiap ada commit baru di branch `dev`
+# (yaitu setiap PR feature/* yang di-approve & di-merge ke dev).
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch: {} # bisa juga dijalankan manual dari tab Actions
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false # jangan batalkan deploy yang sedang berjalan
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (untuk mengambil skrip deploy)
+        uses: actions/checkout@v4
+
+      - name: Siapkan kunci SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEV_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.DEV_SSH_PORT || '22' }}" -H "${{ secrets.DEV_SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Jalankan deploy di server
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "${{ secrets.DEV_SSH_PORT || '22' }}" \
+            "${{ secrets.DEV_SSH_USER }}@${{ secrets.DEV_SSH_HOST }}" \
+            "APP_DIR='${{ secrets.DEV_APP_DIR }}' bash -s" < deploy/deploy-dev.sh
