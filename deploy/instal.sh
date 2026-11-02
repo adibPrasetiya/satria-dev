@@ -28,7 +28,7 @@ PUBLIC_HOST="${PUBLIC_HOST:-$(curl -fsSL https://api.ipify.org 2>/dev/null || ec
 # URL publik untuk CORS & tautan reset email. Set DOMAIN=... untuk pakai domain + HTTPS.
 DOMAIN="${DOMAIN:-}"
 if [ -n "$DOMAIN" ]; then BASE_URL="https://${DOMAIN}"; else BASE_URL="http://${PUBLIC_HOST}"; fi
-ZAP_VERSION="2.15.0"
+ZAP_VERSION="2.17.0"
 ZAP_DIR="$HOME/ZAP_${ZAP_VERSION}"
 
 log() { echo -e "\n\033[1;32m==> $*\033[0m"; }
