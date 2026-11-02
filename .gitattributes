@@ -1,0 +1,6 @@
+# Paksa LF untuk skrip & file yang dibaca di Linux (server/CI).
+# Mencegah CRLF Windows merusak shell script saat dijalankan di server.
+*.sh  text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.cjs text eol=lf
