@@ -142,8 +142,8 @@ else
 fi
 
 # --- 7. Install & build tiap komponen ---------------------------------------
-log "Backend: install + migrasi DB"
-( cd backend && npm ci && npm run db:migrate )
+log "Backend: install + migrasi DB + seed katalog BSSN"
+( cd backend && npm ci && npm run db:migrate && npm run catalog:seed )
 
 log "Frontend: install + build statis"
 ( cd frontend && npm ci && npm run build )
