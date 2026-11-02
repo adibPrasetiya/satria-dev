@@ -2,13 +2,19 @@
 # =============================================================================
 # instal.sh — Bootstrap server dev SATYA sekali-jalan (Ubuntu/Debian, apt).
 #
-# Pasang & konfigurasikan SEMUA: Node 20, Python 3.13, MySQL, Nginx, PM2,
+# Setup frontend + backend + worker: Node 20, Python 3.13, MySQL, PM2,
 # OWASP ZAP (daemon LOKAL — worker tidak lagi akses ZAP via internet),
-# clone repo, isi .env (rahasia dibangkitkan otomatis), build, lalu start.
+# clone repo, isi .env (rahasia dibangkitkan otomatis), build, lalu start via PM2.
 #
-# Jalankan DI SERVER sebagai user deploy (punya sudo):
+# CATATAN: skrip ini TIDAK memasang/mengatur Nginx. Reverse proxy & TLS
+# Anda konfigurasi sendiri — arahkan ke:
+#   /      -> ${APP_DIR}/frontend/build   (file statis, SPA)
+#   /api/  -> http://127.0.0.1:3000       (backend)
+#
+# Jalankan DI SERVER sebagai user deploy (punya sudo). Set DOMAIN agar tautan
+# reset kata sandi & CORS memakai domain publik Anda:
 #   curl -fsSL https://raw.githubusercontent.com/adibPrasetiya/satria-dev/dev/deploy/instal.sh -o instal.sh
-#   chmod +x instal.sh && ./instal.sh
+#   chmod +x instal.sh && DOMAIN=dev.domain-anda.id ./instal.sh
 #
 # Idempoten: aman diulang. File .env & rahasia TIDAK ditimpa bila sudah ada
 # (supaya WORKER_TOKEN backend == worker tetap konsisten).
@@ -19,6 +25,9 @@ REPO_URL="https://github.com/adibPrasetiya/satria-dev.git"
 BRANCH="dev"
 APP_DIR="${APP_DIR:-$HOME/satya}"
 PUBLIC_HOST="${PUBLIC_HOST:-$(curl -fsSL https://api.ipify.org 2>/dev/null || echo localhost)}"
+# URL publik untuk CORS & tautan reset email. Set DOMAIN=... untuk pakai domain + HTTPS.
+DOMAIN="${DOMAIN:-}"
+if [ -n "$DOMAIN" ]; then BASE_URL="https://${DOMAIN}"; else BASE_URL="http://${PUBLIC_HOST}"; fi
 ZAP_VERSION="2.15.0"
 ZAP_DIR="$HOME/ZAP_${ZAP_VERSION}"
 
@@ -28,7 +37,7 @@ log() { echo -e "\n\033[1;32m==> $*\033[0m"; }
 log "Update apt & paket dasar"
 sudo apt-get update -y
 sudo apt-get install -y curl git unzip ca-certificates gnupg build-essential \
-  software-properties-common default-jre nginx mysql-server
+  software-properties-common default-jre mysql-server
 
 # --- 1. Node.js 20 (NodeSource) ---------------------------------------------
 if ! command -v node >/dev/null || [ "$(node -v | cut -c2-3)" -lt 20 ]; then
@@ -94,8 +103,8 @@ DATABASE_URL=mysql://satya:${DB_PASS}@localhost:3306/satya
 JWT_ACCESS_SECRET=${JWT_SECRET}
 JWT_ACCESS_EXPIRES_IN=15m
 REFRESH_TOKEN_TTL_DAYS=7
-CORS_ORIGIN=http://${PUBLIC_HOST}
-APP_URL=http://${PUBLIC_HOST}
+CORS_ORIGIN=${BASE_URL}
+APP_URL=${BASE_URL}
 PASSWORD_RESET_TTL_MINUTES=30
 LOGIN_MAX_ATTEMPTS=5
 LOGIN_LOCK_MINUTES=15
@@ -169,42 +178,20 @@ log "Aktifkan PM2 saat boot"
 sudo env PATH="$PATH:$(dirname "$(command -v node)")" "$(command -v pm2)" startup systemd -u "$USER" --hp "$HOME" || true
 pm2 save
 
-# --- 9. Nginx (sajikan frontend/build + proxy /api → backend) ---------------
-log "Konfigurasi Nginx"
-sudo tee /etc/nginx/sites-available/satya >/dev/null <<NGINX
-server {
-    listen 80 default_server;
-    server_name _;
-    root ${APP_DIR}/frontend/build;
-    index index.html;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    location / {
-        try_files \$uri \$uri/ /index.html;   # SPA fallback (adapter-static)
-    }
-}
-NGINX
-sudo ln -sf /etc/nginx/sites-available/satya /etc/nginx/sites-enabled/satya
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl reload nginx
-
-# --- 10. Selesai ------------------------------------------------------------
-log "SELESAI"
+# --- 9. Selesai -------------------------------------------------------------
+log "SELESAI (frontend+backend+worker siap; Nginx diatur sendiri)"
 cat <<DONE
 
-  Frontend : http://${PUBLIC_HOST}/
-  API      : http://${PUBLIC_HOST}/api/v1
-  PM2      : pm2 ls   (satya-backend, satya-worker, satya-zap)
+  Proses PM2 : pm2 ls   (satya-backend, satya-worker, satya-zap)
+  Backend    : http://127.0.0.1:3000   (arahkan reverse proxy: /api/ -> sini)
+  Frontend   : ${APP_DIR}/frontend/build   (file statis SPA; arahkan reverse proxy: / -> sini,
+               fallback ke /index.html untuk adapter-static)
+  ZAP lokal  : http://127.0.0.1:8080
 
   Langkah manual tersisa:
-   1. Buat admin pertama:   cd ${APP_DIR}/backend && npm run admin:create
-   2. (opsional) isi RESEND_API_KEY / GEMINI_API_KEY di backend/.env & worker/.env,
+   1. Konfigurasi reverse proxy (Nginx) Anda ke dua lokasi di atas + TLS domain.
+   2. Buat admin pertama:   cd ${APP_DIR}/backend && npm run admin:create
+   3. (opsional) isi RESEND_API_KEY / GEMINI_API_KEY di backend/.env & worker/.env,
       lalu: pm2 reload ecosystem.config.cjs --update-env
-   3. Deploy berikutnya cukup merge PR ke 'dev' → GitHub Actions jalan otomatis.
+   4. Deploy berikutnya cukup merge PR ke 'dev' → GitHub Actions jalan otomatis.
 DONE
