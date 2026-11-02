@@ -23,7 +23,8 @@ echo "==> Frontend: install + build statis (hasil di frontend/build, disajikan N
 echo "==> Worker: siapkan venv + dependensi"
 cd worker
 if [ ! -x .venv/bin/python ]; then
-  python3 -m venv .venv            # server HARUS punya Python 3.13 (greenlet/playwright)
+  # Worker butuh Python 3.13 (greenlet/playwright). Pakai python3.13 bila ada.
+  { command -v python3.13 >/dev/null && python3.13 -m venv .venv; } || python3 -m venv .venv
 fi
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
