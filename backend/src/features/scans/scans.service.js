@@ -6,8 +6,9 @@ import { butuhTinjauan, penerapanMetode } from './applicability.js';
 import * as scanEvents from './scanEvents.js';
 import { scansRepository } from './scans.repository.js';
 
-// Fungsi keamanan yang dinilai worker tahap ini (Autentikasi, Manajemen Sesi, Kontrol Akses, Validasi Input).
-const FUNGSI = ['AUTH', 'SESS', 'ACCS', 'INPV'];
+// Fungsi keamanan yang dinilai worker tahap ini (Autentikasi, Manajemen Sesi, Kontrol Akses,
+// Validasi Input, Keamanan Komunikasi).
+const FUNGSI = ['AUTH', 'SESS', 'ACCS', 'INPV', 'COMM'];
 
 const seesAll = (actor) => actor.peran === 'asesor' || actor.peran === 'admin';
 

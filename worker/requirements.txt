@@ -8,6 +8,10 @@ zaproxy==0.6.0
 # Perlu venv Python 3.13 dan unduh browser sekali: `python -m playwright install chromium`
 # (server Linux tambahan: `python -m playwright install-deps`). greenlet (dep playwright) butuh wheel 3.13.
 playwright==1.64.1
+# Engine sslyze (library in-proses) untuk fungsi Keamanan Komunikasi (COMM-8.3/8.4):
+# versi protokol TLS, cipher suite, validitas & trust sertifikat. Read-only (hanya handshake).
+# Membawa dependensi `cryptography`; tanpa paket ini check sslyze → tidak_dapat_diverifikasi.
+sslyze==6.1.0
 # MFA/TOTP untuk discovery & check terautentikasi (membangkitkan kode OTP dari totp_secret).
 pyotp==2.9.0
 # Enrichment AI discovery (opsional; diimpor lazy). Gemini utama, Anthropic fallback.

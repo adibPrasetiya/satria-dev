@@ -4,6 +4,7 @@ from . import akses  # noqa: F401
 from . import field_sandi  # noqa: F401
 from . import https  # noqa: F401
 from . import input_validation  # noqa: F401
+from . import komunikasi  # noqa: F401
 from . import kontrol_akses  # noqa: F401
 from . import lockout  # noqa: F401
 from . import manajemen_sesi  # noqa: F401
