@@ -33,6 +33,27 @@ if [ -f .env ] && grep -q '^WORKER_ENGINES=' .env; then
     fi
   done
 fi
+
+# Biner nuclei (APIS-12.2-T02): unduh rilis precompiled sekali (tanpa Go). Idempoten.
+# Tanpa biner, check exposure.api_docs_debug tetap jalan sebagai tidak_dapat_diverifikasi.
+NUCLEI_VER="3.11.1"
+NUCLEI_DST="$HOME/.local/bin/nuclei"
+if [ ! -x "$NUCLEI_DST" ] && ! command -v nuclei >/dev/null 2>&1; then
+  echo "==> Memasang biner nuclei v${NUCLEI_VER}"
+  mkdir -p "$HOME/.local/bin" /tmp/satya-nuclei
+  if curl -fsSL "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VER}/nuclei_${NUCLEI_VER}_linux_amd64.zip" -o /tmp/satya-nuclei/n.zip; then
+    unzip -o -q /tmp/satya-nuclei/n.zip -d /tmp/satya-nuclei \
+      && mv -f /tmp/satya-nuclei/nuclei "$NUCLEI_DST" && chmod +x "$NUCLEI_DST" \
+      && "$NUCLEI_DST" -update-templates -silent 2>/dev/null || true
+  fi
+  rm -rf /tmp/satya-nuclei
+fi
+# Arahkan worker ke biner nuclei bila di ~/.local/bin (mungkin di luar PATH proses PM2).
+if [ -x "$NUCLEI_DST" ] && [ -f .env ] && ! grep -q '^NUCLEI_BIN=' .env; then
+  echo "NUCLEI_BIN=$NUCLEI_DST" >> .env
+  echo "==> worker/.env: set NUCLEI_BIN=$NUCLEI_DST"
+fi
+
 if [ ! -x .venv/bin/python ]; then
   # Worker butuh Python 3.13 (greenlet/playwright). Pakai python3.13 bila ada.
   { command -v python3.13 >/dev/null && python3.13 -m venv .venv; } || python3 -m venv .venv

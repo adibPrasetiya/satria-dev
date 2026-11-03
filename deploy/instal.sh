@@ -65,6 +65,20 @@ if [ ! -x "$ZAP_DIR/zap.sh" ]; then
   rm -f /tmp/zap.zip
 fi
 
+# --- 4b. nuclei (engine Keamanan API APIS-12.2-T02; biner precompiled, tanpa Go) ------
+NUCLEI_VERSION="3.11.1"
+NUCLEI_BIN_PATH="$HOME/.local/bin/nuclei"
+if [ ! -x "$NUCLEI_BIN_PATH" ] && ! command -v nuclei >/dev/null 2>&1; then
+  log "Unduh biner nuclei $NUCLEI_VERSION"
+  mkdir -p "$HOME/.local/bin" /tmp/satya-nuclei
+  if curl -fsSL "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" -o /tmp/satya-nuclei/n.zip; then
+    unzip -q -o /tmp/satya-nuclei/n.zip -d /tmp/satya-nuclei \
+      && mv -f /tmp/satya-nuclei/nuclei "$NUCLEI_BIN_PATH" && chmod +x "$NUCLEI_BIN_PATH" \
+      && "$NUCLEI_BIN_PATH" -update-templates -silent 2>/dev/null || true
+  fi
+  rm -rf /tmp/satya-nuclei
+fi
+
 # --- 5. Clone / update repo -------------------------------------------------
 if [ ! -d "$APP_DIR/.git" ]; then
   log "Clone repo ke $APP_DIR"
@@ -140,9 +154,8 @@ PLAYWRIGHT_BROWSER=chromium
 SSLYZE_ENABLE=
 SSLYZE_PORT=443
 SSLYZE_TIMEOUT=10
-# nuclei (engine Keamanan API APIS-12.2-T02): biner Go eksternal; opsional. Tanpa biner →
-# check exposure.api_docs_debug = tidak_dapat_diverifikasi. Pasang bila perlu:
-#   go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates
+# nuclei (engine Keamanan API APIS-12.2-T02): biner precompiled dipasang di ~/.local/bin (lihat #4b).
+NUCLEI_BIN=${NUCLEI_BIN_PATH}
 NUCLEI_ENABLE=
 NUCLEI_TIMEOUT=180
 NUCLEI_TAGS=exposure,swagger,api,config,misconfig,debug
@@ -168,6 +181,11 @@ else
         echo "   WORKER_ENGINES diperbarui: tambah '${eng}'."
       fi
     done
+  fi
+  # Arahkan ke biner nuclei bila terpasang & belum tercatat.
+  if [ -x "$NUCLEI_BIN_PATH" ] && ! grep -q '^NUCLEI_BIN=' worker/.env; then
+    echo "NUCLEI_BIN=${NUCLEI_BIN_PATH}" >> worker/.env
+    echo "   worker/.env: set NUCLEI_BIN=${NUCLEI_BIN_PATH}."
   fi
 fi
 
