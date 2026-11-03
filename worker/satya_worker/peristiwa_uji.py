@@ -32,6 +32,14 @@ SKENARIO = {
     "auth.password_not_echoed": "echo_sandi",
     "auth.login_over_https": "kanal_https",
     "tls.http_redirect": "redirect_http",
+    # Keamanan Komunikasi (COMM) — kanal TLS & sertifikat (pakai skenario generik/kanal yang ada).
+    "tls.https_enforced": "kanal_https",
+    "headers.hsts": "header_keamanan",
+    "tls.protocol_versions": "kanal_https",
+    "tls.weak_ciphers": "kanal_https",
+    "tls.certificate_validity": "kanal_https",
+    "tls.certificate_browser_trust": "kanal_https",
+    "tls.certificate_issuer_psre": "kanal_https",
     # Validasi Input (INPV) — sapuan seluruh endpoint (lihat satya_worker/inpv).
     "input.server_side_validation": "validasi_input",
     "input.reject_on_error": "validasi_input",
