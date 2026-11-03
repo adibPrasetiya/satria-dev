@@ -22,6 +22,13 @@ echo "==> Frontend: install + build statis (hasil di frontend/build, disajikan N
 
 echo "==> Worker: siapkan venv + dependensi"
 cd worker
+# Rekonsiliasi .env: pastikan engine sslyze (fungsi Keamanan Komunikasi COMM) aktif.
+# .env ter-ignore git & tak ditimpa deploy, jadi server lama (dibuat sebelum COMM) perlu
+# penambahan ini sekali. Idempoten: hanya menambah bila baris ada & belum memuat sslyze.
+if [ -f .env ] && grep -q '^WORKER_ENGINES=' .env && ! grep -q '^WORKER_ENGINES=.*sslyze' .env; then
+  sed -i 's/^\(WORKER_ENGINES=.*\)$/\1,sslyze/' .env
+  echo "==> worker/.env: tambah engine 'sslyze' ke WORKER_ENGINES"
+fi
 if [ ! -x .venv/bin/python ]; then
   # Worker butuh Python 3.13 (greenlet/playwright). Pakai python3.13 bila ada.
   { command -v python3.13 >/dev/null && python3.13 -m venv .venv; } || python3 -m venv .venv

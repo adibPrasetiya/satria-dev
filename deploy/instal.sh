@@ -126,7 +126,7 @@ ENV
 BACKEND_URL=http://127.0.0.1:3000/api/v1
 WORKER_TOKEN=${WORKER_TOKEN}
 WORKER_ID=worker-1
-WORKER_ENGINES=custom,discovery,zap,playwright
+WORKER_ENGINES=custom,discovery,zap,playwright,sslyze
 POLL_INTERVAL=2
 # ZAP LOKAL di server ini (tidak lagi via internet)
 ZAP_BASE_URL=http://127.0.0.1:8080
@@ -136,14 +136,25 @@ ZAP_TIMEOUT_ASCAN=300
 PLAYWRIGHT_HEADLESS=true
 PLAYWRIGHT_NAV_TIMEOUT_MS=15000
 PLAYWRIGHT_BROWSER=chromium
+# sslyze (engine Keamanan Komunikasi COMM-8.3/8.4): handshake TLS read-only, paket in-proses.
+SSLYZE_ENABLE=
+SSLYZE_PORT=443
+SSLYZE_TIMEOUT=10
 AI_PROVIDER=none
 AI_REDAKSI=true
 AI_BAHASA=id
+# Penajam AI untuk COMM (klasifikasi penerbit->PSrE & adjudikasi host). Aktif hanya bila AI_PROVIDER != none.
+AI_COMM=hemat
 ENV
   echo "   .env dibuat. Edit manual bila perlu Resend/AI (RESEND_API_KEY, GEMINI_API_KEY, dst)."
 else
   log ".env sudah ada — dipertahankan (rahasia tidak diubah)"
   ZAP_API_KEY="$(grep -E '^ZAP_API_KEY=' worker/.env | cut -d= -f2-)"
+  # Rekonsiliasi: pastikan engine sslyze (COMM) ada tanpa menyentuh rahasia lain.
+  if grep -q '^WORKER_ENGINES=' worker/.env && ! grep -q '^WORKER_ENGINES=.*sslyze' worker/.env; then
+    sed -i 's/^\(WORKER_ENGINES=.*\)$/\1,sslyze/' worker/.env
+    echo "   WORKER_ENGINES diperbarui: tambah 'sslyze'."
+  fi
 fi
 
 # --- 7. Install & build tiap komponen ---------------------------------------
