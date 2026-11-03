@@ -5,13 +5,14 @@
 // Titik uji yang selalu berlaku dan tidak perlu dipetakan pengguna.
 export const TITIK_UJI_TETAP = ['global', 'dokumen'];
 
-// Engine yang dieksekusi worker (nuclei → asesor sampai didukung).
+// Engine yang dieksekusi worker.
 // 'zap' butuh worker engine zap + ZAP terkonfigurasi; 'playwright' butuh worker engine playwright
-// (browser Chromium terpasang); 'sslyze' butuh worker engine sslyze (paket sslyze terpasang) untuk
-// fungsi Keamanan Komunikasi (COMM). Bila worker/alatnya tak tersedia, check melapor
-// tidak_dapat_diverifikasi saat runtime (tidak menghakimi). PENTING: pastikan ada worker dengan
-// engine terkait yang berjalan agar task tak menggantung di antrean.
-const ENGINE_DIDUKUNG = new Set(['custom', 'zap', 'playwright', 'sslyze']);
+// (browser Chromium terpasang); 'sslyze' butuh worker engine sslyze (paket sslyze) untuk fungsi
+// Keamanan Komunikasi (COMM); 'nuclei' butuh biner nuclei untuk fungsi Keamanan API (APIS-12.2-T02).
+// Bila worker/alatnya tak tersedia, check melapor tidak_dapat_diverifikasi saat runtime (tidak
+// menghakimi). PENTING: pastikan ada worker dengan engine terkait yang berjalan agar task tak
+// menggantung di antrean.
+const ENGINE_DIDUKUNG = new Set(['custom', 'zap', 'playwright', 'sslyze', 'nuclei']);
 
 /**
  * Akun uji utama terisi (punya username+password) → metode butuh_autentikasi bisa jalan.
