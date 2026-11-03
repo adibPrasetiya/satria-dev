@@ -110,19 +110,33 @@ class KlienScan:
         *,
         json: Optional[dict[str, Any]] = None,
         data: Optional[dict[str, Any]] = None,
+        content: Optional[Any] = None,
+        headers: Optional[dict[str, str]] = None,
         judul_bukti: str,
         sandi_disamarkan: Optional[str] = None,
     ) -> httpx.Response:
-        """Kirim request dan rekam bukti request/response (tersamarkan)."""
+        """Kirim request dan rekam bukti request/response (tersamarkan).
+
+        `content` = badan mentah (str/bytes) untuk menguji penanganan body non-JSON (mis. uji
+        Content-Type/skema API). `headers` = header tambahan per-request (mis. Origin untuk uji CORS);
+        nilai berkunci sensitif otomatis disamarkan pada bukti.
+        """
         self._jaga_ruang_lingkup(url)
+        # Badan untuk bukti selalu dict agar perekam & animasi aman (content mentah diringkas).
+        body_rekam: dict[str, Any] = (
+            json if isinstance(json, dict)
+            else data if isinstance(data, dict)
+            else {"_body": str(content)[:500]} if content is not None
+            else {}
+        )
         t0 = time.perf_counter()
         try:
-            resp = self._klien.request(metode, url, json=json, data=data)
+            resp = self._klien.request(metode, url, json=json, data=data, content=content, headers=headers)
         except Exception as e:
-            self._lapor(metode, url, json or data, None, t0, type(e).__name__)
+            self._lapor(metode, url, body_rekam, None, t0, type(e).__name__)
             raise
-        self._rekam(resp, judul_bukti, json or data or {}, sandi_disamarkan)
-        self._lapor(metode, url, json or data, resp, t0)
+        self._rekam(resp, judul_bukti, body_rekam, sandi_disamarkan)
+        self._lapor(metode, url, body_rekam, resp, t0)
         return resp
 
     def _lapor(self, metode: str, url: str, body: Optional[dict[str, Any]], resp: Optional[httpx.Response],

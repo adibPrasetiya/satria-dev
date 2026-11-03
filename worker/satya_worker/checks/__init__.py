@@ -1,6 +1,7 @@
 """Paket check. Impor modul agar dekorator @check mendaftarkan plugin (efek samping impor)."""
 
 from . import akses  # noqa: F401
+from . import api_web  # noqa: F401
 from . import field_sandi  # noqa: F401
 from . import https  # noqa: F401
 from . import input_validation  # noqa: F401

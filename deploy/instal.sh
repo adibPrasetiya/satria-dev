@@ -126,7 +126,7 @@ ENV
 BACKEND_URL=http://127.0.0.1:3000/api/v1
 WORKER_TOKEN=${WORKER_TOKEN}
 WORKER_ID=worker-1
-WORKER_ENGINES=custom,discovery,zap,playwright,sslyze
+WORKER_ENGINES=custom,discovery,zap,playwright,sslyze,nuclei
 POLL_INTERVAL=2
 # ZAP LOKAL di server ini (tidak lagi via internet)
 ZAP_BASE_URL=http://127.0.0.1:8080
@@ -140,20 +140,34 @@ PLAYWRIGHT_BROWSER=chromium
 SSLYZE_ENABLE=
 SSLYZE_PORT=443
 SSLYZE_TIMEOUT=10
+# nuclei (engine Keamanan API APIS-12.2-T02): biner Go eksternal; opsional. Tanpa biner →
+# check exposure.api_docs_debug = tidak_dapat_diverifikasi. Pasang bila perlu:
+#   go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates
+NUCLEI_ENABLE=
+NUCLEI_TIMEOUT=180
+NUCLEI_TAGS=exposure,swagger,api,config,misconfig,debug
+NUCLEI_SEVERITY=low,medium,high,critical
+NUCLEI_RATE=50
 AI_PROVIDER=none
 AI_REDAKSI=true
 AI_BAHASA=id
 # Penajam AI untuk COMM (klasifikasi penerbit->PSrE & adjudikasi host). Aktif hanya bila AI_PROVIDER != none.
 AI_COMM=hemat
+# Penajam AI untuk APIS (klasifikasi endpoint publik & adjudikasi paparan). Aktif hanya bila AI_PROVIDER != none.
+AI_APIS=hemat
 ENV
   echo "   .env dibuat. Edit manual bila perlu Resend/AI (RESEND_API_KEY, GEMINI_API_KEY, dst)."
 else
   log ".env sudah ada — dipertahankan (rahasia tidak diubah)"
   ZAP_API_KEY="$(grep -E '^ZAP_API_KEY=' worker/.env | cut -d= -f2-)"
-  # Rekonsiliasi: pastikan engine sslyze (COMM) ada tanpa menyentuh rahasia lain.
-  if grep -q '^WORKER_ENGINES=' worker/.env && ! grep -q '^WORKER_ENGINES=.*sslyze' worker/.env; then
-    sed -i 's/^\(WORKER_ENGINES=.*\)$/\1,sslyze/' worker/.env
-    echo "   WORKER_ENGINES diperbarui: tambah 'sslyze'."
+  # Rekonsiliasi: pastikan engine fungsi baru (sslyze/nuclei) ada tanpa menyentuh rahasia lain.
+  if grep -q '^WORKER_ENGINES=' worker/.env; then
+    for eng in sslyze nuclei; do
+      if ! grep -q "^WORKER_ENGINES=.*${eng}" worker/.env; then
+        sed -i "s/^\(WORKER_ENGINES=.*\)$/\1,${eng}/" worker/.env
+        echo "   WORKER_ENGINES diperbarui: tambah '${eng}'."
+      fi
+    done
   fi
 fi
 
