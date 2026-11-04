@@ -173,6 +173,8 @@ AI_APIS=hemat
 AI_ERRL=hemat
 # Penajam AI untuk DATA (paparan backup & mass assignment). Aktif hanya bila AI_PROVIDER != none.
 AI_DATA=hemat
+# Penajam AI untuk FILE (hasil unggahan uji & paparan berkas konfig/sumber). Aktif hanya bila AI_PROVIDER != none.
+AI_FILE=hemat
 ENV
   echo "   .env dibuat. Edit manual bila perlu Resend/AI (RESEND_API_KEY, GEMINI_API_KEY, dst)."
 else

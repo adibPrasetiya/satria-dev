@@ -111,6 +111,7 @@ class KlienScan:
         json: Optional[dict[str, Any]] = None,
         data: Optional[dict[str, Any]] = None,
         content: Optional[Any] = None,
+        files: Optional[Any] = None,
         headers: Optional[dict[str, str]] = None,
         judul_bukti: str,
         sandi_disamarkan: Optional[str] = None,
@@ -118,7 +119,8 @@ class KlienScan:
         """Kirim request dan rekam bukti request/response (tersamarkan).
 
         `content` = badan mentah (str/bytes) untuk menguji penanganan body non-JSON (mis. uji
-        Content-Type/skema API). `headers` = header tambahan per-request (mis. Origin untuk uji CORS);
+        Content-Type/skema API). `files` = unggahan multipart httpx ({field: (nama, isi, tipe)}) untuk
+        uji fungsi File. `headers` = header tambahan per-request (mis. Origin untuk uji CORS);
         nilai berkunci sensitif otomatis disamarkan pada bukti.
         """
         self._jaga_ruang_lingkup(url)
@@ -127,11 +129,12 @@ class KlienScan:
             json if isinstance(json, dict)
             else data if isinstance(data, dict)
             else {"_body": str(content)[:500]} if content is not None
+            else {"_files": [str(k) for k in files]} if isinstance(files, dict)
             else {}
         )
         t0 = time.perf_counter()
         try:
-            resp = self._klien.request(metode, url, json=json, data=data, content=content, headers=headers)
+            resp = self._klien.request(metode, url, json=json, data=data, content=content, files=files, headers=headers)
         except Exception as e:
             self._lapor(metode, url, body_rekam, None, t0, type(e).__name__)
             raise
