@@ -120,6 +120,37 @@ def _san(cert: Any) -> list[str]:
         return []
 
 
+def _kunci_tanda(cert: Any) -> dict[str, Any]:
+    """Tipe & ukuran kunci publik + algoritma tanda tangan sertifikat (dari cryptography x509)."""
+    out: dict[str, Any] = {"tipe_kunci": None, "ukuran_kunci": None, "kurva": None, "algoritma_tanda_tangan": None}
+    try:
+        from cryptography.hazmat.primitives.asymmetric import ec, rsa, ed25519, ed448
+
+        pub = cert.public_key()
+        if isinstance(pub, rsa.RSAPublicKey):
+            out["tipe_kunci"], out["ukuran_kunci"] = "RSA", pub.key_size
+        elif isinstance(pub, ec.EllipticCurvePublicKey):
+            out["tipe_kunci"], out["ukuran_kunci"], out["kurva"] = "EC", pub.curve.key_size, pub.curve.name
+        elif isinstance(pub, ed25519.Ed25519PublicKey):
+            out["tipe_kunci"], out["ukuran_kunci"] = "Ed25519", 256
+        elif isinstance(pub, ed448.Ed448PublicKey):
+            out["tipe_kunci"], out["ukuran_kunci"] = "Ed448", 448
+        else:
+            out["tipe_kunci"] = type(pub).__name__
+    except Exception:
+        pass
+    try:
+        alg = getattr(cert, "signature_hash_algorithm", None)
+        if alg is not None and getattr(alg, "name", None):
+            out["algoritma_tanda_tangan"] = str(alg.name)
+        else:
+            oid = getattr(cert, "signature_algorithm_oid", None)
+            out["algoritma_tanda_tangan"] = getattr(oid, "_name", None) or (str(oid) if oid else None)
+    except Exception:
+        pass
+    return out
+
+
 def _cocok_satu(host: str, pola: str) -> bool:
     """Cocokkan host dengan satu entri sertifikat (dukung wildcard leftmost RFC 6125)."""
     host = host.lower().strip(".")
@@ -245,6 +276,7 @@ def _ekstrak_sertifikat(attempt: Any, hostname: str = "") -> dict[str, Any]:
         urutan_rantai_valid=getattr(dep, "received_chain_has_valid_order", None),
         panjang_rantai=len(rantai),
         trust=trust,
+        **_kunci_tanda(leaf),
     )
     return out
 
