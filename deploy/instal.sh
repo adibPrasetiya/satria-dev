@@ -171,6 +171,8 @@ AI_COMM=hemat
 AI_APIS=hemat
 # Penajam AI untuk ERRL (kebocoran error & paparan log). Aktif hanya bila AI_PROVIDER != none.
 AI_ERRL=hemat
+# Penajam AI untuk DATA (paparan backup & mass assignment). Aktif hanya bila AI_PROVIDER != none.
+AI_DATA=hemat
 ENV
   echo "   .env dibuat. Edit manual bila perlu Resend/AI (RESEND_API_KEY, GEMINI_API_KEY, dst)."
 else
