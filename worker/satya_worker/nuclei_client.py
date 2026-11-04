@@ -48,10 +48,11 @@ def tersedia() -> bool:
 
 
 def _timeout() -> float:
+    # Default 90s: cukup untuk tag terfokus, tetap di bawah lease task backend agar tak requeue.
     try:
-        return float(os.environ.get("NUCLEI_TIMEOUT", "180"))
+        return float(os.environ.get("NUCLEI_TIMEOUT", "90"))
     except ValueError:
-        return 180.0
+        return 90.0
 
 
 def _tags() -> str:
@@ -66,28 +67,38 @@ def _rate() -> str:
     return os.environ.get("NUCLEI_RATE", "50").strip() or "50"
 
 
+def _concurrency() -> str:
+    return os.environ.get("NUCLEI_CONCURRENCY", "25").strip() or "25"
+
+
 def _host(u: str) -> str:
     return (urlsplit(u).hostname or "").lower()
 
 
-def _relevan(f: dict[str, Any]) -> bool:
-    """True bila temuan terkait paparan dokumentasi/debug API."""
+def _relevan(f: dict[str, Any], kata: tuple[str, ...] = _RELEVAN) -> bool:
+    """True bila temuan memuat salah satu kata kunci relevan (template_id/nama/tags)."""
     tid = str(f.get("template_id") or "").lower()
     nama = str(f.get("nama") or "").lower()
     tags = " ".join(str(t).lower() for t in (f.get("tags") or []))
     blob = f"{tid} {nama} {tags}"
-    return any(k in blob for k in _RELEVAN)
+    return any(k in blob for k in kata)
 
 
 def jalankan(
     base_url: str,
     *,
+    tags: Optional[str] = None,
+    kata_relevan: tuple[str, ...] = _RELEVAN,
     headers: Optional[dict[str, str]] = None,
     hanya_relevan: bool = True,
     timeout: Optional[float] = None,
 ) -> list[dict[str, Any]]:
     """Pindai `base_url` dengan nuclei (tag terfokus). Kembalikan list temuan in-scope:
     {template_id, nama, severity, tags, matched_at, url}. Best-effort → [] bila biner absen/gagal.
+
+    `tags` menimpa NUCLEI_TAGS (mis. tag khusus file log). `kata_relevan` memfilter temuan agar
+    hanya yang sesuai konteks check (dok API vs file log). `-no-interactsh` & concurrency menjaga
+    agar scan cepat & tak menggantung menunggu OOB.
     """
     if not tersedia():
         return []
@@ -99,10 +110,13 @@ def jalankan(
         "-silent",
         "-no-color",
         "-disable-update-check",
-        "-tags", _tags(),
+        "-no-interactsh",
+        "-tags", tags or _tags(),
         "-severity", _severity(),
         "-rate-limit", _rate(),
-        "-timeout", "10",
+        "-concurrency", _concurrency(),
+        "-timeout", "8",
+        "-retries", "1",
     ]
     for k, v in (headers or {}).items():
         perintah += ["-H", f"{k}: {v}"]
@@ -142,7 +156,7 @@ def jalankan(
             "matched_at": url,
             "url": url,
         }
-        if hanya_relevan and not _relevan(f):
+        if hanya_relevan and not _relevan(f, kata_relevan):
             continue
         kunci = f"{f['template_id']}@{url}"
         if kunci in terlihat:
