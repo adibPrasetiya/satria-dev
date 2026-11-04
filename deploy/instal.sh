@@ -177,6 +177,8 @@ AI_DATA=hemat
 AI_FILE=hemat
 # Penajam AI untuk CONF (paparan konfigurasi: debug/sampel/.env/.git). Aktif hanya bila AI_PROVIDER != none.
 AI_CONF=hemat
+# Penajam AI untuk CRYP (paparan rahasia/kunci). Aktif hanya bila AI_PROVIDER != none.
+AI_CRYP=hemat
 ENV
   echo "   .env dibuat. Edit manual bila perlu Resend/AI (RESEND_API_KEY, GEMINI_API_KEY, dst)."
 else
