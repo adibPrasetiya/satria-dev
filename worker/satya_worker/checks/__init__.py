@@ -2,6 +2,7 @@
 
 from . import akses  # noqa: F401
 from . import api_web  # noqa: F401
+from . import berkas  # noqa: F401
 from . import field_sandi  # noqa: F401
 from . import https  # noqa: F401
 from . import input_validation  # noqa: F401
