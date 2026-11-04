@@ -8,7 +8,7 @@ import { scansRepository } from './scans.repository.js';
 
 // Fungsi keamanan yang dinilai worker tahap ini (Autentikasi, Manajemen Sesi, Kontrol Akses,
 // Validasi Input, Keamanan Komunikasi).
-const FUNGSI = ['AUTH', 'SESS', 'ACCS', 'INPV', 'COMM', 'APIS', 'ERRL', 'DATA', 'FILE'];
+const FUNGSI = ['AUTH', 'SESS', 'ACCS', 'INPV', 'COMM', 'APIS', 'ERRL', 'DATA', 'FILE', 'CONF'];
 
 const seesAll = (actor) => actor.peran === 'asesor' || actor.peran === 'admin';
 

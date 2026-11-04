@@ -175,6 +175,8 @@ AI_ERRL=hemat
 AI_DATA=hemat
 # Penajam AI untuk FILE (hasil unggahan uji & paparan berkas konfig/sumber). Aktif hanya bila AI_PROVIDER != none.
 AI_FILE=hemat
+# Penajam AI untuk CONF (paparan konfigurasi: debug/sampel/.env/.git). Aktif hanya bila AI_PROVIDER != none.
+AI_CONF=hemat
 ENV
   echo "   .env dibuat. Edit manual bila perlu Resend/AI (RESEND_API_KEY, GEMINI_API_KEY, dst)."
 else
