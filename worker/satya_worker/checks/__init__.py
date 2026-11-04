@@ -12,6 +12,7 @@ from . import konfigurasi  # noqa: F401
 from . import kontrol_akses  # noqa: F401
 from . import kriptografi  # noqa: F401
 from . import lockout  # noqa: F401
+from . import logika_bisnis  # noqa: F401
 from . import manajemen_sesi  # noqa: F401
 from . import password_policy  # noqa: F401
 from . import penanganan_error  # noqa: F401
