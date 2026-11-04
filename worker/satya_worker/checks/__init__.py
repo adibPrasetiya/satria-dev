@@ -11,6 +11,7 @@ from . import lockout  # noqa: F401
 from . import manajemen_sesi  # noqa: F401
 from . import password_policy  # noqa: F401
 from . import penanganan_error  # noqa: F401
+from . import proteksi_data  # noqa: F401
 from . import reset_enumerasi  # noqa: F401
 from . import sandi_tak_echo  # noqa: F401
 from . import validasi_server  # noqa: F401
