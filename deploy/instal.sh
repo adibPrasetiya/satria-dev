@@ -157,10 +157,11 @@ SSLYZE_TIMEOUT=10
 # nuclei (engine Keamanan API APIS-12.2-T02): biner precompiled dipasang di ~/.local/bin (lihat #4b).
 NUCLEI_BIN=${NUCLEI_BIN_PATH}
 NUCLEI_ENABLE=
-NUCLEI_TIMEOUT=180
+NUCLEI_TIMEOUT=90
 NUCLEI_TAGS=exposure,swagger,api,config,misconfig,debug
 NUCLEI_SEVERITY=low,medium,high,critical
 NUCLEI_RATE=50
+NUCLEI_CONCURRENCY=25
 AI_PROVIDER=none
 AI_REDAKSI=true
 AI_BAHASA=id
@@ -168,6 +169,8 @@ AI_BAHASA=id
 AI_COMM=hemat
 # Penajam AI untuk APIS (klasifikasi endpoint publik & adjudikasi paparan). Aktif hanya bila AI_PROVIDER != none.
 AI_APIS=hemat
+# Penajam AI untuk ERRL (kebocoran error & paparan log). Aktif hanya bila AI_PROVIDER != none.
+AI_ERRL=hemat
 ENV
   echo "   .env dibuat. Edit manual bila perlu Resend/AI (RESEND_API_KEY, GEMINI_API_KEY, dst)."
 else
