@@ -6,6 +6,7 @@ from . import berkas  # noqa: F401
 from . import field_sandi  # noqa: F401
 from . import https  # noqa: F401
 from . import input_validation  # noqa: F401
+from . import kode_berbahaya  # noqa: F401
 from . import komunikasi  # noqa: F401
 from . import konfigurasi  # noqa: F401
 from . import kontrol_akses  # noqa: F401
