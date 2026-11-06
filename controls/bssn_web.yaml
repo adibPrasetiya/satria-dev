@@ -305,6 +305,11 @@ fungsi_keamanan:
             check_id: session.token_entropy
             parameter: { jumlah_sampel: 30, entropi_minimum_bit: 64 }
             kriteria_lulus: Token cukup panjang, acak, dan tidak berpola/berurutan.
+          - id: SESS-2.3-T02
+            nama: Analisis struktur token (JWT/UUID/encoded) dan prediktabilitas identitas
+            titik_uji: login
+            check_id: session.token_structure
+            kriteria_lulus: Identitas sesi yang dibawa token tidak dapat ditebak (bukan angka berurutan, timestamp, username/email, atau JWT tanpa tanda tangan).
 
       - id: SESS-2.4
         nomor_referensi: "2.4"
@@ -328,6 +333,20 @@ fungsi_keamanan:
             check_id: session.idle_timeout
             parameter: { batas_idle_menit: 30 }  # TODO: sesuaikan kebijakan
             kriteria_lulus: Token ditolak setelah melewati batas idle.
+          - id: SESS-2.4-T03
+            nama: Logout membersihkan artefak sesi di sisi klien
+            titik_uji: logout
+            butuh_autentikasi: true
+            check_id: session.logout_client_side
+            kriteria_lulus: Respons logout mengosongkan/meng-expired-kan cookie sesi di klien (Max-Age=0 / Expires lampau / nilai kosong).
+          - id: SESS-2.4-T04
+            nama: Logout lewat alur UI nyata menginvalidasi sesi di server
+            titik_uji: logout
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            engine: playwright
+            check_id: session.logout_real_flow
+            kriteria_lulus: Setelah menekan logout di antarmuka, token/sesi lama ditolak server (bukan hanya dihapus di sisi klien).
 
       - id: SESS-2.5
         nomor_referensi: "2.5"
@@ -347,6 +366,12 @@ fungsi_keamanan:
             titik_uji: area_terautentikasi
             check_id: session.reject_unknown_id
             kriteria_lulus: Token yang tidak dikenal tidak menghasilkan sesi baru yang terautentikasi.
+          - id: SESS-2.5-T03
+            nama: Sesi tahan session fixation (identitas berubah setelah autentikasi)
+            titik_uji: login
+            butuh_autentikasi: true
+            check_id: session.fixation
+            kriteria_lulus: Identitas sesi anonim pra-login tidak dipertahankan setelah login (session id diperbarui saat autentikasi).
 
       - id: SESS-2.6
         nomor_referensi: "2.6"
@@ -367,6 +392,12 @@ fungsi_keamanan:
             engine: zap
             check_id: session.token_not_in_url
             kriteria_lulus: Tidak ada token sesi pada URL, Referer, atau riwayat.
+          - id: SESS-2.6-T03
+            nama: Token sesi tidak disimpan di lokasi yang dapat diakses JavaScript
+            titik_uji: login
+            butuh_autentikasi: true
+            check_id: session.token_storage
+            kriteria_lulus: Sesi dibawa cookie HttpOnly; token tidak diserahkan via body/localStorage/sessionStorage yang dapat dibaca skrip (rentan XSS).
 
       - id: SESS-2.7
         nomor_referensi: "2.7"
@@ -382,6 +413,13 @@ fungsi_keamanan:
             jenis: semi_otomatis
             check_id: session.concurrent_sessions
             kriteria_lulus: Aplikasi membatasi atau memberi tahu adanya sesi ganda sesuai kebijakan.
+          - id: SESS-2.7-T03
+            nama: Duplikasi/kloning artefak sesi antar klien
+            titik_uji: login
+            jenis: semi_otomatis
+            butuh_autentikasi: true
+            check_id: session.concurrent_clone
+            kriteria_lulus: Artefak sesi yang sama tidak dapat dipakai bebas dari klien lain, atau aplikasi memberi tahu/membatasinya sesuai kebijakan.
           - id: SESS-2.7-T02
             nama: Persetujuan/re-autentikasi untuk aksi sensitif
             titik_uji: area_terautentikasi

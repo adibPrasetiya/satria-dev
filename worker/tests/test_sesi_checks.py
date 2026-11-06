@@ -55,10 +55,12 @@ def test_framework_fingerprint_jwt_lulus():
     assert hasil.status == "lulus", hasil.ringkasan
 
 
-def test_entropi_jwt_tdv():
+def test_entropi_jwt_sig_acak_lulus():
+    # Token JWT dengan tanda tangan acak & unik tiap login → keacakan dinilai pada segmen
+    # tanda tangan (pembawa keacakan JWT) → lulus (dulu punt ke tidak_dapat_diverifikasi).
     with TargetPalsu("aman", jwt=True) as t:
         hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.3-T01", "session.token_entropy", "login"))
-    assert hasil.status == "tidak_dapat_diverifikasi", hasil.ringkasan
+    assert hasil.status == "lulus", hasil.ringkasan
 
 
 def test_entropi_rentan_gagal():
@@ -270,3 +272,154 @@ def test_ai_tie_break_logout_memetakan_gagal(monkeypatch):
         srv.shutdown()
     assert hasil.status == "gagal", hasil.ringkasan  # AI: sesi lama masih autentik → gagal
     assert hasil.menunggu_tinjauan is True
+
+
+# =========================================================== struktur token (SESS-2.3-T02)
+
+def test_token_structure_jwt_acak_lulus():
+    with TargetPalsu("aman", jwt=True) as t:  # JWT dengan jti acak → identitas acak kuat
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.3-T02", "session.token_structure", "login"))
+    assert hasil.status == "lulus", hasil.ringkasan
+
+
+def test_token_structure_uuid_lulus():
+    with TargetPalsu("aman") as t:  # token_urlsafe(32) opaque berentropi
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.3-T02", "session.token_structure", "login"))
+    assert hasil.status == "lulus", hasil.ringkasan
+
+
+def test_token_structure_encoded_prediktabel_gagal():
+    with TargetPalsu("aman", token_encoded=True) as t:  # token = base64("user-N") — ter-encode tapi tertebak
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.3-T02", "session.token_structure", "login"))
+    assert hasil.status == "gagal", hasil.ringkasan
+
+
+def test_entropi_encoded_berurutan_gagal():
+    with TargetPalsu("aman", token_encoded=True) as t:  # identitas ter-encode berurutan lintas login
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.3-T01", "session.token_entropy", "login"))
+    assert hasil.status == "gagal", hasil.ringkasan
+
+
+# =========================================================== logout bersih di klien (SESS-2.4-T03)
+
+def test_logout_client_side_cookie_lulus():
+    with TargetPalsu("aman", cookie_saja=True) as t:  # logout kirim sessionid=; Max-Age=0
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.4-T03", "session.logout_client_side", "logout"))
+    assert hasil.status == "lulus", hasil.ringkasan
+
+
+def test_logout_client_side_token_tidak_berlaku():
+    with TargetPalsu("aman") as t:  # sesi token (Bearer) → tak teramati lewat HTTP
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.4-T03", "session.logout_client_side", "logout"))
+    assert hasil.status == "tidak_berlaku", hasil.ringkasan
+
+
+# =========================================================== logout invalidasi sesi cookie (SESS-2.4-T01)
+
+def test_logout_invalidates_cookie_server_lulus():
+    with TargetPalsu("aman", cookie_saja=True) as t:  # logout invalidasi cookie sisi-server
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.4-T01", "session.logout_invalidates", "logout"))
+    assert hasil.status == "lulus", hasil.ringkasan
+
+
+def test_logout_invalidates_cookie_klien_saja_gagal():
+    # Regresi bug: logout HANYA meng-expired-kan cookie di klien; server tetap menerima sesi.
+    # Reuse dari klien BERSIH dengan cookie yang ditangkap sebelum logout menyingkap sesi hidup → gagal.
+    with TargetPalsu("aman", cookie_saja=True, logout_klien_saja=True) as t:
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.4-T01", "session.logout_invalidates", "logout"))
+    assert hasil.status == "gagal", hasil.ringkasan
+
+
+# =========================================================== session fixation (SESS-2.5-T03)
+
+def test_fixation_token_tidak_berlaku():
+    with TargetPalsu("aman") as t:  # tak ada cookie sesi anonim pra-login
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.5-T03", "session.fixation", "login"))
+    assert hasil.status == "tidak_berlaku", hasil.ringkasan
+
+
+def test_fixation_rotasi_lulus():
+    with TargetPalsu("aman", cookie_saja=True, cookie_anon=True) as t:  # login merotasi cookie
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.5-T03", "session.fixation", "login"))
+    assert hasil.status == "lulus", hasil.ringkasan
+
+
+def test_fixation_tidak_dirotasi_gagal():
+    with TargetPalsu("aman", cookie_saja=True, cookie_anon=True, fixation_rentan=True) as t:
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.5-T03", "session.fixation", "login"))
+    assert hasil.status == "gagal", hasil.ringkasan
+
+
+# =========================================================== kloning/duplikasi sesi (SESS-2.7-T03)
+
+def test_concurrent_clone_kedua_diterima_tdv(monkeypatch):
+    monkeypatch.setenv("AI_SESS", "off")
+    with TargetPalsu("aman") as t:  # token bearer stateless → klon diterima, AI off → tdv
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.7-T03", "session.concurrent_clone", "login"))
+    assert hasil.status == "tidak_dapat_diverifikasi", hasil.ringkasan
+
+
+def test_concurrent_clone_ai_memetakan_lulus(monkeypatch):
+    monkeypatch.setenv("AI_SESS", "hemat")
+    monkeypatch.setattr(ai_pkg, "muat_provider_dari_env",
+                        lambda: ProviderPalsu({"putusan": "ada_pembatasan", "keyakinan": 0.8, "alasan": "ada pemberitahuan sesi lain"}))
+    with TargetPalsu("aman") as t:
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.7-T03", "session.concurrent_clone", "login"))
+    assert hasil.status == "lulus", hasil.ringkasan
+    assert hasil.menunggu_tinjauan is True
+
+
+# =========================================================== lokasi penyimpanan token (SESS-2.6-T03)
+
+def test_token_storage_body_gagal():
+    with TargetPalsu("aman") as t:  # token Bearer di body → ditangani JS, bukan cookie HttpOnly
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.6-T03", "session.token_storage", "login"))
+    assert hasil.status == "gagal", hasil.ringkasan
+
+
+def test_token_storage_httponly_cookie_lulus():
+    with TargetPalsu("aman", cookie_saja=True) as t:  # cookie HttpOnly, tanpa token di body
+        hasil = jalankan_metode(ctx_for(t.base_url), metode("SESS-2.6-T03", "session.token_storage", "login"))
+    assert hasil.status == "lulus", hasil.ringkasan
+
+
+# =========================================================== logout alur UI nyata (SESS-2.4-T04, playwright)
+
+import satya_worker.playwright_driver as pwmod
+
+
+def _m_real():
+    return metode("SESS-2.4-T04", "session.logout_real_flow", "logout", engine="playwright")
+
+
+def test_logout_real_flow_token_hidup_gagal(monkeypatch):
+    monkeypatch.setattr(pwmod, "tersedia", lambda: True)
+    monkeypatch.setattr(pwmod, "logout_flow", lambda c, a: {
+        "login_ok": True, "token_ada": True, "logout_terpicu": True,
+        "logout_request": True, "token_hapus_klien": True, "status_token_lama": 200})
+    hasil = jalankan_metode(ctx_for("http://127.0.0.1:1"), _m_real())
+    assert hasil.status == "gagal" and hasil.menunggu_tinjauan is True, hasil.ringkasan
+
+
+def test_logout_real_flow_token_ditolak_lulus(monkeypatch):
+    monkeypatch.setattr(pwmod, "tersedia", lambda: True)
+    monkeypatch.setattr(pwmod, "logout_flow", lambda c, a: {
+        "login_ok": True, "token_ada": True, "logout_terpicu": True,
+        "logout_request": True, "token_hapus_klien": True, "status_token_lama": None})
+    hasil = jalankan_metode(ctx_for("http://127.0.0.1:1"), _m_real())
+    assert hasil.status == "lulus", hasil.ringkasan
+
+
+def test_logout_real_flow_kontrol_tak_ketemu_tdv(monkeypatch):
+    monkeypatch.setattr(pwmod, "tersedia", lambda: True)
+    monkeypatch.setattr(pwmod, "logout_flow", lambda c, a: {
+        "login_ok": True, "token_ada": True, "logout_terpicu": False,
+        "logout_request": False, "token_hapus_klien": None, "status_token_lama": None})
+    hasil = jalankan_metode(ctx_for("http://127.0.0.1:1"), _m_real())
+    assert hasil.status == "tidak_dapat_diverifikasi", hasil.ringkasan
+
+
+def test_logout_real_flow_tanpa_browser_tdv(monkeypatch):
+    monkeypatch.setattr(pwmod, "tersedia", lambda: False)
+    hasil = jalankan_metode(ctx_for("http://127.0.0.1:1"), _m_real())
+    assert hasil.status == "tidak_dapat_diverifikasi", hasil.ringkasan

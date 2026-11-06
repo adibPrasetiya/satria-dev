@@ -28,6 +28,7 @@ _PUTUSAN_SAH = {
     "autentik", "tak_autentik", "publik",
     "cocok_kerangka", "tak_cocok",
     "ada_pembatasan", "tak_ada",
+    "prediktabel", "acak_kuat",
     "tak_pasti",
 }
 
@@ -52,10 +53,29 @@ _PERTANYAAN: dict[str, str] = {
         "Dua sesi untuk akun yang sama aktif bersamaan. Dari metadata respons, apakah aplikasi tampak "
         "MEMBATASI atau MEMBERI TAHU adanya sesi ganda. Putusan: 'ada_pembatasan', 'tak_ada', 'tak_pasti'."
     ),
+    "session.concurrent_clone": (
+        "Satu artefak sesi (token/cookie) yang SAMA dipakai dari DUA klien independen secara paralel, dan "
+        "keduanya mengakses area terautentikasi. Dari metadata, apakah aplikasi tampak MEMBATASI/mengikat "
+        "sesi ke satu klien (mis. menolak salah satu, memberi tahu), atau TIDAK ada pembatasan sama sekali. "
+        "Putusan: 'ada_pembatasan', 'tak_ada', 'tak_pasti'."
+    ),
+    "session.token_structure": (
+        "Berikut ciri STRUKTUR sebuah token sesi (format jwt/opaque, algoritma, daftar nama klaim, klaim "
+        "pembawa identitas sesi dan BENTUK nilainya — uuid/int/timestamp/email/username/opaque, serta lapisan "
+        "encode bila ada). TANPA melihat nilai mentah, apakah identitas sesi yang dibawa token ini tampak "
+        "DAPAT DITEBAK/prediktabel (mis. angka berurutan, timestamp, username, email, alg 'none') atau ACAK "
+        "kuat (uuid/opaque berentropi, tanda tangan memadai). Putusan: 'prediktabel', 'acak_kuat', 'tak_pasti'."
+    ),
+    "session.token_entropy": (
+        "Berikut metadata dari beberapa sampel token sesi lintas-login (bentuk dominan, apakah semua unik, "
+        "apakah identitas di dalamnya BERURUTAN/menaik, berapa yang angkanya terbaca). TANPA nilai mentah, "
+        "apakah token sesi aplikasi ini tampak PREDIKTABEL (berpola/berurutan/ter-encode dari nilai tertebak) "
+        "atau ACAK kuat. Putusan: 'prediktabel', 'acak_kuat', 'tak_pasti'."
+    ),
 }
 
-# Hanya fingerprint pola token yang layak di-cache (fitur stabil lintas scan).
-_CACHE_UNTUK = {"session.framework_fingerprint"}
+# Fingerprint pola/struktur token yang layak di-cache (fitur stabil lintas scan).
+_CACHE_UNTUK = {"session.framework_fingerprint", "session.token_structure"}
 
 _kunci_cache = threading.Lock()
 

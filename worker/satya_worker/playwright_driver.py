@@ -500,6 +500,138 @@ def login_browser(ctx: ScanContext, akun: AkunUji) -> dict:
     }
 
 
+# --------------------------------------------------------------------------- logout (alur UI nyata)
+
+def _is_logout_url(url: str) -> bool:
+    u = (url or "").lower()
+    return any(k in u for k in ("logout", "signout", "sign-out", "sign_out", "keluar"))
+
+
+# Pemicu menu pengguna (avatar/dropdown pojok) agar item logout muncul sebelum diklik.
+_MENU_TRIGGER = """
+() => {
+  const sel = '[aria-haspopup], header button, nav button, [class*=avatar i], [class*=dropdown i] button, [class*=profile i] button, button[id*=menu i]';
+  const c = Array.from(document.querySelectorAll(sel)).slice(0, 10);
+  let n = 0;
+  for (const e of c) { try { e.click(); n++; } catch (_) {} }
+  return n;
+}
+"""
+
+_SEL_LOGOUT = [
+    'a[href*="logout" i]', '[aria-label*="logout" i]', '[aria-label*="keluar" i]',
+    'text=/log ?out/i', 'text=/sign ?out/i', 'text=/keluar/i', 'text=/logout/i',
+]
+
+
+def _picu_logout(page: Any) -> bool:
+    """Temukan & klik kontrol logout (buka menu pengguna dulu bila perlu). True bila terklik."""
+    def _klik() -> bool:
+        for sel in _SEL_LOGOUT:
+            try:
+                el = page.query_selector(sel)
+                if el is not None:
+                    el.click()
+                    return True
+            except Exception:
+                continue
+        return False
+
+    if _klik():
+        return True
+    # Tak terlihat → buka kandidat menu pengguna lalu coba lagi.
+    try:
+        page.evaluate(_MENU_TRIGGER)
+        page.wait_for_timeout(900)
+    except Exception:
+        pass
+    return _klik()
+
+
+def logout_flow(ctx: ScanContext, akun: AkunUji) -> dict:
+    """Jalankan alur LOGOUT seperti pengguna sungguhan di browser, lalu uji apakah token
+    sesi LAMA masih berlaku — menangkap logout yang hanya membersihkan sisi-klien sementara
+    sesi tetap hidup di server (yang tak terlihat oleh uji endpoint logout langsung).
+
+    Return { login_ok, token_ada, logout_terpicu, logout_request, token_hapus_klien,
+             status_token_lama }. Lempar PlaywrightTidakTersedia bila browser tak bisa diluncurkan.
+    """
+    hasil = {"login_ok": False, "token_ada": False, "logout_terpicu": False,
+             "logout_request": False, "token_hapus_klien": None, "status_token_lama": None}
+    halaman = ctx.url_titik("login_page") or ctx.url_titik("login")
+    if halaman is None or not akun.password or not dalam_lingkup(ctx, halaman):
+        return hasil
+
+    f = ctx.form_untuk("login")
+    field_user = f.field_username if f else "email"
+    field_pass = f.field_password if f else "password"
+    reqs: list[str] = []
+
+    with buka_konteks(ctx) as (context, page):
+        try:
+            page.on("request", lambda r: reqs.append(r.url) if _is_logout_url(r.url) else None)
+        except Exception:
+            pass
+        if not _goto(page, halaman):
+            return hasil
+        storage0 = _baca_storage(page)
+        _isi(page, _SEL_USER, field_user, akun.username)
+        _isi(page, _SEL_PASS, field_pass, akun.password)
+        _klik_submit(page)
+        for _ in range(1):
+            try:
+                page.wait_for_load_state("networkidle")
+            except Exception:
+                pass
+        try:
+            page.wait_for_timeout(1500)
+        except Exception:
+            pass
+        if akun.totp_secret and _ada_field_otp(page):
+            from . import mfa  # lazy
+            kode = mfa.kode_untuk_akun(akun)
+            if kode and _isi_otp(page, kode):
+                _klik_submit(page)
+                try:
+                    page.wait_for_timeout(1200)
+                except Exception:
+                    pass
+
+        storage1 = _baca_storage(page)
+        token = deteksi_sesi.token_baru(storage0, storage1) or deteksi_sesi.cari_token_nilai(storage1)
+        hasil["token_ada"] = bool(token)
+        hasil["login_ok"] = bool(token) or bool(_probe_terproteksi(page, ctx.base_url, token))
+        if not token:
+            return hasil
+
+        hasil["logout_terpicu"] = _picu_logout(page)
+        try:
+            page.wait_for_load_state("networkidle")
+        except Exception:
+            pass
+        try:
+            page.wait_for_timeout(2000)
+        except Exception:
+            pass
+
+        storage2 = _baca_storage(page)
+        hasil["token_hapus_klien"] = deteksi_sesi.cari_token_nilai(storage2) is None
+        hasil["logout_request"] = any(_is_logout_url(u) for u in reqs)
+
+        # Uji ulang token LAMA beberapa kali (kurangi flaky; 2xx mana pun = masih berlaku).
+        status = None
+        for _ in range(3):
+            status = _probe_terproteksi(page, ctx.base_url, token)
+            if status:
+                break
+            try:
+                page.wait_for_timeout(600)
+            except Exception:
+                pass
+        hasil["status_token_lama"] = status
+    return hasil
+
+
 # --------------------------------------------------------------------------- form reset kata sandi
 
 def _isi_semua_sandi(page: Any, nilai: str) -> int:

@@ -16,10 +16,11 @@ from collections import Counter
 from datetime import datetime
 from typing import Optional
 
+from .. import analisis_token as at
 from ..http_client import LuarRuangLingkup
 from ..models import HasilMetode, MetodeSpec, Pewaktu, ScanContext
 from ..registry import check
-from ..sesi import buat_klien, ekstrak_sesi, login_ambil
+from ..sesi import artefak_sesi, buat_klien, ekstrak_sesi, header_artefak, login_ambil
 
 # Pola token JWT (tiga segmen base64url).
 import re as _re
@@ -96,21 +97,8 @@ def _ttl_sesi(r: dict) -> Optional[float]:
 
 
 def _fitur_token(r: dict) -> dict:
-    """Ciri NON-sensitif token/cookie sesi untuk fingerprint (tanpa nilai asli)."""
-    tok = r.get("token")
-    c = r.get("cookie")
-    if tok:
-        n = len(tok)
-        return {
-            "wadah": "header",
-            "format": "jwt" if _JWT.match(tok) else "opaque",
-            "segmen": (tok.count(".") + 1) if "." in tok else 1,
-            "panjang_kira": "<=16" if n <= 16 else "17-32" if n <= 32 else ">32",
-            "ada_strip": "-" in tok,
-        }
-    if c:
-        return {"wadah": "cookie", "nama_pola": c.get("name", ""), "atribut": c.get("flags", "")}
-    return {"wadah": "tidak_ada"}
+    """Ciri STRUKTUR token/cookie sesi untuk fingerprint (metadata non-sensitif, tanpa nilai asli)."""
+    return at.analisis(token=r.get("token"), cookie=r.get("cookie"))["metadata_ai"]
 
 
 def _tie_break(check_id: str, metadata: dict, hasil_tdv: HasilMetode, *, peta: dict[str, str],
@@ -209,15 +197,24 @@ class CekFingerprintKerangka:
 
 @check("session.token_entropy")
 class CekEntropiToken:
+    """SESS-2.3-T01 — kumpulkan N sampel token lalu nilai keacakan pada bagian yang BENAR:
+    untuk token opaque pada nilainya, untuk JWT pada segmen TANDA TANGAN (pembawa keacakan).
+    Juga mendeteksi identitas yang BERURUTAN/ter-encode (prediktabel) lintas-login — token yang
+    tampak acak di permukaan tetapi membungkus id tertebak. Kasus ambigu → AI tie-break."""
+
     def run(self, ctx, metode):
         with Pewaktu() as jam:
             akun = _akun_utama(ctx)
+            n = int(metode.parameter.get("jumlah_sampel", 30))
+            min_bit = float(metode.parameter.get("entropi_minimum_bit", 64))
+            hasil = None
             if akun is None or not akun.password:
                 hasil = _tdv(metode, "Membutuhkan akun uji untuk mengumpulkan sampel token.")
+            elif ctx.url_titik("login") is None:
+                hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan='Titik uji "login" tidak tersedia pada aplikasi.')
             else:
-                n = int(metode.parameter.get("jumlah_sampel", 30))
-                min_bit = float(metode.parameter.get("entropi_minimum_bit", 64))
                 sampel: list[str] = []
+                bukti: list = []
                 try:
                     with buat_klien(ctx) as klien:
                         for i in range(n):
@@ -230,35 +227,61 @@ class CekEntropiToken:
                         bukti = list(klien.bukti)[:3]  # cukup beberapa bukti
                 except (LuarRuangLingkup, Exception) as e:
                     hasil = _tdv(metode, "Gagal menghubungi endpoint login.", f"{type(e).__name__}: {e}")
-                    hasil.durasi_ms = jam.durasi_ms
-                    return hasil
 
-                if len(sampel) < 5:
+                if hasil is None and len(sampel) < 5:
                     hasil = _tdv(metode, f"Sampel token tak cukup ({len(sampel)}) untuk analisis entropi.", bukti=bukti)
-                elif all(_JWT.match(s) for s in sampel):
-                    # Token JWT (stateless): keacakan ada pada tanda tangan, bukan session-ID acak.
-                    # Analisis entropi session-ID tidak berlaku; sampel bisa identik bila iat sama.
-                    hasil = _tdv(metode, "Token berformat JWT (stateless) — analisis entropi session-ID tidak berlaku; dikonfirmasi asesor.", bukti=bukti)
-                else:
-                    unik = len(set(sampel)) == len(sampel)
-                    panjang_min = min(len(s) for s in sampel)
-                    bit = _entropi_bit(sampel)
-                    # Deteksi berurutan: banyak pasangan berbagi prefiks panjang.
-                    prefiks = len({s[: max(1, panjang_min - 2)] for s in sampel})
-                    berurutan = prefiks <= 2 and panjang_min < 24
-                    if unik and panjang_min >= 16 and bit >= min_bit and not berurutan:
-                        hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan=f"{len(sampel)} token unik, panjang ≥ {panjang_min}, entropi ~{bit:.0f} bit (≥ {min_bit:.0f}).", detail=metode.kriteria_lulus, bukti=bukti)
+                elif hasil is None:
+                    md_sampel = at.metadata_sampel(sampel)
+                    analisa = [at.analisis(token=s) for s in sampel]
+                    semua_jwt = all(a["metadata_ai"].get("format") == "jwt" for a in analisa)
+                    ada_prediktabel = any(a["kualitas"] == "prediktabel" for a in analisa)
+                    # (1) Identitas berurutan lintas login → prediktabel (walau permukaan "acak").
+                    if md_sampel["identitas_berurutan"]:
+                        hasil = HasilMetode(metode_id=metode.id, status="gagal",
+                                            ringkasan="Token sesi menyimpan identitas BERURUTAN/dapat ditebak lintas login.",
+                                            detail=f"{metode.kriteria_lulus}\n{md_sampel}", bukti=bukti)
+                    # (2) Struktur satu sampel sudah jelas prediktabel (encoded id, alg none, dsb.).
+                    elif ada_prediktabel:
+                        catatan = next(a["catatan"] for a in analisa if a["kualitas"] == "prediktabel")
+                        hasil = HasilMetode(metode_id=metode.id, status="gagal",
+                                            ringkasan="Struktur token mengandung identitas yang dapat ditebak.",
+                                            detail=f"{metode.kriteria_lulus}\n{catatan}", bukti=bukti)
                     else:
-                        alasan = []
-                        if not unik:
-                            alasan.append("token berulang")
-                        if panjang_min < 16:
-                            alasan.append(f"terlalu pendek ({panjang_min})")
-                        if bit < min_bit:
-                            alasan.append(f"entropi rendah (~{bit:.0f} bit)")
-                        if berurutan:
-                            alasan.append("berpola/berurutan")
-                        hasil = HasilMetode(metode_id=metode.id, status="gagal", ringkasan=f"Token sesi lemah: {', '.join(alasan)}.", detail=metode.kriteria_lulus, bukti=bukti)
+                        # (3) Entropi pada bagian yang relevan (sig JWT / nilai opaque).
+                        nilai_ent = [a["nilai_entropi"] for a in analisa if a["nilai_entropi"]]
+                        if not nilai_ent:
+                            hasil = _tdv(metode, "Tak ada nilai token yang dapat dinilai entropinya.", bukti=bukti)
+                        else:
+                            unik = len(set(nilai_ent)) == len(nilai_ent)
+                            panjang_min = min(len(s) for s in nilai_ent)
+                            bit = _entropi_bit(nilai_ent)
+                            prefiks = len({s[: max(1, panjang_min - 2)] for s in nilai_ent})
+                            berurutan = prefiks <= 2 and panjang_min < 24
+                            bagian = "tanda tangan JWT" if semua_jwt else "nilai token"
+                            if unik and panjang_min >= 16 and bit >= min_bit and not berurutan:
+                                hasil = HasilMetode(metode_id=metode.id, status="lulus",
+                                                    ringkasan=f"{len(nilai_ent)} {bagian} unik, panjang ≥ {panjang_min}, entropi ~{bit:.0f} bit (≥ {min_bit:.0f}).",
+                                                    detail=metode.kriteria_lulus, bukti=bukti)
+                            else:
+                                alasan = []
+                                if not unik:
+                                    alasan.append(f"{bagian} berulang")
+                                if panjang_min < 16:
+                                    alasan.append(f"terlalu pendek ({panjang_min})")
+                                if bit < min_bit:
+                                    alasan.append(f"entropi rendah (~{bit:.0f} bit)")
+                                if berurutan:
+                                    alasan.append("berpola/berurutan")
+                                # Opaque yang jelas lemah → gagal langsung; selebihnya (mis. JWT dengan
+                                # tanda tangan identik karena iat sama, atau encoding tak terbaca) → AI.
+                                if not semua_jwt and (not unik or berurutan or panjang_min < 12):
+                                    hasil = HasilMetode(metode_id=metode.id, status="gagal",
+                                                        ringkasan=f"Token sesi lemah: {', '.join(alasan)}.",
+                                                        detail=metode.kriteria_lulus, bukti=bukti)
+                                else:
+                                    hasil_tdv = _tdv(metode, f"Keacakan token belum pasti deterministik: {', '.join(alasan) or 'ambigu'}.", bukti=bukti)
+                                    hasil = _tie_break("session.token_entropy", md_sampel, hasil_tdv,
+                                                       peta={"prediktabel": "gagal", "acak_kuat": "lulus"})
         hasil.durasi_ms = jam.durasi_ms
         return hasil
 
@@ -362,10 +385,14 @@ class CekFlagCookie:
 
 @check("session.logout_invalidates")
 class CekLogoutInvalidasi:
-    """SESS-2.4-T01 — login, pastikan sesi aktif, logout, lalu coba PAKAI ULANG sesi lama.
+    """SESS-2.4-T01 — login, pastikan sesi aktif, logout, lalu PAKAI ULANG artefak sesi lama DARI
+    KLIEN BERSIH (artefak dilampirkan eksplisit).
 
-    Sesi lama ditolak (401/403) → lulus. Masih terautentikasi (200 non-HTML) → gagal.
-    Respons HTML/redirect yang ambigu → serahkan tie-breaker AI (autentik/tak_autentik).
+    Krusial: pemakaian ulang TIDAK memakai klien yang me-logout, sebab logout biasanya mengirim
+    `Set-Cookie ...; Max-Age=0` yang menghapus cookie di cookie-jar klien — request berikutnya lalu
+    tak membawa sesi apa pun dan selalu 401, menutupi apakah SERVER benar-benar menginvalidasi
+    (lulus palsu). Dengan melampirkan nilai artefak lama secara eksplisit pada klien baru, 401/403
+    berarti penolakan server sejati. 200 non-HTML → gagal; HTML/redirect ambigu → tie-breaker AI.
     """
 
     def run(self, ctx, metode):
@@ -373,41 +400,51 @@ class CekLogoutInvalidasi:
             akun = _akun_utama(ctx)
             url_logout = ctx.url_titik("logout")
             url_area = ctx.url_titik("area_terautentikasi")
+            hasil = None
+            art = None
             if akun is None or not akun.password:
                 hasil = _tdv(metode, "Membutuhkan akun uji untuk login lalu logout.")
             elif url_logout is None or url_area is None:
                 hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan='Titik uji "logout" dan/atau "area_terautentikasi" tidak tersedia pada aplikasi.')
             else:
+                bukti: list = []
                 try:
                     with buat_klien(ctx) as klien:
                         r = login_ambil(klien, ctx, akun, judul=f"{metode.id} — login")
-                        if not r["ok"] or not (r["token"] or r["cookie"]):
-                            hasil = _tdv(metode, "Gagal memperoleh sesi untuk uji logout.", bukti=list(klien.bukti))
+                        art = artefak_sesi(r)
+                        if not r["ok"] or art is None:
+                            bukti = list(klien.bukti)
+                            hasil = _tdv(metode, "Gagal memperoleh sesi untuk uji logout.", bukti=bukti)
                         else:
                             pre = klien.kirim("GET", url_area, judul_bukti=f"{metode.id} — akses sebelum logout")
                             if pre.status_code != 200:
-                                hasil = _tdv(metode, f"Sesi tak aktif sebelum logout (HTTP {pre.status_code}); tak dapat menguji invalidasi.", bukti=list(klien.bukti))
+                                bukti = list(klien.bukti)
+                                hasil = _tdv(metode, f"Sesi tak aktif sebelum logout (HTTP {pre.status_code}); tak dapat menguji invalidasi.", bukti=bukti)
                             else:
                                 klien.kirim(_metode_titik(ctx, "logout", "POST"), url_logout, judul_bukti=f"{metode.id} — logout")
-                                post = klien.kirim("GET", url_area, judul_bukti=f"{metode.id} — akses dengan sesi lama setelah logout")
                                 bukti = list(klien.bukti)
-                                ctype = post.headers.get("content-type", "").lower()
-                                if post.status_code in (401, 403):
-                                    hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan=f"Sesi lama ditolak setelah logout (HTTP {post.status_code}).", detail=metode.kriteria_lulus, bukti=bukti)
-                                elif post.status_code == 200 and "text/html" not in ctype:
-                                    hasil = HasilMetode(metode_id=metode.id, status="gagal", ringkasan="Sesi lama MASIH terautentikasi setelah logout (tidak diinvalidasi di server).", detail=metode.kriteria_lulus, bukti=bukti)
-                                else:
-                                    hasil_tdv = _tdv(metode, f"Respons setelah logout ambigu (HTTP {post.status_code}, {ctype or 'tanpa tipe'}).", bukti=bukti)
-                                    teks = (post.text or "").lower()
-                                    metadata = {
-                                        "status_sebelum_logout": pre.status_code,
-                                        "status_pakai_ulang": post.status_code,
-                                        "tipe_konten": ctype,
-                                        "panjang": len(post.text or ""),
-                                        "ada_sinyal_login": any(k in teks for k in ("type=password", "name=password", "login", "masuk", "sign in")),
-                                    }
-                                    hasil = _tie_break("session.logout_invalidates", metadata, hasil_tdv,
-                                                       peta={"tak_autentik": "lulus", "autentik": "gagal"})
+                    if hasil is None:
+                        with buat_klien(ctx) as klien2:
+                            post = klien2.kirim("GET", url_area, headers=header_artefak(art),
+                                                judul_bukti=f"{metode.id} — pakai ulang artefak sesi lama (klien bersih) setelah logout")
+                            bukti = bukti + list(klien2.bukti)
+                        ctype = post.headers.get("content-type", "").lower()
+                        if post.status_code in (401, 403):
+                            hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan=f"Artefak sesi lama ({art['jenis']}) ditolak setelah logout (HTTP {post.status_code}).", detail=metode.kriteria_lulus, bukti=bukti)
+                        elif post.status_code == 200 and "text/html" not in ctype:
+                            hasil = HasilMetode(metode_id=metode.id, status="gagal", ringkasan="Artefak sesi lama MASIH terautentikasi setelah logout (tidak diinvalidasi di server).", detail=metode.kriteria_lulus, bukti=bukti)
+                        else:
+                            hasil_tdv = _tdv(metode, f"Respons setelah logout ambigu (HTTP {post.status_code}, {ctype or 'tanpa tipe'}).", bukti=bukti)
+                            teks = (post.text or "").lower()
+                            metadata = {
+                                "status_pakai_ulang": post.status_code,
+                                "tipe_konten": ctype,
+                                "panjang": len(post.text or ""),
+                                "jenis_artefak": art["jenis"],
+                                "ada_sinyal_login": any(k in teks for k in ("type=password", "name=password", "login", "masuk", "sign in")),
+                            }
+                            hasil = _tie_break("session.logout_invalidates", metadata, hasil_tdv,
+                                               peta={"tak_autentik": "lulus", "autentik": "gagal"})
                 except (LuarRuangLingkup, Exception) as e:
                     hasil = _tdv(metode, "Gagal menghubungi endpoint logout/sesi.", f"{type(e).__name__}: {e}")
         hasil.durasi_ms = jam.durasi_ms
@@ -456,9 +493,10 @@ class CekIdleTimeout:
 
 @check("session.concurrent_sessions")
 class CekSesiBersamaan:
-    """SESS-2.7-T01 — login sesi A, login sesi B (klien terpisah), lalu cek apakah sesi A masih
-    berlaku. A ditolak → lulus (sesi dibatasi). Kedua aktif → kebijakan bergantung aplikasi
-    (kriteria: membatasi ATAU memberi tahu) → serahkan tie-breaker AI; bila tak meyakinkan, asesor."""
+    """SESS-2.7-T01 — login sesi A (pastikan aktif), login sesi B di klien terpisah (PASTIKAN B
+    aktif), lalu cek apakah A masih berlaku. A ditolak → lulus (sesi dibatasi). Kedua terkonfirmasi
+    aktif → kebijakan aplikasi (membatasi ATAU memberi tahu) → tie-breaker AI; bila tak meyakinkan,
+    asesor. B tak terkonfirmasi aktif → tak konklusif (hindari vonis dari asumsi)."""
 
     def run(self, ctx, metode):
         with Pewaktu() as jam:
@@ -472,28 +510,322 @@ class CekSesiBersamaan:
                 try:
                     with buat_klien(ctx) as kA:
                         rA = login_ambil(kA, ctx, akun, judul=f"{metode.id} — login sesi A")
-                        preA = None
-                        if rA["ok"] and (rA["token"] or rA["cookie"]):
-                            preA = kA.kirim("GET", url_area, judul_bukti=f"{metode.id} — akses sesi A")
+                        artA = artefak_sesi(rA)
+                        preA = kA.kirim("GET", url_area, judul_bukti=f"{metode.id} — akses sesi A") if (rA["ok"] and artA) else None
                         with buat_klien(ctx) as kB:
                             rB = login_ambil(kB, ctx, akun, judul=f"{metode.id} — login sesi B")
+                            artB = artefak_sesi(rB)
+                            postB = kB.kirim("GET", url_area, judul_bukti=f"{metode.id} — akses sesi B") if (rB["ok"] and artB) else None
+                            bukti_b = list(kB.bukti)
                         postA = kA.kirim("GET", url_area, judul_bukti=f"{metode.id} — akses sesi A setelah login B")
-                        bukti = list(kA.bukti)
+                        bukti = list(kA.bukti) + bukti_b
+                    b_aktif = postB is not None and postB.status_code == 200
                     if not rA["ok"] or not rB["ok"] or preA is None or preA.status_code != 200:
                         hasil = _tdv(metode, "Tak dapat memastikan sesi A aktif untuk uji sesi bersamaan.", bukti=bukti)
                     elif postA.status_code in (401, 403):
                         hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan="Sesi pertama diinvalidasi saat login kedua (sesi dibatasi).", detail=metode.kriteria_lulus, bukti=bukti)
+                    elif not b_aktif:
+                        hasil = _tdv(metode, "Sesi B tak terkonfirmasi aktif; uji sesi bersamaan tak konklusif.", bukti=bukti)
                     else:
-                        hasil_tdv = _tdv(metode, "Kedua sesi tetap aktif; kebijakan sesi ganda bergantung aturan aplikasi — dikonfirmasi asesor.", bukti=bukti)
+                        hasil_tdv = _tdv(metode, "Sesi A & B terkonfirmasi aktif bersamaan; kebijakan sesi ganda bergantung aturan aplikasi — dikonfirmasi asesor.", bukti=bukti)
                         teks = (postA.text or "").lower()
                         metadata = {
                             "status_sesi_a_setelah_b": postA.status_code,
+                            "status_sesi_b": postB.status_code,
                             "kedua_sesi_aktif": True,
+                            "artefak_identik": bool(artA and artB and artA.get("nilai") == artB.get("nilai")),
                             "ada_sinyal_sesi_ganda": any(k in teks for k in ("perangkat lain", "sesi lain", "another device", "logged in elsewhere", "multiple session")),
                         }
                         hasil = _tie_break("session.concurrent_sessions", metadata, hasil_tdv,
                                            peta={"ada_pembatasan": "lulus"})
                 except (LuarRuangLingkup, Exception) as e:
                     hasil = _tdv(metode, "Gagal menghubungi endpoint sesi.", f"{type(e).__name__}: {e}")
+        hasil.durasi_ms = jam.durasi_ms
+        return hasil
+
+
+# =================================================================== metode baru (struktur & duplikasi)
+
+@check("session.token_structure")
+class CekStrukturToken:
+    """SESS-2.3-T02 — bedah struktur satu token sesi: untuk JWT, dekode payload dan temukan klaim
+    identitas (jti/sid/sub) serta bentuk nilainya; untuk opaque, deteksi lapisan encode (base64/hex)
+    dan intip apakah membungkus identifier yang dapat ditebak. Vonis deterministik bila jelas
+    (acak_kuat→lulus, prediktabel→gagal); bentuk ambigu diserahkan ke AI (prediktabel/acak_kuat)."""
+
+    def run(self, ctx, metode):
+        with Pewaktu() as jam:
+            akun = _akun_utama(ctx)
+            if akun is None or not akun.password:
+                hasil = _tdv(metode, "Membutuhkan akun uji untuk memperoleh token sesi.")
+            elif ctx.url_titik("login") is None:
+                hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan='Titik uji "login" tidak tersedia pada aplikasi.')
+            else:
+                try:
+                    with buat_klien(ctx) as klien:
+                        r = login_ambil(klien, ctx, akun, judul=f"{metode.id} — ambil token untuk analisis struktur")
+                        bukti = list(klien.bukti)
+                    if not r["ok"] or not (r["token"] or r["cookie"]):
+                        hasil = _tdv(metode, "Gagal memperoleh token sesi untuk analisis struktur.", bukti=bukti)
+                    else:
+                        a = at.analisis(token=r.get("token"), cookie=r.get("cookie"))
+                        detail = f"{metode.kriteria_lulus}\n{a['catatan']}\nStruktur: {a['metadata_ai']}"
+                        if a["kualitas"] == "prediktabel":
+                            hasil = HasilMetode(metode_id=metode.id, status="gagal", ringkasan=f"Identitas sesi dapat ditebak: {a['catatan']}", detail=detail, bukti=bukti)
+                        elif a["kualitas"] == "acak_kuat":
+                            hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan=f"Struktur token sehat: {a['catatan']}", detail=detail, bukti=bukti)
+                        else:
+                            hasil_tdv = _tdv(metode, f"Struktur token ambigu: {a['catatan']}", detail=detail, bukti=bukti)
+                            kunci = "struktur|" + "|".join(f"{k}={a['metadata_ai'][k]}" for k in sorted(a["metadata_ai"]))
+                            hasil = _tie_break("session.token_structure", a["metadata_ai"], hasil_tdv,
+                                               peta={"prediktabel": "gagal", "acak_kuat": "lulus"}, kunci_cache=kunci)
+                except (LuarRuangLingkup, Exception) as e:
+                    hasil = _tdv(metode, "Gagal menghubungi endpoint login.", f"{type(e).__name__}: {e}")
+        hasil.durasi_ms = jam.durasi_ms
+        return hasil
+
+
+@check("session.logout_client_side")
+class CekLogoutBersihKlien:
+    """SESS-2.4-T03 — pelengkap T01: periksa apakah respons logout turut MEMBERSIHKAN artefak sesi
+    di sisi klien. Untuk sesi cookie: logout harus mengirim `Set-Cookie` yang mengosongkan/meng-
+    expired-kan cookie sesi (Max-Age=0 / Expires lampau / nilai kosong). Untuk sesi token (Bearer):
+    pembersihan di sisi klien tak dapat diamati lewat HTTP → tidak_berlaku."""
+
+    def run(self, ctx, metode):
+        with Pewaktu() as jam:
+            akun = _akun_utama(ctx)
+            url_logout = ctx.url_titik("logout")
+            if akun is None or not akun.password:
+                hasil = _tdv(metode, "Membutuhkan akun uji untuk login lalu logout.")
+            elif url_logout is None:
+                hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan='Titik uji "logout" tidak tersedia pada aplikasi.')
+            else:
+                try:
+                    with buat_klien(ctx) as klien:
+                        r = login_ambil(klien, ctx, akun, judul=f"{metode.id} — login")
+                        if not r["ok"] or not (r["token"] or r["cookie"]):
+                            hasil = _tdv(metode, "Gagal memperoleh sesi untuk uji logout.", bukti=list(klien.bukti))
+                        elif r["cookie"] is None:
+                            hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan="Sesi berbasis token (Bearer) — pembersihan artefak di klien tak teramati lewat HTTP.", bukti=list(klien.bukti))
+                        else:
+                            nama_cookie = r["cookie"].get("name", "")
+                            resp = klien.kirim(_metode_titik(ctx, "logout", "POST"), url_logout, judul_bukti=f"{metode.id} — logout (periksa Set-Cookie)")
+                            bukti = list(klien.bukti)
+                            try:
+                                sc_list = resp.headers.get_list("set-cookie")
+                            except Exception:
+                                sc = resp.headers.get("set-cookie")
+                                sc_list = [sc] if sc else []
+                            relevan = [s for s in sc_list if s.split("=", 1)[0].strip().lower() == nama_cookie.lower()]
+                            bersih = False
+                            for s in relevan:
+                                low = s.lower()
+                                nilai = s.split(";", 1)[0].split("=", 1)[1].strip() if "=" in s.split(";", 1)[0] else ""
+                                if "max-age=0" in low.replace(" ", "") or nilai == "" or _re.search(r"expires=[^;]*(1970|19[789]\d|200[0-9])", low):
+                                    bersih = True
+                                    break
+                            if bersih:
+                                hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan=f"Logout mengosongkan/meng-expired-kan cookie sesi '{nama_cookie}' di klien.", detail=metode.kriteria_lulus, bukti=bukti)
+                            elif relevan:
+                                hasil = HasilMetode(metode_id=metode.id, status="gagal", ringkasan=f"Logout menyetel ulang cookie '{nama_cookie}' tanpa mengosongkan/meng-expired-kannya.", detail=metode.kriteria_lulus, bukti=bukti)
+                            else:
+                                hasil = _tdv(metode, f"Logout tak mengirim `Set-Cookie` untuk '{nama_cookie}'; pembersihan sisi klien tak terkonfirmasi (bisa jadi klien yang menghapus). Dikonfirmasi asesor.", bukti=bukti)
+                except (LuarRuangLingkup, Exception) as e:
+                    hasil = _tdv(metode, "Gagal menghubungi endpoint logout.", f"{type(e).__name__}: {e}")
+        hasil.durasi_ms = jam.durasi_ms
+        return hasil
+
+
+@check("session.fixation")
+class CekFiksasiSesi:
+    """SESS-2.5-T03 — session fixation: ambil artefak sesi ANONIM (pra-login) dari halaman login,
+    lalu login pada klien yang sama; identitas sesi HARUS berubah setelah autentikasi (sesi anonim
+    tak boleh dipromosikan menjadi terautentikasi). Cookie sesi sama sebelum & sesudah login →
+    gagal (rawan fiksasi). Tak ada cookie anonim pra-login (mis. sesi token murni) → tidak_berlaku."""
+
+    def run(self, ctx, metode):
+        with Pewaktu() as jam:
+            akun = _akun_utama(ctx)
+            url_login = ctx.url_titik("login")
+            if akun is None or not akun.password:
+                hasil = _tdv(metode, "Membutuhkan akun uji untuk login.")
+            elif url_login is None:
+                hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan='Titik uji "login" tidak tersedia pada aplikasi.')
+            else:
+                try:
+                    with buat_klien(ctx) as klien:
+                        # Ambil cookie sesi anonim (GET halaman login bila URL-nya laman; jika titik
+                        # login adalah endpoint API POST, pakai base_url sebagai laman pembuka).
+                        laman = url_login if _metode_titik(ctx, "login", "POST") == "GET" else ctx.base_url
+                        pra = klien.kirim("GET", laman, judul_bukti=f"{metode.id} — ambil sesi anonim (pra-login)")
+                        sesi_pra = ekstrak_sesi(pra)
+                        nilai_pra = sesi_pra["cookie"]["value"] if sesi_pra["cookie"] else None
+                        nama_pra = sesi_pra["cookie"]["name"] if sesi_pra["cookie"] else None
+                        r = login_ambil(klien, ctx, akun, judul=f"{metode.id} — login")
+                        art = artefak_sesi(r)
+                        bukti = list(klien.bukti)
+                    if not r["ok"] or art is None:
+                        hasil = _tdv(metode, "Gagal memperoleh sesi setelah login.", bukti=bukti)
+                    elif nilai_pra is None:
+                        hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan="Tak ada cookie sesi anonim pra-login — vektor fiksasi berbasis cookie tak berlaku.", bukti=bukti)
+                    else:
+                        nilai_pasca = art["nilai"] if art["jenis"] == "cookie" else None
+                        if nilai_pasca is not None and nilai_pasca == nilai_pra:
+                            hasil = HasilMetode(metode_id=metode.id, status="gagal", ringkasan=f"Identitas sesi (cookie '{nama_pra}') TIDAK berubah setelah login — rawan session fixation.", detail=metode.kriteria_lulus, bukti=bukti)
+                        else:
+                            hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan="Identitas sesi berubah setelah autentikasi (sesi anonim tak dipromosikan).", detail=metode.kriteria_lulus, bukti=bukti)
+                except (LuarRuangLingkup, Exception) as e:
+                    hasil = _tdv(metode, "Gagal menghubungi endpoint login.", f"{type(e).__name__}: {e}")
+        hasil.durasi_ms = jam.durasi_ms
+        return hasil
+
+
+@check("session.concurrent_clone")
+class CekKloningSesi:
+    """SESS-2.7-T03 — duplikasi/kloning sesi: SATU artefak sesi yang sama dipakai dari DUA klien
+    independen secara paralel (klien asli + klien "kloning" yang melampirkan artefak eksplisit).
+    Salah satu ditolak → sesi terikat/ dibatasi (lulus). Keduanya diterima → tak ada pembatasan
+    teknis pada level artefak → tie-breaker AI (ada_pembatasan); bila tidak, dikonfirmasi asesor."""
+
+    def run(self, ctx, metode):
+        with Pewaktu() as jam:
+            akun = _akun_utama(ctx)
+            url_area = ctx.url_titik("area_terautentikasi")
+            if akun is None or not akun.password:
+                hasil = _tdv(metode, "Membutuhkan akun uji untuk kloning sesi.")
+            elif ctx.url_titik("login") is None or url_area is None:
+                hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan='Titik uji "login" dan/atau "area_terautentikasi" tidak tersedia pada aplikasi.')
+            else:
+                try:
+                    klon = None
+                    asli2 = None
+                    bukti_klon: list = []
+                    with buat_klien(ctx) as klien:
+                        r = login_ambil(klien, ctx, akun, judul=f"{metode.id} — login (sesi asli)")
+                        art = artefak_sesi(r)
+                        asli = klien.kirim("GET", url_area, judul_bukti=f"{metode.id} — akses dari klien asli") if (r["ok"] and art) else None
+                        if r["ok"] and art and asli is not None and asli.status_code == 200:
+                            with buat_klien(ctx) as kklon:
+                                klon = kklon.kirim("GET", url_area, headers=header_artefak(art),
+                                                   judul_bukti=f"{metode.id} — akses PARALEL dari klien kloning (artefak sama)")
+                                bukti_klon = list(kklon.bukti)
+                            # Pastikan sesi asli MASIH hidup setelah kloning dipakai.
+                            asli2 = klien.kirim("GET", url_area, judul_bukti=f"{metode.id} — akses klien asli setelah kloning")
+                        bukti = list(klien.bukti) + bukti_klon
+                    if art is None or asli is None or asli.status_code != 200:
+                        hasil = _tdv(metode, "Tak dapat memastikan sesi asli aktif untuk uji kloning.", bukti=bukti)
+                    elif klon is None:
+                        hasil = _tdv(metode, "Uji kloning tak terlaksana.", bukti=bukti)
+                    elif klon.status_code in (401, 403):
+                        hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan=f"Artefak sesi yang digandakan ditolak pada klien kedua (HTTP {klon.status_code}) — sesi terikat/dibatasi.", detail=metode.kriteria_lulus, bukti=bukti)
+                    else:
+                        ctype = klon.headers.get("content-type", "").lower()
+                        asli_tetap = asli2 is not None and asli2.status_code == 200
+                        hasil_tdv = _tdv(metode, "Artefak sesi yang sama diterima pada dua klien paralel; tak ada pembatasan teknis pada level artefak — kebijakan dikonfirmasi asesor.", bukti=bukti)
+                        teks = (klon.text or "").lower()
+                        metadata = {
+                            "status_klon": klon.status_code,
+                            "tipe_konten": ctype,
+                            "jenis_artefak": art["jenis"],
+                            "sesi_asli_tetap_aktif": asli_tetap,
+                            "kedua_klien_diterima": True,
+                            "ada_sinyal_pembatasan": any(k in teks for k in ("perangkat lain", "sesi lain", "another device", "logged in elsewhere", "multiple session", "dibatasi")),
+                        }
+                        hasil = _tie_break("session.concurrent_clone", metadata, hasil_tdv,
+                                           peta={"ada_pembatasan": "lulus"})
+                except (LuarRuangLingkup, Exception) as e:
+                    hasil = _tdv(metode, "Gagal menghubungi endpoint sesi.", f"{type(e).__name__}: {e}")
+        hasil.durasi_ms = jam.durasi_ms
+        return hasil
+
+
+@check("session.token_storage")
+class CekPenyimpananToken:
+    """SESS-2.6-T03 — DI MANA token sesi disimpan di sisi klien. Token diserahkan di BODY respons
+    login (dikonsumsi JavaScript lalu lazim disimpan di localStorage/sessionStorage yang dapat
+    dibaca skrip) ATAU cookie tanpa HttpOnly → rentan dicuri via XSS → gagal. Cookie sesi HttpOnly
+    (tak terbaca JavaScript) → lulus. Konfirmasi lokasi storage persisnya bisa via engine browser."""
+
+    def run(self, ctx, metode):
+        with Pewaktu() as jam:
+            akun = _akun_utama(ctx)
+            if akun is None or not akun.password:
+                hasil = _tdv(metode, "Membutuhkan akun uji untuk memperoleh sesi.")
+            elif ctx.url_titik("login") is None:
+                hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan='Titik uji "login" tidak tersedia pada aplikasi.')
+            else:
+                try:
+                    with buat_klien(ctx) as klien:
+                        r = login_ambil(klien, ctx, akun, judul=f"{metode.id} — ambil sesi untuk cek lokasi penyimpanan")
+                        bukti = list(klien.bukti)
+                    c = r.get("cookie")
+                    tok = r.get("token")
+                    if not r["ok"] or not (tok or c):
+                        hasil = _tdv(metode, "Gagal memperoleh sesi untuk menilai lokasi penyimpanan.", bukti=bukti)
+                    elif tok:
+                        hasil = HasilMetode(metode_id=metode.id, status="gagal",
+                                            ringkasan="Token sesi diserahkan di body respons (ditangani JavaScript, bukan cookie HttpOnly) — lazim disimpan di localStorage/sessionStorage dan dapat dicuri via XSS.",
+                                            detail=f"{metode.kriteria_lulus}\nSesi token Bearer; tak ada cookie sesi HttpOnly. Rujukan: CWE-522/CWE-1004. Lokasi storage persis dapat dikonfirmasi via engine browser.",
+                                            bukti=bukti)
+                    elif c is not None:
+                        flags = c.get("flags", "")
+                        if "httponly" in flags:
+                            catatan = "" if "secure" in flags else " (catatan: atribut Secure kurang — lihat SESS-2.6-T01)"
+                            hasil = HasilMetode(metode_id=metode.id, status="lulus",
+                                                ringkasan=f"Sesi dibawa cookie HttpOnly '{c.get('name')}' (tak terbaca JavaScript).{catatan}",
+                                                detail=metode.kriteria_lulus, bukti=bukti)
+                        else:
+                            hasil = HasilMetode(metode_id=metode.id, status="gagal",
+                                                ringkasan=f"Cookie sesi '{c.get('name')}' tanpa HttpOnly — dapat dibaca JavaScript; rentan pencurian via XSS.",
+                                                detail=f"{metode.kriteria_lulus}\nRujukan: CWE-1004.", bukti=bukti)
+                    else:
+                        hasil = _tdv(metode, "Lokasi penyimpanan sesi tak dapat ditentukan dari artefak.", bukti=bukti)
+                except (LuarRuangLingkup, Exception) as e:
+                    hasil = _tdv(metode, "Gagal menghubungi endpoint login.", f"{type(e).__name__}: {e}")
+        hasil.durasi_ms = jam.durasi_ms
+        return hasil
+
+
+@check("session.logout_real_flow", engine="playwright")
+class CekLogoutAlurNyata:
+    """SESS-2.4-T04 — login via BROWSER, lakukan LOGOUT seperti pengguna (klik kontrol logout),
+    lalu uji apakah token sesi LAMA masih berlaku. Token masih diterima (2xx) → gagal: logout tak
+    menginvalidasi sesi di server (sering FE hanya membersihkan storage klien, token tetap hidup —
+    tak tertangkap uji endpoint logout langsung). Ditolak → lulus. Kontrol logout tak ditemukan /
+    browser tak tersedia → tidak_dapat_diverifikasi (degradasi anggun)."""
+
+    def run(self, ctx, metode):
+        with Pewaktu() as jam:
+            akun = _akun_utama(ctx)
+            if akun is None or not akun.password:
+                hasil = _tdv(metode, "Membutuhkan akun uji untuk alur logout browser.")
+            elif ctx.url_titik("login_page") is None and ctx.url_titik("login") is None:
+                hasil = HasilMetode(metode_id=metode.id, status="tidak_berlaku", ringkasan='Titik uji halaman login tidak tersedia pada aplikasi.')
+            else:
+                try:
+                    from .. import playwright_driver as pw
+                    if not pw.tersedia():
+                        hasil = _tdv(metode, "Browser (Playwright) tak tersedia; uji alur logout UI dilewati.")
+                    else:
+                        fl = pw.logout_flow(ctx, akun)
+                        detail = (f"{metode.kriteria_lulus}\nlogin_ok={fl['login_ok']} token_ada={fl['token_ada']} "
+                                  f"logout_terpicu={fl['logout_terpicu']} logout_request={fl['logout_request']} "
+                                  f"token_hapus_klien={fl['token_hapus_klien']} status_token_lama={fl['status_token_lama']}")
+                        if not fl["login_ok"] or not fl["token_ada"]:
+                            hasil = _tdv(metode, "Gagal login/menangkap token via browser untuk uji logout.", detail)
+                        elif not fl["logout_terpicu"]:
+                            hasil = _tdv(metode, "Kontrol logout tak ditemukan otomatis; konfirmasi manual oleh asesor.", detail)
+                        elif fl["status_token_lama"] is not None:
+                            catatan = " FE memanggil endpoint logout tetapi token tetap hidup." if fl["logout_request"] else " FE tampak tak memanggil endpoint logout (hanya bersih di klien)."
+                            hasil = HasilMetode(metode_id=metode.id, status="gagal",
+                                                ringkasan=f"Setelah logout di UI, token sesi lama MASIH berlaku (HTTP {fl['status_token_lama']}) — sesi tidak diinvalidasi di server.{catatan}",
+                                                detail=detail, menunggu_tinjauan=True)
+                        else:
+                            hasil = HasilMetode(metode_id=metode.id, status="lulus",
+                                                ringkasan="Token sesi lama ditolak setelah logout di UI (sesi diinvalidasi di server).",
+                                                detail=detail)
+                except Exception as e:
+                    hasil = _tdv(metode, "Gagal menjalankan alur logout browser.", f"{type(e).__name__}: {e}")
         hasil.durasi_ms = jam.durasi_ms
         return hasil
