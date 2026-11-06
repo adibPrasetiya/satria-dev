@@ -123,6 +123,33 @@ def ekstrak_sesi(resp) -> dict:
     return {"token": token, "cookie": cookie}
 
 
+def artefak_sesi(r: dict) -> Optional[dict]:
+    """Rangkum artefak sesi dari hasil login agar bisa DIPAKAI ULANG di klien lain / setelah logout.
+
+    Return {"jenis": "token"|"cookie", "nilai": str, "nama": str} atau None.
+    """
+    if r.get("token"):
+        return {"jenis": "token", "nilai": r["token"], "nama": "Authorization"}
+    c = r.get("cookie")
+    if c and c.get("value"):
+        return {"jenis": "cookie", "nilai": c["value"], "nama": c.get("name") or "session"}
+    return None
+
+
+def header_artefak(art: Optional[dict]) -> dict:
+    """Header untuk melampirkan artefak sesi secara EKSPLISIT pada klien bersih.
+
+    Dipakai menguji pemakaian-ulang sesi (mis. setelah logout) TANPA bergantung pada cookie-jar
+    klien — yang bisa ikut terhapus oleh `Set-Cookie` logout (Max-Age=0) dan menutupi apakah
+    server benar-benar menginvalidasi sesi. Nilai disamarkan otomatis pada bukti (kunci sensitif).
+    """
+    if not art:
+        return {}
+    if art["jenis"] == "token":
+        return {"Authorization": f"Bearer {art['nilai']}"}
+    return {"Cookie": f"{art['nama']}={art['nilai']}"}
+
+
 def _coba_browser(klien: KlienScan, ctx: ScanContext, akun: AkunUji) -> Optional[dict]:
     """Fallback login via Playwright (form digerakkan JS/SPA). Suntik sesi ke `klien` httpx.
 

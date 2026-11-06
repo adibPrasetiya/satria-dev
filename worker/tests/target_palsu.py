@@ -68,11 +68,16 @@ def _jwt_acak(exp_detik: int | None = None) -> str:
 def buat_handler(mode: str, *, cookie: bool = False, token_tetap: bool = False, jwt: bool = False,
                  rekam_post: list[str] | None = None, validasi_ketat: bool = False, bocor_hash: bool = False,
                  sandi_akun: dict[str, str] | None = None, jwt_exp: int | None = None,
-                 sesi_tunggal: bool = False, rate_limit: bool = False, rate_batas: int = 5):
+                 sesi_tunggal: bool = False, rate_limit: bool = False, rate_batas: int = 5,
+                 token_encoded: bool = False, cookie_saja: bool = False, logout_klien_saja: bool = False,
+                 cookie_anon: bool = False, fixation_rentan: bool = False):
     aman = mode == "aman"
     gagal: dict[str, int] = {}
     diterbitkan: set[str] = set()
     pemilik_token: dict[str, str] = {}
+    # Sesi berbasis cookie dengan validasi SISI-SERVER (untuk uji logout/reuse yang akurat).
+    sesi_cookie: set[str] = set()
+    pemilik_cookie: dict[str, str] = {}
     # Sandi akun saat ini (berubah lewat change-password) — memungkinkan uji pemulihan sandi.
     sandi = sandi_akun if sandi_akun is not None else {}
     sandi.setdefault(AKUN_UTAMA[0], AKUN_UTAMA[1])
@@ -107,7 +112,19 @@ def buat_handler(mode: str, *, cookie: bool = False, token_tetap: bool = False, 
             auth = self.headers.get("Authorization", "")
             return auth.startswith("Bearer ") and auth[7:] in diterbitkan
 
+        def _cookie_val(self) -> str | None:
+            m = re.search(r"sessionid=([^;]+)", self.headers.get("Cookie", ""))
+            return m.group(1).strip() if m else None
+
+        def _sesi_valid(self) -> bool:
+            """Sesi sah: Bearer terbit ATAU cookie sesi yang masih valid sisi-server."""
+            return self._issued() or (self._cookie_val() in sesi_cookie)
+
         def do_GET(self):
+            # Cookie sesi ANONIM pra-login (untuk uji session fixation) bila diminta.
+            anon_sc = None
+            if cookie_anon and not self._cookie_val():
+                anon_sc = f"sessionid=anon{secrets.token_hex(6)}; Path=/"
             if self.path == "/" or self.path == "":
                 html = (
                     "<!doctype html><html><head><title>SATYA Uji</title></head><body>"
@@ -115,7 +132,7 @@ def buat_handler(mode: str, *, cookie: bool = False, token_tetap: bool = False, 
                     "<a href=/forgot-password>Lupa sandi</a> <a href=/profil>Profil</a>"
                     "</body></html>"
                 )
-                self._kirim(200, html, "text/html; charset=utf-8")
+                self._kirim(200, html, "text/html; charset=utf-8", set_cookie=anon_sc)
                 return
             if self.path.startswith("/register"):
                 html = (
@@ -136,15 +153,17 @@ def buat_handler(mode: str, *, cookie: bool = False, token_tetap: bool = False, 
             if self.path.startswith("/login"):
                 tipe = "password" if aman else "text"
                 html = f"<!doctype html><html><body><form method=post action=/auth/login><input name=email type=email><input name=password type={tipe}></form></body></html>"
-                self._kirim(200, html, "text/html; charset=utf-8")
+                self._kirim(200, html, "text/html; charset=utf-8", set_cookie=anon_sc)
                 return
             if self.path.startswith("/auth/me") or self.path.startswith("/profil"):
                 # aman: hanya token terbit yang diterima (token asing/kosong → 401).
                 # rentan: selalu 200 & membocorkan kata sandi (langgar 1.1-T01, 1.6-T01, 2.5-T02).
-                if aman and not self._issued():
+                if aman and not self._sesi_valid():
                     self._kirim(401, {"success": False, "message": "perlu login"})
                     return
-                email = pemilik_token.get(self.headers.get("Authorization", "")[7:], AKUN_UTAMA[0])
+                email = (pemilik_token.get(self.headers.get("Authorization", "")[7:])
+                         or pemilik_cookie.get(self._cookie_val() or "")
+                         or AKUN_UTAMA[0])
                 prof = {"id": _uid(email), "email": email, "nama": "Akun Uji"}
                 if not aman:
                     prof["password"] = AKUN_UTAMA[1]
@@ -232,6 +251,9 @@ def buat_handler(mode: str, *, cookie: bool = False, token_tetap: bool = False, 
                             pemilik_token.pop(t, None)
                     if token_tetap:
                         tok = tetap_val
+                    elif token_encoded:
+                        counter["n"] += 1
+                        tok = _b64(f"user-{counter['n']}".encode())  # ter-encode tapi prediktabel
                     elif aman:
                         tok = _jwt_acak(jwt_exp) if jwt else secrets.token_urlsafe(32)
                     else:
@@ -240,10 +262,27 @@ def buat_handler(mode: str, *, cookie: bool = False, token_tetap: bool = False, 
                     diterbitkan.add(tok)
                     pemilik_token[tok] = email
                     sc = None
-                    if cookie:
-                        flags = "; Secure; HttpOnly; SameSite=Lax" if aman else ""
-                        sc = f"sessionid={secrets.token_hex(8) if aman else counter['n']}{flags}"
-                    self._kirim(200, {"success": True, "accessToken": tok, "user": {"email": email}}, set_cookie=sc)
+                    if cookie or cookie_saja:
+                        masuk = self._cookie_val()
+                        if fixation_rentan and masuk:
+                            cval = masuk  # sesi anonim DIPROMOSIKAN tanpa dirotasi (rawan fiksasi)
+                        else:
+                            counter["n"] += 1
+                            cval = secrets.token_hex(8) if aman else str(counter["n"])
+                        sesi_cookie.add(cval)
+                        pemilik_cookie[cval] = email
+                        # cookie_saja diuji via http lokal → tanpa Secure agar cookie dikirim balik
+                        # klien (uji round-trip/reuse); mode cookie biasa tetap menyertakan Secure.
+                        if cookie_saja:
+                            flags = "; HttpOnly; SameSite=Lax" if aman else ""
+                        else:
+                            flags = "; Secure; HttpOnly; SameSite=Lax" if aman else ""
+                        sc = f"sessionid={cval}{flags}"
+                    # cookie_saja: sesi HANYA lewat cookie (tak ada token di body).
+                    body_login = {"success": True, "user": {"email": email}}
+                    if not cookie_saja:
+                        body_login["accessToken"] = tok
+                    self._kirim(200, body_login, set_cookie=sc)
                     return
                 gagal[email] = gagal.get(email, 0) + 1
                 if aman and gagal[email] > 5:
@@ -273,7 +312,13 @@ def buat_handler(mode: str, *, cookie: bool = False, token_tetap: bool = False, 
                     tok = auth[7:]
                     diterbitkan.discard(tok)  # invalidasi sesi di server
                     pemilik_token.pop(tok, None)
-                sc = "sessionid=; Max-Age=0" if cookie else None
+                # logout_klien_saja: hanya meng-expired-kan cookie di KLIEN, TIDAK menginvalidasi
+                # sisi-server (bug "logout palsu" — mendeteksinya butuh reuse dari klien bersih).
+                cval = self._cookie_val()
+                if cval and not logout_klien_saja:
+                    sesi_cookie.discard(cval)
+                    pemilik_cookie.pop(cval, None)
+                sc = "sessionid=; Max-Age=0" if (cookie or cookie_saja) else None
                 self._kirim(200, {"success": True}, set_cookie=sc)
                 return
 
@@ -295,7 +340,9 @@ def buat_handler(mode: str, *, cookie: bool = False, token_tetap: bool = False, 
 class TargetPalsu:
     def __init__(self, mode: str = "aman", *, cookie: bool = False, token_tetap: bool = False, jwt: bool = False,
                  validasi_ketat: bool = False, bocor_hash: bool = False, jwt_exp: int | None = None,
-                 sesi_tunggal: bool = False, rate_limit: bool = False, rate_batas: int = 5) -> None:
+                 sesi_tunggal: bool = False, rate_limit: bool = False, rate_batas: int = 5,
+                 token_encoded: bool = False, cookie_saja: bool = False, logout_klien_saja: bool = False,
+                 cookie_anon: bool = False, fixation_rentan: bool = False) -> None:
         self.mode = mode
         self.post_masuk: list[str] = []  # path setiap POST yang benar-benar diterima server
         self.sandi: dict[str, str] = {}  # sandi akun saat ini (diperbarui change-password)
@@ -303,7 +350,9 @@ class TargetPalsu:
             ("127.0.0.1", 0),
             buat_handler(mode, cookie=cookie, token_tetap=token_tetap, jwt=jwt, rekam_post=self.post_masuk,
                          validasi_ketat=validasi_ketat, bocor_hash=bocor_hash, sandi_akun=self.sandi,
-                         jwt_exp=jwt_exp, sesi_tunggal=sesi_tunggal, rate_limit=rate_limit, rate_batas=rate_batas),
+                         jwt_exp=jwt_exp, sesi_tunggal=sesi_tunggal, rate_limit=rate_limit, rate_batas=rate_batas,
+                         token_encoded=token_encoded, cookie_saja=cookie_saja, logout_klien_saja=logout_klien_saja,
+                         cookie_anon=cookie_anon, fixation_rentan=fixation_rentan),
         )
         self.port = self._srv.server_address[1]
         self.base_url = f"http://127.0.0.1:{self.port}"
