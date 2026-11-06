@@ -46,7 +46,36 @@ export const unitId = Joi.number().integer().positive().required().messages({
   'number.positive': 'Satuan tidak valid',
 });
 
-export const registerSchema = Joi.object({ nama: name, nrp, satuan_id: unitId, email, password: newPassword });
+export const employmentStatus = Joi.string()
+  .valid('TNI', 'PNS')
+  .required()
+  .messages({ 'any.only': 'Status harus TNI atau PNS', 'any.required': 'Status wajib dipilih' });
+
+export const rank = Joi.string().trim().min(2).max(60).required().messages({
+  'string.min': 'Pangkat/golongan wajib dipilih',
+  'string.max': 'Pangkat/golongan terlalu panjang',
+  'any.required': 'Pangkat/golongan wajib dipilih',
+  'string.empty': 'Pangkat/golongan wajib dipilih',
+});
+
+export const registerSchema = Joi.object({
+  nama: name,
+  status_kepegawaian: employmentStatus,
+  pangkat: rank,
+  // NIP PNS selalu 18 digit; NRP militer 6–18 digit.
+  nrp: Joi.when('status_kepegawaian', {
+    is: 'PNS',
+    then: Joi.string()
+      .trim()
+      .pattern(/^\d{18}$/)
+      .required()
+      .messages({ 'string.pattern.base': 'NIP berupa 18 digit angka', 'any.required': 'NIP wajib diisi' }),
+    otherwise: nrp,
+  }),
+  satuan_id: unitId,
+  email,
+  password: newPassword,
+});
 
 // Cek ketersediaan satu kolom per permintaan (stepper pendaftaran memeriksa NRP lalu email).
 export const availabilitySchema = Joi.object({ nrp: nrp.optional(), email: email.optional() })

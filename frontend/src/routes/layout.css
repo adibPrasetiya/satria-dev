@@ -45,15 +45,15 @@
 	/* Sidebar berlatar loreng: warna teks terang di atas lapisan gelap. */
 	--sidebar: oklch(0.24 0.035 130);
 	--sidebar-foreground: oklch(0.94 0.025 100);
-	--sidebar-primary: oklch(0.8 0.13 85);
+	--sidebar-primary: oklch(0.68 0.088 126);
 	--sidebar-primary-foreground: oklch(0.2 0.03 125);
 	--sidebar-accent: oklch(1 0 0 / 10%);
 	--sidebar-accent-foreground: oklch(0.98 0.02 100);
 	--sidebar-border: oklch(1 0 0 / 12%);
-	--sidebar-ring: oklch(0.8 0.13 85);
+	--sidebar-ring: oklch(0.68 0.088 126);
 
-	--gold: oklch(0.74 0.135 82);
-	--gold-foreground: oklch(0.25 0.04 80);
+	--gold: oklch(0.6 0.082 126);
+	--gold-foreground: oklch(0.23 0.03 126);
 	--khaki: oklch(0.68 0.055 100);
 	--olive-dark: oklch(0.27 0.04 135);
 	--success: oklch(0.5 0.13 145);
@@ -89,15 +89,15 @@
 	--chart-5: oklch(0.8 0.13 85);
 	--sidebar: oklch(0.15 0.015 130);
 	--sidebar-foreground: oklch(0.93 0.02 100);
-	--sidebar-primary: oklch(0.8 0.13 85);
+	--sidebar-primary: oklch(0.68 0.088 126);
 	--sidebar-primary-foreground: oklch(0.2 0.03 125);
 	--sidebar-accent: oklch(1 0 0 / 9%);
 	--sidebar-accent-foreground: oklch(0.98 0.02 100);
 	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.8 0.13 85);
+	--sidebar-ring: oklch(0.68 0.088 126);
 
-	--gold: oklch(0.8 0.13 85);
-	--gold-foreground: oklch(0.22 0.04 80);
+	--gold: oklch(0.68 0.088 126);
+	--gold-foreground: oklch(0.2 0.03 126);
 	--khaki: oklch(0.72 0.05 100);
 	--olive-dark: oklch(0.2 0.025 135);
 	--success: oklch(0.72 0.14 145);

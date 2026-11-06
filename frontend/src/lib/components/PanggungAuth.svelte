@@ -5,7 +5,7 @@
 	export function adeganDari(path: string | undefined): Adegan | null {
 		if (!path) return null;
 		if (path.startsWith('/daftar')) return 'daftar';
-		// Lupa & atur ulang kata sandi satu alur pemulihan: kartu di tengah, dua prajurit mengapit.
+		// Lupa & atur ulang kata sandi satu alur pemulihan (latar bersih seperti pendaftaran).
 		if (path.startsWith('/lupa-sandi') || path.startsWith('/reset-sandi')) return 'lupa';
 		if (path.startsWith('/login')) return 'login';
 		return null;
@@ -14,20 +14,19 @@
 
 <script lang="ts">
 	// Panggung halaman publik: latar tetap hidup saat berpindah halaman, sehingga pergantian
-	// adegan bisa dianimasikan seperti menu game:
-	// - latar: transisi CSS (login: prajurit hijau kiri; daftar: prajurit hitam kanan;
-	//   lupa: keduanya bergeser mengapit kartu di tengah);
-	// - kartu: View Transitions API (kartu lama keluar, kartu baru meluncur ke posisinya; gaya di layout.css).
+	// adegan bisa dianimasikan:
+	// - latar: transisi CSS antara dua latar — prajurit (masuk) dan polos bertekstur topografi
+	//   (daftar, lupa & atur ulang kata sandi);
+	// - isian: View Transitions API (lama keluar, baru meluncur ke posisinya; gaya di layout.css).
 	import type { Snippet } from 'svelte';
 	import { onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import AuraPrajurit from './AuraPrajurit.svelte';
-	import LatarKopassus from './LatarKopassus.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
 	const adegan = $derived(adeganDari(page.url.pathname) ?? 'login');
-	const lupa = $derived(adegan === 'lupa');
+	const masuk = $derived(adegan === 'login');
 
 	onNavigate((nav) => {
 		const dari = adeganDari(nav.from?.url.pathname);
@@ -36,7 +35,7 @@
 		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
 		const akar = document.documentElement;
-		// Mis. "login-daftar", "login-lupa"; tiap pasangan punya animasi kartu sendiri (layout.css).
+		// Mis. "login-daftar", "login-lupa"; tiap pasangan punya animasi sendiri (layout.css).
 		akar.dataset.arahAuth = `${dari}-${ke}`;
 		return new Promise((selesai) => {
 			const vt = document.startViewTransition(async () => {
@@ -49,24 +48,26 @@
 </script>
 
 <div class="relative isolate flex min-h-svh flex-col overflow-x-hidden bg-[#0d110c] text-white">
-	<div class={['adegan', adegan !== 'daftar' && 'aktif', lupa && 'kanan']}>
-		<AuraPrajurit aktif={adegan !== 'daftar'} />
-		<!-- Gradasi keterbacaan: gelap dari kanan (desktop, kartu di kanan) dan dari bawah (ponsel). -->
+	<!-- Adegan masuk: foto prajurit (panel isian di kanan). -->
+	<div class={['adegan', masuk && 'aktif']}>
+		<AuraPrajurit />
+		<!-- Gradasi keterbacaan: gelap dari kanan (desktop) dan dari bawah (ponsel). -->
 		<div
-			class="gradasi pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b0f09] from-40% via-[#0b0f09]/80 via-55% to-transparent to-70% lg:bg-gradient-to-l lg:from-[#0b0f09]/90 lg:from-0% lg:via-[#0b0f09]/45 lg:via-40% lg:to-transparent lg:to-65%"
+			class="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b0f09] from-40% via-[#0b0f09]/80 via-55% to-transparent to-70% lg:bg-gradient-to-l lg:from-[#0b0f09]/90 lg:from-0% lg:via-[#0b0f09]/45 lg:via-40% lg:to-transparent lg:to-65%"
 		></div>
 	</div>
 
-	<div class={['adegan adegan-daftar', adegan !== 'login' && 'aktif', lupa && 'kiri']}>
-		<LatarKopassus aktif={adegan !== 'login'} />
-		<!-- Kartu daftar di kiri: gradasi dari kiri (desktop) dan dari bawah (ponsel). -->
+	<!-- Adegan daftar & lupa/atur ulang sandi: latar polos bersih bertekstur topografi. -->
+	<div class={['adegan adegan-bersih', !masuk && 'aktif']}>
+		<div class="absolute inset-0 bg-[#0a0d09]"></div>
 		<div
-			class="gradasi pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b0d0c] from-40% via-[#0b0d0c]/80 via-55% to-transparent to-70% lg:bg-gradient-to-r lg:from-[#0b0d0c]/92 lg:from-0% lg:via-[#0b0d0c]/50 lg:via-40% lg:to-transparent lg:to-65%"
+			class="absolute inset-0 opacity-70"
+			style="background-image:url('/topo.webp');background-size:512px"
+		></div>
+		<div
+			class="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_50%_45%,transparent_0%,rgb(5_7_4/0.55)_70%,rgb(5_7_4/0.85)_100%)]"
 		></div>
 	</div>
-
-	<!-- Adegan lupa: gelap di tengah tempat kartu, kedua prajurit tetap terlihat di sisi. -->
-	<div class={['gradasi-tengah pointer-events-none absolute inset-0', lupa && 'aktif']}></div>
 
 	{@render children()}
 </div>
@@ -95,55 +96,15 @@
 			opacity 0.5s 0.15s ease-out,
 			visibility 0s;
 	}
-	/* Adegan daftar mengatur geser prajuritnya sendiri (parallax), jadi wadahnya cukup memudar. */
-	.adegan-daftar,
-	.adegan-daftar.aktif {
+	/* Latar bersih cukup memudar (tanpa geser). */
+	.adegan-bersih,
+	.adegan-bersih.aktif {
 		transform: none;
-	}
-	.gradasi {
-		transition: opacity 0.6s;
-	}
-
-	.gradasi-tengah {
-		opacity: 0;
-		transition: opacity 0.8s 0.1s;
-		background:
-			radial-gradient(ellipse 32% 70% at 50% 50%, rgb(11 15 9 / 0.85), transparent 75%),
-			linear-gradient(to top, rgb(11 15 9 / 0.85), transparent 45%);
-	}
-
-	@media (min-width: 1024px) {
-		/* Adegan lupa: prajurit hijau bergeser ke kanan, prajurit hitam ke kiri; tepi dalam dipudarkan
-		   agar keduanya menyatu di belakang kartu. */
-		.adegan.aktif.kanan {
-			transform: translateX(52%);
-			mask-image: linear-gradient(to right, transparent, #000 12%);
-		}
-		.adegan-daftar.aktif.kiri {
-			transform: translateX(-48%);
-			mask-image: linear-gradient(to left, transparent, #000 12%);
-		}
-		.kanan .gradasi,
-		.kiri .gradasi {
-			opacity: 0;
-		}
-		.gradasi-tengah.aktif {
-			opacity: 1;
-		}
-	}
-	/* Ponsel: layar terlalu sempit untuk dibelah; adegan lupa memakai latar login saja. */
-	@media (max-width: 1023px) {
-		.adegan.kiri {
-			opacity: 0;
-			visibility: hidden;
-		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.adegan,
-		.adegan.aktif,
-		.adegan.aktif.kanan,
-		.adegan-daftar.aktif.kiri {
+		.adegan.aktif {
 			transition:
 				opacity 0.3s,
 				visibility 0s 0.3s;

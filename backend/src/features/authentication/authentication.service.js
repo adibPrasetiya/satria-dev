@@ -18,6 +18,8 @@ const MINUTE_MS = 60 * 1000;
 export const toPublicUser = (user) => ({
   id: String(user.id),
   nama: user.name,
+  status_kepegawaian: user.employmentStatus ?? null,
+  pangkat: user.rank ?? null,
   nrp: user.nrp,
   email: user.email,
   satuan: user.unit,
@@ -63,7 +65,7 @@ export function createAuthenticationService({
      * Pendaftaran mandiri: akun dibuat sebagai pemilik aplikasi dan belum terverifikasi.
      * Respons selalu sama walau email/NRP sudah terdaftar agar keberadaan akun tidak bocor.
      */
-    async register({ nama, nrp, satuan_id: unitId, email, password }) {
+    async register({ nama, status_kepegawaian: employmentStatus, pangkat: rank, nrp, satuan_id: unitId, email, password }) {
       // Daftar satuan bersifat publik, jadi menolaknya di awal tidak membocorkan apa pun.
       if (!(await repository.findActiveUnitById(unitId))) {
         throw AppError.badRequest('Data yang dikirim tidak valid', [{ field: 'satuan_id', message: 'Satuan tidak ditemukan di daftar' }]);
@@ -74,8 +76,18 @@ export function createAuthenticationService({
         auditor('auth.daftar.duplikat', { email, nrp });
         return;
       }
-      const user = await repository.createUser({ name: nama, nrp, unitId, email, passwordHash, role: 'pemilik', isVerified: false });
-      auditor('auth.daftar', { targetUserId: user?.id, email, nrp, unitId });
+      const user = await repository.createUser({
+        name: nama,
+        employmentStatus,
+        rank,
+        nrp,
+        unitId,
+        email,
+        passwordHash,
+        role: 'pemilik',
+        isVerified: false,
+      });
+      auditor('auth.daftar', { targetUserId: user?.id, email, nrp, unitId, statusKepegawaian: employmentStatus });
     },
 
     /**

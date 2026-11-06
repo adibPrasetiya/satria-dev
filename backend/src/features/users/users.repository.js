@@ -8,6 +8,8 @@ import { likePattern } from '../../utils/likePattern.js';
 const columns = {
   id: users.id,
   name: users.name,
+  employmentStatus: users.employmentStatus,
+  rank: users.rank,
   nrp: users.nrp,
   unit: units.name,
   unitId: users.unitId,
@@ -32,7 +34,9 @@ function buildFilter({ search, status }) {
   const conditions = [];
   if (search) {
     const pattern = likePattern(search);
-    conditions.push(or(like(users.name, pattern), like(users.email, pattern), like(users.nrp, pattern), like(units.name, pattern)));
+    conditions.push(
+      or(like(users.name, pattern), like(users.rank, pattern), like(users.email, pattern), like(users.nrp, pattern), like(units.name, pattern)),
+    );
   }
   if (status) conditions.push(STATUS_FILTER[status]());
   return conditions.length ? and(...conditions) : undefined;

@@ -157,7 +157,7 @@
 				tahap === 'berhasil'
 					? 'bg-success text-white hover:bg-success'
 					: siap
-						? 'bg-gold text-gold-foreground shadow-[0_0_28px_rgb(230_170_60/0.4)] hover:bg-gold/90'
+						? 'bg-gold text-gold-foreground shadow-[0_0_24px_rgb(150_175_95/0.28)] hover:bg-gold/90'
 						: 'bg-gold/55 text-gold-foreground/80 hover:bg-gold/65'
 			)}
 		>

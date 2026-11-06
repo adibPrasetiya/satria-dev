@@ -4,8 +4,8 @@
 	// Adegan login: kartu di kanan; daftar: kartu di kiri (prajurit di kanan); lupa: kartu di tengah.
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
-	import Lambang from './Lambang.svelte';
 	import { adeganDari } from './PanggungAuth.svelte';
+	import LogoSatria from './LogoSatria.svelte';
 	import { cn } from '#lib/utils.js';
 
 	let {
@@ -20,33 +20,87 @@
 
 <main
 	class={cn(
-		'relative flex flex-1 items-end justify-center pt-[30svh] lg:items-center lg:px-[7vw] lg:py-10',
+		'relative flex flex-1 items-end justify-center pt-[30svh] lg:items-stretch lg:p-0 lg:pt-0',
 		{ daftar: 'lg:justify-start', lupa: 'lg:justify-center', login: 'lg:justify-end' }[adegan]
 	)}
 >
+	<!-- Desktop: panel solid setinggi layar menempel ke tepi (bukan kartu melayang) → bagi 2 dengan latar. -->
 	<section
 		class={cn(
-			'kartu-auth sudut-taktis w-full rounded-t-2xl border border-b-0 border-gold/30 px-6 pt-6 pb-6 shadow-[0_-10px_50px_rgb(0_0_0/0.6)] sm:px-8 lg:rounded-none lg:border-b lg:shadow-[0_24px_70px_rgb(0_0_0/0.65)]',
-			adegan === 'daftar' ? 'bg-[#0e1110]/95 lg:max-w-[560px]' : 'bg-[#10150e]/95 lg:max-w-[400px]',
+			'kartu-auth relative w-full rounded-t-2xl border border-b-0 border-gold/30 px-6 pt-6 pb-6 shadow-[0_-10px_50px_rgb(0_0_0/0.6)] sm:px-8',
+			'lg:flex lg:min-h-svh lg:flex-col lg:justify-center lg:rounded-none lg:border-t-0 lg:border-r-0 lg:border-l lg:border-gold/25 lg:px-0 lg:py-16 lg:shadow-[-30px_0_80px_rgb(0_0_0/0.55)]',
+			adegan === 'daftar'
+				? 'bg-[#0e1110]/95 lg:w-[45vw] lg:max-w-[640px] lg:bg-[#0c0f0b]'
+				: 'bg-[#10150e]/95 lg:w-[41vw] lg:max-w-[560px] lg:bg-[#0a0d08]',
+			adegan !== 'login' && 'sudut-taktis',
 			goyang && 'goyang'
 		)}
 		style:view-transition-name="kartu-{adegan}"
 		aria-labelledby="judul-auth"
 	>
-		<div class="flex items-center gap-3">
-			<Lambang class="size-11 shrink-0 drop-shadow-[0_4px_10px_rgb(0_0_0/0.6)]" />
-			<div class="leading-tight">
-				<p class="font-stencil text-2xl tracking-[0.16em] text-gold">SATYA</p>
-				<p class="text-xs text-white/55">Asesmen Kelaikan Keamanan Aplikasi</p>
+		{#if adegan === 'login'}
+			<!-- Tekstur topografi (pattern seamless, diulang — bukan gambar diperbesar). -->
+			<div
+				class="pointer-events-none absolute inset-0 z-0 hidden bg-repeat opacity-80 lg:block"
+				style="background-image:url('/topo.webp');background-size:512px"
+				aria-hidden="true"
+			></div>
+			<!-- Dekorasi HUD taktis (desktop): garis hijau bertingkat di pojok kanan-atas + bracket
+			     bawah-kanan, meniru dekorasi pada mockup. -->
+			<svg
+				class="pointer-events-none absolute top-0 right-0 z-20 hidden h-[60px] w-[300px] lg:block"
+				viewBox="0 0 300 60"
+				fill="none"
+				aria-hidden="true"
+			>
+				<path
+					d="M4 44 L40 28 L198 28 L220 14"
+					stroke="var(--gold)"
+					stroke-width="1.75"
+					stroke-opacity="0.7"
+				/>
+				<path d="M220 14 L300 14" stroke="oklch(0.8 0.13 128)" stroke-width="4" />
+			</svg>
+			<svg
+				class="pointer-events-none absolute right-0 bottom-0 z-20 hidden h-[74px] w-[260px] lg:block"
+				viewBox="0 0 260 74"
+				fill="none"
+				aria-hidden="true"
+			>
+				<path
+					d="M260 56 L214 56 L190 72"
+					stroke="var(--gold)"
+					stroke-width="1.5"
+					stroke-opacity="0.55"
+				/>
+				<path
+					d="M260 44 L224 44"
+					stroke="oklch(0.8 0.13 128)"
+					stroke-width="3.5"
+					stroke-opacity="0.85"
+				/>
+			</svg>
+		{/if}
+
+		<div class="relative z-10 lg:mx-auto lg:w-full lg:max-w-[400px]">
+			<LogoSatria
+				class="flex w-fit [--logo-h:3rem] sm:[--logo-h:3.5rem] lg:mx-auto lg:[--logo-h:5.5rem]"
+			/>
+
+			<div class="mt-5 mb-4 lg:mt-7 lg:mb-6">
+				<h1
+					id="judul-auth"
+					class="font-heading text-xl font-semibold tracking-normal lg:text-[2rem] lg:leading-tight"
+				>
+					{judul}
+				</h1>
+				{#if keterangan}<p class="mt-1 text-sm text-white/60 lg:mt-2 lg:text-[15px]">
+						{keterangan}
+					</p>{/if}
 			</div>
-		</div>
 
-		<div class="mt-5 mb-4">
-			<h1 id="judul-auth" class="font-heading text-xl font-semibold tracking-normal">{judul}</h1>
-			{#if keterangan}<p class="mt-1 text-sm text-white/60">{keterangan}</p>{/if}
+			{@render children()}
 		</div>
-
-		{@render children()}
 	</section>
 </main>
 

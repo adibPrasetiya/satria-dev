@@ -2,6 +2,9 @@ import { sql } from 'drizzle-orm';
 import { bigint, boolean, char, datetime, index, json, mysqlEnum, mysqlTable, smallint, text, varchar } from 'drizzle-orm/mysql-core';
 import { ROLES } from '../config/app.js';
 
+/** Status kepegawaian pendaftar: militer (NRP) atau PNS (NIP 18 digit). */
+export const EMPLOYMENT_STATUSES = ['TNI', 'PNS'];
+
 const id = () => bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey();
 const userId = () =>
   bigint('user_id', { mode: 'number', unsigned: true })
@@ -28,6 +31,10 @@ export const users = mysqlTable(
   {
     id: id(),
     name: varchar('name', { length: 100 }).notNull(),
+    // Status kepegawaian (TNI/PNS) & pangkat/golongan. Nullable: akun lama (sebelum kolom ini ada)
+    // menyimpan pangkat di dalam `name`.
+    employmentStatus: mysqlEnum('status_kepegawaian', EMPLOYMENT_STATUSES),
+    rank: varchar('pangkat', { length: 60 }),
     // NRP (militer) / NIP (PNS).
     nrp: varchar('nrp', { length: 20 }).notNull().unique(),
     unitId: bigint('unit_id', { mode: 'number', unsigned: true })

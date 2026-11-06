@@ -71,6 +71,13 @@
       "when": 1793000000000,
       "tag": "0009_inpv_runtime_custom",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1793060000000,
+      "tag": "0010_users_status_pangkat",
+      "breakpoints": true
     }
   ]
 }
