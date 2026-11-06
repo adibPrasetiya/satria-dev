@@ -107,8 +107,15 @@ export interface SatuanAdmin extends Satuan {
 }
 
 /** Permohonan akun baru; aktif setelah disetujui admin. */
+/** Status kepegawaian pendaftar: militer (NRP) atau PNS (NIP 18 digit). */
+export type StatusKepegawaian = 'TNI' | 'PNS';
+
 export interface PendaftaranAkun {
 	nama: string;
+	status_kepegawaian: StatusKepegawaian;
+	/** Pangkat (TNI) atau golongan (PNS). */
+	pangkat: string;
+	/** NRP (TNI) / NIP (PNS). */
 	nrp: string;
 	/** Id dari daftar satuan (lihat `Satuan`). */
 	satuan_id: string;
@@ -122,6 +129,9 @@ export type StatusAkun = 'pending' | 'verified' | 'inactive';
 export interface Pengguna {
 	id: string;
 	nama: string;
+	/** Null untuk akun lama (pangkat dulu tergabung di `nama`). */
+	status_kepegawaian?: StatusKepegawaian | null;
+	pangkat?: string | null;
 	nrp?: string;
 	email: string;
 	peran: Peran;

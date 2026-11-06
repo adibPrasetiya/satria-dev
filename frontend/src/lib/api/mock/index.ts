@@ -285,6 +285,8 @@ export const mockApi: Api = {
 			state.pengguna.push({
 				id: idBaru('u'),
 				nama: data.nama,
+				status_kepegawaian: data.status_kepegawaian,
+				pangkat: data.pangkat,
 				nrp: data.nrp,
 				email: data.email,
 				satuan: satuan.nama,

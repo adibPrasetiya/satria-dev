@@ -77,7 +77,16 @@ describe('authentication.service', () => {
   const eventNames = () => events.map(([e]) => e);
 
   const daftar = (overrides = {}) =>
-    service.register({ nama: 'Letda Inf. Uji Coba', nrp: '11080012', satuan_id: 1, email: 'uji@satuan.mil.id', password: SANDI, ...overrides });
+    service.register({
+      nama: 'Uji Coba',
+      status_kepegawaian: 'TNI',
+      pangkat: 'Letda',
+      nrp: '11080012',
+      satuan_id: 1,
+      email: 'uji@satuan.mil.id',
+      password: SANDI,
+      ...overrides,
+    });
   const verifikasi = (email = 'uji@satuan.mil.id') => Object.assign(repo.state.users.find((u) => u.email === email), { isVerified: true });
   const tokenDariEmail = () => new URL(mails.at(-1).text.match(/https?:\/\/\S+/)[0]).searchParams.get('token');
 
@@ -105,6 +114,14 @@ describe('authentication.service', () => {
       assert.ok(await verifyPassword(SANDI, user.passwordHash));
     });
 
+    it('menyimpan status kepegawaian & pangkat sebagai kolom tersendiri', async () => {
+      await daftar();
+      const [user] = repo.state.users;
+      assert.equal(user.name, 'Uji Coba');
+      assert.equal(user.employmentStatus, 'TNI');
+      assert.equal(user.rank, 'Letda');
+    });
+
     it('email/NRP yang sudah ada tidak membuat akun kedua dan tidak melempar galat (cegah enumerasi)', async () => {
       await daftar();
       await assert.doesNotReject(daftar({ nrp: '99999999' }));
@@ -113,13 +130,23 @@ describe('authentication.service', () => {
     });
 
     it('skema menolak kata sandi lemah & NRP bukan angka', () => {
-      const base = { nama: 'Nama Uji', nrp: '11080012', satuan_id: 1, email: 'a@b.mil.id', password: SANDI };
+      const base = { nama: 'Nama Uji', status_kepegawaian: 'TNI', pangkat: 'Kapten', nrp: '11080012', satuan_id: 1, email: 'a@b.mil.id', password: SANDI };
       assert.equal(registerSchema.validate(base).error, undefined);
       assert.ok(registerSchema.validate({ ...base, password: 'rahasia123' }).error, 'tanpa huruf besar & simbol');
       assert.ok(registerSchema.validate({ ...base, password: 'Ab!1' }).error, 'terlalu pendek');
       assert.ok(registerSchema.validate({ ...base, nrp: 'ABC123' }).error);
       assert.ok(registerSchema.validate({ ...base, satuan_id: undefined }).error, 'satuan wajib dipilih');
       assert.ok(registerSchema.validate({ ...base, satuan_id: 'Satuan bebas' }).error, 'satuan harus id dari daftar');
+    });
+
+    it('skema mewajibkan status & pangkat, dan NIP PNS harus 18 digit', () => {
+      const base = { nama: 'Nama Uji', status_kepegawaian: 'TNI', pangkat: 'Kapten', nrp: '11080012', satuan_id: 1, email: 'a@b.mil.id', password: SANDI };
+      assert.ok(registerSchema.validate({ ...base, status_kepegawaian: undefined }).error, 'status wajib');
+      assert.ok(registerSchema.validate({ ...base, status_kepegawaian: 'POLRI' }).error, 'status hanya TNI/PNS');
+      assert.ok(registerSchema.validate({ ...base, pangkat: '' }).error, 'pangkat wajib');
+      const pns = { ...base, status_kepegawaian: 'PNS', pangkat: 'Penata (III/c)' };
+      assert.ok(registerSchema.validate({ ...pns, nrp: '11080012' }).error, 'NIP PNS tidak boleh 8 digit');
+      assert.equal(registerSchema.validate({ ...pns, nrp: '198501012010011001' }).error, undefined);
     });
 
     it('menolak satuan yang tidak ada atau nonaktif di daftar', async () => {
@@ -224,8 +251,12 @@ describe('authentication.service', () => {
       verifikasi();
       const result = await service.login({ email: 'uji@satuan.mil.id', password: SANDI }, { ip: '127.0.0.1' });
       assert.ok(result.accessToken && result.refreshToken);
-      assert.deepEqual(Object.keys(result.user).sort(), ['aktif', 'email', 'id', 'nama', 'nrp', 'peran', 'satuan', 'satuan_id', 'terverifikasi']);
+      assert.deepEqual(Object.keys(result.user).sort(), [
+        'aktif', 'email', 'id', 'nama', 'nrp', 'pangkat', 'peran', 'satuan', 'satuan_id', 'status_kepegawaian', 'terverifikasi',
+      ]);
       assert.equal(result.user.terverifikasi, true);
+      assert.equal(result.user.status_kepegawaian, 'TNI');
+      assert.equal(result.user.pangkat, 'Letda');
       assert.equal(repo.state.users[0].lastLoginAt, clock);
     });
 

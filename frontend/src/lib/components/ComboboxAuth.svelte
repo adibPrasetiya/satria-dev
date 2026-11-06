@@ -52,6 +52,8 @@
 	let gagal = $state(false);
 	let urutan = 0;
 	let tunda: ReturnType<typeof setTimeout> | undefined;
+	/** true selama jeda debounce: teks sudah berubah tapi pencariannya belum dijalankan. */
+	let tertunda = false;
 
 	const idDaftar = $derived(`${id}-daftar`);
 	const gelap = $derived(tema === 'gelap');
@@ -80,7 +82,19 @@
 		}
 		buka = true;
 		clearTimeout(tunda);
-		tunda = setTimeout(() => jalankanCari(kata), 250);
+		tertunda = true;
+		tunda = setTimeout(() => {
+			tertunda = false;
+			jalankanCari(kata);
+		}, 250);
+	}
+
+	/** Enter saat pencarian belum selesai: cari teks terbaru dulu, baru pilih hasil teratasnya. */
+	async function pilihSetelahCari() {
+		clearTimeout(tunda);
+		tertunda = false;
+		await jalankanCari(kata);
+		if (buka && hasil[aktif]) pilih(hasil[aktif]);
 	}
 
 	function bukaDaftar() {
@@ -103,6 +117,10 @@
 			if (!hasil.length) return;
 			aktif = (aktif + (e.key === 'ArrowDown' ? 1 : -1) + hasil.length) % hasil.length;
 			document.getElementById(`${id}-opsi-${aktif}`)?.scrollIntoView({ block: 'nearest' });
+		} else if (e.key === 'Enter' && buka && (tertunda || memuat)) {
+			// Hasil yang tampil masih milik teks sebelumnya — jangan dipilih (bisa salah pilih).
+			e.preventDefault();
+			void pilihSetelahCari();
 		} else if (e.key === 'Enter' && buka && hasil[aktif]) {
 			// Enter memilih opsi, bukan mengirim form.
 			e.preventDefault();
