@@ -7,7 +7,7 @@
 	import type { Peran } from '#lib/types.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
-	import Lambang from './Lambang.svelte';
+	import LogoSatria from './LogoSatria.svelte';
 	import MenuAkun from './MenuAkun.svelte';
 	import IndikatorWorker from './IndikatorWorker.svelte';
 	import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
@@ -42,14 +42,24 @@
 			item: [
 				{ href: '/dashboard', label: 'Dasbor', ikon: LayoutDashboard, peran: SEMUA },
 				{ href: '/aplikasi', label: 'Aplikasi', ikon: AppWindow, peran: SEMUA },
-				{ href: '/aplikasi/baru', label: 'Registrasi Aplikasi', ikon: CirclePlus, peran: ['pemilik', 'admin'] },
+				{
+					href: '/aplikasi/baru',
+					label: 'Registrasi Aplikasi',
+					ikon: CirclePlus,
+					peran: ['pemilik', 'admin']
+				},
 				{ href: '/katalog', label: 'Katalog Kontrol', ikon: BookOpen, peran: SEMUA }
 			]
 		},
 		{
 			grup: 'Asesmen',
 			item: [
-				{ href: '/asesor/antrian', label: 'Antrian Tinjauan', ikon: ClipboardCheck, peran: ['asesor', 'admin'] }
+				{
+					href: '/asesor/antrian',
+					label: 'Antrian Tinjauan',
+					ikon: ClipboardCheck,
+					peran: ['asesor', 'admin']
+				}
 			]
 		},
 		{
@@ -117,27 +127,34 @@
 	});
 </script>
 
-<div class="flex min-h-svh">
+<div class="flex min-h-svh bg-background">
 	<aside
 		class={cn(
-			'bg-loreng no-print fixed inset-y-0 left-0 z-40 flex w-64 flex-col text-sidebar-foreground shadow-xl transition-[transform,width] duration-200 lg:translate-x-0',
-			terbuka ? 'translate-x-0' : '-translate-x-full',
-			ciut && 'lg:w-16'
+			'no-print fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-border bg-card text-foreground transition-[transform,width] duration-200 lg:translate-x-0',
+			terbuka ? 'translate-x-0 shadow-2xl' : '-translate-x-full',
+			ciut && 'lg:w-[72px]'
 		)}
 	>
 		<!-- Identitas -->
-		<div class={cn('flex h-19 shrink-0 items-center gap-3 border-b border-sidebar-border px-4', ciut && 'lg:justify-center lg:px-0')}>
-			<Lambang class="size-11 shrink-0 drop-shadow" />
-			<div class={cn('min-w-0 leading-tight', ciut && 'lg:hidden')}>
-				<p class="font-stencil text-2xl tracking-[0.12em] text-gold">SATYA</p>
-				<p class="font-heading text-[10px] tracking-[0.18em] text-sidebar-foreground/80 uppercase">
-					Kelaikan Keamanan Aplikasi
-				</p>
-			</div>
+		<div
+			class={cn('flex h-16 shrink-0 items-center gap-3 px-5', ciut && 'lg:justify-center lg:px-0')}
+		>
+			<a href="/dashboard" aria-label="SATRIA — dasbor" class="flex items-center">
+				<LogoSatria tema="ikut" class={cn('[--logo-h:2.25rem]', ciut && 'lg:hidden')} />
+				{#if ciut}
+					<img
+						src="/satria-lambang.png"
+						alt=""
+						width="94"
+						height="138"
+						class="hidden h-9 w-auto lg:block"
+					/>
+				{/if}
+			</a>
 			<Button
 				variant="ghost"
 				size="icon-sm"
-				class="ml-auto text-sidebar-foreground hover:bg-white/10 hover:text-white lg:hidden"
+				class="ml-auto text-muted-foreground lg:hidden"
 				onclick={() => (terbuka = false)}
 				aria-label="Tutup menu"
 			>
@@ -145,41 +162,55 @@
 			</Button>
 		</div>
 
-		<nav class={cn('flex-1 overflow-x-hidden overflow-y-auto px-3 py-2', ciut && 'lg:px-2')}>
-			{#each nav as g (g.grup)}
-				<p
-					class={cn(
-						'flex items-center gap-2 px-2 pt-4 pb-1.5 font-heading text-[10px] font-medium tracking-[0.22em] text-gold/90 uppercase',
-						ciut && 'lg:justify-center lg:px-0'
-					)}
-				>
-					<span class={cn('h-px w-3 bg-gold/70', ciut && 'lg:w-6')}></span><span class={cn(ciut && 'lg:hidden')}>{g.grup}</span>
-				</p>
-				{#each g.item as i (i.href)}
-					<a
-						href={i.href}
-						title={ciut ? i.label : undefined}
+		<nav aria-label="Menu utama" class="flex-1 overflow-x-hidden overflow-y-auto px-3 py-4">
+			{#each nav as g, gi (g.grup)}
+				<div class={cn(gi > 0 && 'mt-6')}>
+					<p
 						class={cn(
-							'group relative flex items-center gap-2.5 rounded-sm px-3 py-2 font-heading text-[13px] tracking-[0.06em] uppercase transition-colors hover:bg-white/10',
-							aktif(i.href) && 'bg-black/35 text-white',
-							ciut && 'lg:justify-center lg:px-0'
+							'mb-1.5 px-3 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase',
+							ciut && 'lg:sr-only'
 						)}
 					>
-						{#if aktif(i.href)}
-							<span class="absolute inset-y-1 left-0 w-1 rounded-r bg-gold"></span>
-						{/if}
-						<i.ikon
-							class={cn(
-								'size-4',
-								aktif(i.href) ? 'text-gold' : 'text-sidebar-foreground/70 group-hover:text-white'
-							)}
-						/>
-						<span class={cn('truncate', ciut && 'lg:sr-only')}>{i.label}</span>
-					</a>
-				{/each}
+						{g.grup}
+					</p>
+					{#if ciut && gi > 0}
+						<div class="mx-auto mb-2 hidden h-px w-6 bg-border lg:block" aria-hidden="true"></div>
+					{/if}
+					<ul class="grid gap-0.5">
+						{#each g.item as i (i.href)}
+							{@const sini = aktif(i.href)}
+							<li>
+								<a
+									href={i.href}
+									title={ciut ? i.label : undefined}
+									aria-current={sini ? 'page' : undefined}
+									class={cn(
+										'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+										sini
+											? 'bg-gold/12 font-semibold text-foreground'
+											: 'font-medium text-muted-foreground hover:bg-muted hover:text-foreground',
+										ciut && 'lg:justify-center lg:px-0'
+									)}
+								>
+									<i.ikon
+										class={cn(
+											'size-[18px] shrink-0',
+											sini ? 'text-gold' : 'text-muted-foreground group-hover:text-foreground'
+										)}
+									/>
+									<span class={cn('truncate', ciut && 'lg:sr-only')}>{i.label}</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</div>
 			{/each}
 		</nav>
 
+		<!-- Status worker pengujian di kaki sidebar. -->
+		<div class={cn('shrink-0 border-t border-border p-3', ciut && 'lg:px-2')}>
+			<IndikatorWorker {ciut} />
+		</div>
 	</aside>
 
 	{#if terbuka}
@@ -190,15 +221,21 @@
 		></button>
 	{/if}
 
-	<div class={cn('flex min-w-0 flex-1 flex-col transition-[padding] duration-200', ciut ? 'lg:pl-16' : 'lg:pl-64', layarPenuh && 'lg:h-svh')}>
-		<!-- Bilah komando atas -->
+	<div
+		class={cn(
+			'flex min-w-0 flex-1 flex-col transition-[padding] duration-200',
+			ciut ? 'lg:pl-[72px]' : 'lg:pl-64',
+			layarPenuh && 'lg:h-svh'
+		)}
+	>
+		<!-- Bilah atas -->
 		<header
-			class="bg-loreng no-print sticky top-0 z-20 flex h-19 items-center gap-3 border-b-2 border-gold/70 px-4 text-sidebar-foreground"
+			class="no-print sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-border bg-background/85 px-4 backdrop-blur sm:px-6 lg:px-8"
 		>
 			<Button
 				variant="ghost"
 				size="icon-sm"
-				class="hidden text-sidebar-foreground hover:bg-white/10 hover:text-white lg:inline-flex"
+				class="hidden text-muted-foreground lg:inline-flex"
 				onclick={alihCiut}
 				aria-label={ciut ? 'Lebarkan menu' : 'Ciutkan menu'}
 				title={ciut ? 'Lebarkan menu' : 'Ciutkan menu'}
@@ -208,32 +245,43 @@
 			<Button
 				variant="ghost"
 				size="icon-sm"
-				class="text-sidebar-foreground hover:bg-white/10 hover:text-white lg:hidden"
+				class="text-muted-foreground lg:hidden"
 				onclick={() => (terbuka = true)}
 				aria-label="Buka menu"
 			>
 				<Menu />
 			</Button>
-			<span class="font-stencil tracking-[0.12em] text-gold lg:hidden">SATYA</span>
-			<div class="ml-auto flex items-center gap-3">
-				<IndikatorWorker />
+			<a href="/dashboard" class="lg:hidden" aria-label="SATRIA — dasbor">
+				<LogoSatria tema="ikut" class="[--logo-h:1.75rem]" />
+			</a>
+			<div class="ml-auto flex items-center gap-2">
 				<MenuAkun />
 			</div>
 		</header>
 		{#if USE_MOCK}
 			<div
-				class="no-print border-b border-warning/30 bg-warning/10 px-4 py-1 text-center font-heading text-[11px] tracking-[0.12em] text-warning-foreground uppercase"
+				class="no-print border-b border-warning/30 bg-warning/10 px-4 py-1.5 text-center text-xs font-medium text-warning-foreground"
 			>
 				Mode latihan — data tiruan disimpan di browser, belum terhubung ke backend
 			</div>
 		{/if}
-		<main class={cn('w-full flex-1', layarPenuh ? 'relative min-h-0 px-4 py-4 lg:overflow-hidden lg:p-0' : 'mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8')}>
+		<main
+			class={cn(
+				'w-full flex-1',
+				layarPenuh
+					? 'relative min-h-0 px-4 py-4 lg:overflow-hidden lg:p-0'
+					: 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'
+			)}
+		>
 			{@render children()}
 		</main>
 		<footer
-			class={cn('no-print border-t px-4 py-3 text-center font-heading text-[10px] tracking-[0.2em] text-muted-foreground uppercase', layarPenuh && 'lg:hidden')}
+			class={cn(
+				'no-print border-t border-border px-4 py-4 text-center text-xs text-muted-foreground',
+				layarPenuh && 'lg:hidden'
+			)}
 		>
-			SATYA · Hasil asesmen bersifat terbatas — untuk kalangan sendiri
+			SATRIA · Hasil asesmen bersifat terbatas, untuk kalangan sendiri
 		</footer>
 	</div>
 </div>

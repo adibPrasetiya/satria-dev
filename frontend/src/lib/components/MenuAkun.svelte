@@ -37,26 +37,25 @@
 <DropdownMenu.Root bind:open={buka}>
 	<DropdownMenu.Trigger
 		class={cn(
-			'group flex items-center gap-2.5 rounded-sm p-1 pr-2 transition-colors hover:bg-black/30 focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:outline-none',
-			buka && 'bg-black/30'
+			'group flex h-11 items-center gap-2.5 rounded-lg py-1 pr-2 pl-1 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:outline-none',
+			buka && 'bg-muted'
 		)}
 		aria-label="Akun"
 	>
 		<span
-			class={cn(
-				'grid size-10 shrink-0 place-items-center rounded-sm border bg-black/45 font-heading text-sm font-semibold tracking-wider text-gold shadow-[inset_0_0_0_1px_rgb(0_0_0/0.4)] transition-colors',
-				buka ? 'border-gold' : 'border-gold/55 group-hover:border-gold'
-			)}
+			class="grid size-8 shrink-0 place-items-center rounded-full bg-gold/15 text-xs font-bold text-gold"
 		>
 			{inisial}
 		</span>
 		<span class="hidden min-w-0 text-left leading-tight md:block">
-			<span class="block max-w-44 truncate text-sm font-medium text-white">{p?.nama}</span>
-			<span class="block font-heading text-[10px] tracking-[0.18em] text-gold/90 uppercase">
+			<span class="block max-w-44 truncate text-[13px] font-semibold text-foreground">{p?.nama}</span>
+			<span class="block text-[11px] text-muted-foreground">
 				{p && LABEL_PERAN[p.peran]}
 			</span>
 		</span>
-		<ChevronDown class={cn('size-4 text-white/60 transition-transform', buka && 'rotate-180')} />
+		<ChevronDown
+			class={cn('size-4 text-muted-foreground transition-transform', buka && 'rotate-180')}
+		/>
 	</DropdownMenu.Trigger>
 
 	<DropdownMenu.Content

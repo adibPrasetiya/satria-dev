@@ -7,6 +7,9 @@
 	import Server from '@lucide/svelte/icons/server';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 
+	/** ciut = sidebar diciutkan: hanya titik status (rincian tetap di panel tarik-turun). */
+	let { ciut = false }: { ciut?: boolean } = $props();
+
 	let buka = $state(false);
 	$effect(() => storeWorker.pakai());
 
@@ -14,7 +17,7 @@
 	const keadaan = $derived<'memuat' | 'galat' | 'mati' | 'sibuk' | 'siaga'>(
 		storeWorker.galat ? 'galat' : !s ? 'memuat' : s.aktif === 0 ? 'mati' : s.siaga === 0 ? 'sibuk' : 'siaga'
 	);
-	const WARNA = { memuat: 'bg-white/40', galat: 'bg-[#ff7b6b]', mati: 'bg-[#ff7b6b]', sibuk: 'bg-[#f5c451]', siaga: 'bg-[#9fe08a]' };
+	const WARNA = { memuat: 'bg-muted-foreground/50', galat: 'bg-[#ff7b6b]', mati: 'bg-[#ff7b6b]', sibuk: 'bg-[#f5c451]', siaga: 'bg-[#9fe08a]' };
 	const label = $derived.by(() => {
 		if (keadaan === 'memuat') return 'Memeriksa worker…';
 		if (keadaan === 'galat') return 'Status worker tak terjangkau';
@@ -31,21 +34,26 @@
 <DropdownMenu.Root bind:open={buka}>
 	<DropdownMenu.Trigger
 		class={cn(
-			'flex items-center gap-2 rounded-sm border border-white/10 bg-black/35 px-2.5 py-1.5 text-left transition-colors hover:bg-black/50 focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:outline-none',
-			buka && 'bg-black/50'
+			'flex w-full items-center gap-2.5 rounded-lg border border-border bg-background/60 px-3 py-2.5 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:outline-none',
+			buka && 'bg-muted',
+			ciut && 'lg:justify-center lg:px-0'
 		)}
 		aria-label="Status worker pengujian: {label}"
+		title={ciut ? label : undefined}
 	>
-		<span class="relative flex size-2.5">
+		<span class="relative flex size-2.5 shrink-0">
 			{#if keadaan === 'sibuk' || keadaan === 'siaga'}<span class={cn('absolute inline-flex size-full animate-ping rounded-full opacity-60', WARNA[keadaan])}></span>{/if}
 			<span class={cn('relative inline-flex size-2.5 rounded-full', WARNA[keadaan])}></span>
 		</span>
-		<span class="hidden max-w-56 truncate font-heading text-[11px] tracking-[0.08em] text-white/85 uppercase sm:inline">{label}</span>
-		{#if antre > 0}<span class="rounded-sm bg-[#f5c451]/20 px-1 font-mono text-[10px] text-[#f5c451]" title="Pengujian mengantre">{antre} antre</span>{/if}
-		<ChevronDown class={cn('size-3.5 text-white/50 transition-transform', buka && 'rotate-180')} />
+		<span class={cn('min-w-0 flex-1 leading-tight', ciut && 'lg:hidden')}>
+			<span class="block text-[11px] text-muted-foreground">Worker pengujian</span>
+			<span class="block truncate text-xs font-semibold text-foreground">{label}</span>
+		</span>
+		{#if antre > 0}<span class={cn('rounded-md bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning-foreground dark:text-warning', ciut && 'lg:hidden')} title="Pengujian mengantre">{antre} antre</span>{/if}
+		<ChevronDown class={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', buka && 'rotate-180', ciut && 'lg:hidden')} />
 	</DropdownMenu.Trigger>
 
-	<DropdownMenu.Content align="end" sideOffset={10} class="w-96 rounded-none border-gold/35 bg-[#10150e] p-0 text-white shadow-[0_24px_60px_rgb(0_0_0/0.6)]">
+	<DropdownMenu.Content side="right" align="end" sideOffset={12} class="w-96 rounded-none border-gold/35 bg-[#10150e] p-0 text-white shadow-[0_24px_60px_rgb(0_0_0/0.6)]">
 		<div class="flex items-center gap-2 border-b border-gold/30 bg-black/40 px-4 py-2.5">
 			<Server class="size-4 text-gold" />
 			<p class="font-heading text-[11px] tracking-[0.18em] text-gold uppercase">Worker pengujian</p>
