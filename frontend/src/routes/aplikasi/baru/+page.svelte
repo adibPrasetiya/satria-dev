@@ -14,7 +14,7 @@
 	}
 </script>
 
-<svelte:head><title>Registrasi Aplikasi — SATYA</title></svelte:head>
+<svelte:head><title>Registrasi Aplikasi — SATRIA</title></svelte:head>
 
 <PageHeader
 	label="Aset Aplikasi"

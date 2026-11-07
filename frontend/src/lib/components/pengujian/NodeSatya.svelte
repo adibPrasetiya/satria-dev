@@ -30,6 +30,6 @@
 	<text x={L + 46} y={T + 48} class="lbl-term" fill="#9fe08a">▸ listening :8080</text>
 	<text x={L + 46} y={T + 66} class="lbl-term" fill="rgba(159,224,138,0.55)">▸ awaiting request</text>
 	<!-- label -->
-	<text x={x} y={T + H + 18} class="lbl-simpul">SATYA</text>
+	<text x={x} y={T + H + 18} class="lbl-simpul">SATRIA</text>
 	<text x={x} y={T + H + 32} class="lbl-sub">proxy uji</text>
 </g>

@@ -4,6 +4,7 @@ import { audit } from '../../utils/audit.js';
 import { generateToken, hashToken } from '../../utils/crypto.js';
 import { signAccessToken, verifyAccessToken } from '../../utils/jwt.js';
 import { logger } from '../../utils/logger.js';
+import { emailResetSandi } from '../../utils/emailTemplate.js';
 import { sendMail } from '../../utils/mailer.js';
 import { hashPassword, verifyPassword } from '../../utils/password.js';
 import { authenticationRepository } from './authentication.repository.js';
@@ -206,16 +207,12 @@ export function createAuthenticationService({
       try {
         await mailer({
           to: user.email,
-          subject: 'Atur ulang kata sandi SATYA',
-          text: [
-            `Halo ${user.name},`,
-            '',
-            'Kami menerima permintaan untuk mengatur ulang kata sandi akun SATYA Anda.',
-            `Buka tautan berikut dalam ${config.passwordResetTtlMinutes} menit (hanya bisa dipakai sekali):`,
-            link,
-            '',
-            'Abaikan email ini bila Anda tidak meminta atur ulang kata sandi.',
-          ].join('\n'),
+          ...emailResetSandi({
+            nama: user.name,
+            tautan: link,
+            menit: config.passwordResetTtlMinutes,
+            appUrl: config.appUrl,
+          }),
         });
       } catch (error) {
         // Gagal kirim tidak dibocorkan ke klien (respons tetap sama), cukup dicatat.

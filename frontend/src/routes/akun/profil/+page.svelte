@@ -27,7 +27,7 @@
 	);
 </script>
 
-<svelte:head><title>Profil — SATYA</title></svelte:head>
+<svelte:head><title>Profil — SATRIA</title></svelte:head>
 
 <PageHeader label="Akun" judul="Profil" />
 

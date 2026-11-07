@@ -1,7 +1,7 @@
 {
   "name": "satya-backend",
   "version": "0.1.0",
-  "description": "API SATYA — Sistem Asesmen Kelaikan Keamanan Aplikasi (Per-BSSN No. 4 Th. 2021)",
+  "description": "API SATRIA — Sistem Asesmen Kelaikan Keamanan Aplikasi (Per-BSSN No. 4 Th. 2021)",
   "private": true,
   "type": "module",
   "main": "src/main.js",

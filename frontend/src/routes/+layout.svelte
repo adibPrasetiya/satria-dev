@@ -1,6 +1,5 @@
 <script lang="ts">
 	import './layout.css';
-	import favicon from '#lib/assets/favicon.svg';
 	import { ModeWatcher } from 'mode-watcher';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
@@ -35,8 +34,11 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
-	<title>SATYA — Asesmen Kelaikan Keamanan Aplikasi</title>
+	<!-- Ikon dari lambang SATRIA (dibangun: node scripts/build-favicon.mjs). -->
+	<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+	<link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+	<title>SATRIA — Asesmen Kelaikan Keamanan Aplikasi</title>
 </svelte:head>
 
 <ModeWatcher />

@@ -19,7 +19,7 @@ const schema = Joi.object({
   // Email via Resend; tanpa RESEND_API_KEY tautan reset hanya dicatat di log (development).
   RESEND_API_KEY: Joi.string().allow('').default(''),
   // Alamat pengirim harus dari domain yang sudah diverifikasi di Resend.
-  MAIL_FROM: Joi.string().default('SATYA <onboarding@resend.dev>'),
+  MAIL_FROM: Joi.string().default('SATRIA <onboarding@resend.dev>'),
   // Token layanan worker pengujian (header X-Worker-Token di endpoint /internal).
   // Wajib di production; di dev boleh kosong (endpoint /internal menolak semua request).
   WORKER_TOKEN: Joi.string().allow('').default(''),

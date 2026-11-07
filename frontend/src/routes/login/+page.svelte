@@ -83,7 +83,7 @@
 	}
 </script>
 
-<svelte:head><title>Masuk — SATYA</title></svelte:head>
+<svelte:head><title>Masuk — SATRIA</title></svelte:head>
 
 <AuthShell judul="Masuk" {goyang}>
 	<form class="grid gap-4" onsubmit={masuk} novalidate>

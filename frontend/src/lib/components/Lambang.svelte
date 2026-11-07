@@ -5,7 +5,7 @@
 	const id = `lambang-${Math.random().toString(36).slice(2, 8)}`;
 </script>
 
-<svg viewBox="0 0 64 72" class={className} role="img" aria-label="Lambang SATYA">
+<svg viewBox="0 0 64 72" class={className} role="img" aria-label="Lambang SATRIA">
 	<defs>
 		<linearGradient id="{id}-emas" x1="0" y1="0" x2="0" y2="1">
 			<stop offset="0" stop-color="#f3d77a" />

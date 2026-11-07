@@ -32,7 +32,7 @@
 	}
 </script>
 
-<svelte:head><title>Ubah Aplikasi — SATYA</title></svelte:head>
+<svelte:head><title>Ubah Aplikasi — SATRIA</title></svelte:head>
 
 {#if galat}
 	<Kosong judul="Aplikasi tidak ditemukan" pesan={galat}><Button href="/aplikasi" variant="outline">Kembali</Button></Kosong>

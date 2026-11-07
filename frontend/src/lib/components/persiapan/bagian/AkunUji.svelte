@@ -44,7 +44,7 @@
 
 <div class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning-foreground">
 	<TriangleAlert class="mt-0.5 size-3.5 shrink-0" />
-	<p>Gunakan akun yang dibuat khusus untuk SATYA dengan hak akses biasa. Kata sandi akun ini bisa diganti oleh mesin uji saat menguji fitur ubah kata sandi.</p>
+	<p>Gunakan akun yang dibuat khusus untuk SATRIA dengan hak akses biasa. Kata sandi akun ini bisa diganti oleh mesin uji saat menguji fitur ubah kata sandi.</p>
 </div>
 <div class="grid gap-4 rounded-md border p-4 sm:grid-cols-2">
 	<p class="label-stensil text-[10px] sm:col-span-2">Akun uji utama</p>

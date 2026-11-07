@@ -1,6 +1,6 @@
-# SATYA — Backend
+# SATRIA — Backend
 
-API Express 5 + MySQL (Drizzle ORM) untuk SATYA. Struktur mengikuti kappee-lite:
+API Express 5 + MySQL (Drizzle ORM) untuk SATRIA. Struktur mengikuti kappee-lite:
 `src/features/<fitur>/<fitur>.{route,controller,service,repository,validation}.js`.
 
 Tahap ini: **autentikasi** (daftar, masuk, lupa & atur ulang kata sandi) dan **verifikasi akun oleh admin**.
@@ -27,7 +27,7 @@ Frontend: set `VITE_USE_MOCK=false` di `frontend/.env`; Vite meneruskan `/api` k
    (`DELETE /api/v1/users/:id`, data pendaftaran dihapus).
 3. Sebelum diverifikasi, login dengan kata sandi benar ditolak `403 ACCOUNT_PENDING`.
 
-## Keamanan (selaras kontrol yang dinilai SATYA sendiri)
+## Keamanan (selaras kontrol yang dinilai SATRIA sendiri)
 | Kontrol BSSN | Penerapan |
 |---|---|
 | 1.2 / 1.3 | Validasi & kebijakan kata sandi di server: 8–72 karakter, huruf besar, kecil, angka, simbol |
@@ -191,4 +191,4 @@ dan memfinalisasi scan saat semua task selesai.
   tanpa `WORKER_TOKEN` dikonfigurasi, seluruh `/internal` ditolak. Task yang dikunci worker tetapi tak
   selesai dalam `WORKER_TASK_TIMEOUT_MS` dikembalikan ke antrean.
 - **Audit**: `scan.mulai`, `scan.selesai`, `scan.batal`, `scan.target.simpan`.
-- Seed target SATYA untuk uji mandiri: `npm run scan-target:seed <applicationId>`.
+- Seed target SATRIA untuk uji mandiri: `npm run scan-target:seed <applicationId>`.

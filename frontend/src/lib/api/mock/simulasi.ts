@@ -135,7 +135,7 @@ function buktiRequest(app: Aplikasi, metode: Metode, status: Status): Bukti {
 	return {
 		jenis: 'request_response',
 		judul: `${peta?.metode_http ?? 'GET'} ${url.pathname}`,
-		isi: `${peta?.metode_http ?? 'GET'} ${url.pathname} HTTP/1.1\nHost: ${url.host}\nUser-Agent: SATYA-Scanner/0.1\n\n---\n${respons}`
+		isi: `${peta?.metode_http ?? 'GET'} ${url.pathname} HTTP/1.1\nHost: ${url.host}\nUser-Agent: SATRIA-Scanner/0.1\n\n---\n${respons}`
 	};
 }
 
