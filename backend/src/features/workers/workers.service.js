@@ -1,5 +1,6 @@
 import { env } from '../../config/env.js';
 import { AppError } from '../../utils/AppError.js';
+import * as workerEvents from './workerEvents.js';
 import { workersRepository } from './workers.repository.js';
 
 const seesAll = (actor) => actor.peran === 'asesor' || actor.peran === 'admin';
@@ -37,7 +38,11 @@ export function hitungAntrean(tasks, { scanId = null, rata = {}, nAktif = 0 } = 
   };
 }
 
-export function createWorkersService({ repository = workersRepository, timeoutMs = env.worker.heartbeatTimeoutMs } = {}) {
+export function createWorkersService({
+  repository = workersRepository,
+  timeoutMs = env.worker.heartbeatTimeoutMs,
+  events = workerEvents,
+} = {}) {
   /** Heartbeat worker: perbarui registry & lease task; balas sinyal pembatalan. */
   async function heartbeat({ worker_id: id, engines = [], status = 'siaga', task_id: taskId = null, tahap = null, versi = null, host = null }) {
     let scanId = null;
@@ -49,20 +54,25 @@ export function createWorkersService({ repository = workersRepository, timeoutMs
       batalkan = s?.scanStatus === 'dibatalkan';
     }
     await repository.upsert({ id, engines, status: taskId ? 'sibuk' : status === 'berhenti' ? 'berhenti' : 'siaga', taskId, scanId, tahap, versi, host });
+    // Heartbeat datang tiap ±10 dtk per worker; hub SSE hanya mengirim bila isinya benar-benar berubah.
+    events.beriTahu();
     return { batalkan };
   }
 
   async function berhenti(id) {
     await repository.setStatus(id, 'berhenti');
+    events.beriTahu();
     return { ok: true };
   }
 
   /** Dicatat saat worker mengklaim / menyelesaikan task (status tampil segera tanpa menunggu heartbeat). */
   async function catatKlaim(id, engines, task) {
     await repository.upsert({ id, engines, status: 'sibuk', taskId: task.id, scanId: task.scanId, tahap: task.methodCode });
+    events.beriTahu();
   }
   async function catatSelesai(id) {
     if (id) await repository.setStatus(id, 'siaga');
+    events.beriTahu();
   }
 
   async function _snapshot() {
@@ -73,7 +83,11 @@ export function createWorkersService({ repository = workersRepository, timeoutMs
 
   /** Ringkasan status untuk header & wizard (nama aplikasi satuan lain disamarkan bagi pemilik). */
   async function status(actor) {
-    const { daftar, hidup, tasks, rata } = await _snapshot();
+    return statusDari(await _snapshot(), actor);
+  }
+
+  /** Status dari snapshot yang sudah diambil — hub SSE memakai satu snapshot untuk semua pelanggan. */
+  function statusDari({ daftar, hidup, tasks, rata }, actor) {
     const boleh = (unitId) => !actor || seesAll(actor) || String(unitId) === String(actor.satuan_id);
     const scanMenunggu = [];
     const sudah = new Set();
@@ -134,7 +148,7 @@ export function createWorkersService({ repository = workersRepository, timeoutMs
     }
   }
 
-  return { heartbeat, berhenti, catatKlaim, catatSelesai, status, antreanScan, gerbangMulai };
+  return { heartbeat, berhenti, catatKlaim, catatSelesai, status, statusDari, snapshot: _snapshot, antreanScan, gerbangMulai };
 }
 
 export const workersService = createWorkersService();

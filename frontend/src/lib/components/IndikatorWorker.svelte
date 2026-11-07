@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Indikator status worker pengujian di bilah atas: aktif/sibuk/tak ada worker, plus rincian
-	// worker & antrean pada panel tarik-turun. Data dari store yang dipoll (lihat stores/worker).
+	// worker & antrean pada panel tarik-turun. Data dari aliran SSE di store (lihat stores/worker).
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { storeWorker, teksPerkiraan } from '#lib/stores/worker.svelte.js';
 	import { cn } from '#lib/utils.js';
@@ -28,7 +28,19 @@
 	});
 	const antre = $derived(s ? s.antrean.scan.filter((x) => !x.sedang_dikerjakan).length : 0);
 	const WARNA_STATUS: Record<string, string> = { siaga: 'text-[#9fe08a]', sibuk: 'text-[#f5c451]', terputus: 'text-[#ff7b6b]', berhenti: 'text-white/40' };
-	const umur = (d: number) => (d < 60 ? `${d} dtk lalu` : d < 3600 ? `${Math.round(d / 60)} mnt lalu` : `${Math.round(d / 3600)} jam lalu`);
+	// Server hanya mengirim saat status berubah, jadi umur heartbeat ditambah waktu sejak data diterima.
+	// Jam lokal berdetak hanya selama panel terbuka.
+	let kini = $state(Date.now());
+	$effect(() => {
+		if (!buka) return;
+		kini = Date.now();
+		const t = setInterval(() => (kini = Date.now()), 5_000);
+		return () => clearInterval(t);
+	});
+	const umur = (d0: number) => {
+		const d = d0 + Math.max(0, Math.round((kini - storeWorker.diterimaPada) / 1000));
+		return d < 60 ? `${d} dtk lalu` : d < 3600 ? `${Math.round(d / 60)} mnt lalu` : `${Math.round(d / 3600)} jam lalu`;
+	};
 </script>
 
 <DropdownMenu.Root bind:open={buka}>

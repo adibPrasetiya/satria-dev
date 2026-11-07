@@ -1,5 +1,6 @@
 import type { DataPenemuan } from '#lib/penemuan/peristiwa.js';
 import type { DataUji } from '#lib/pengujian/peristiwa.js';
+import type { JenisSatuan } from '#lib/data/satuan.js';
 
 // Tipe data bersama frontend <-> backend Express.
 // Bentuk katalog mengikuti controls/bssn_web.yaml.
@@ -96,13 +97,39 @@ export type Peran = 'pemilik' | 'asesor' | 'admin';
 export interface Satuan {
 	id: string;
 	nama: string;
+	/** Kode jenis satuan (lihat `JENIS_SATUAN` di #lib/data/satuan). */
+	jenis?: JenisSatuan;
+	/** Nama satuan-satuan induknya dari puncak, mis. "Mabes TNI › Kodam Jaya"; kosong = satuan teratas. */
+	jalur?: string;
 }
 
-/** Satuan di halaman admin: termasuk status & jumlah akun yang memakainya. */
-export interface SatuanAdmin extends Satuan {
+/** Data satuan yang bisa diisi admin (hierarki + lokasi untuk peta sebaran di dasbor). */
+export interface SatuanInput {
+	nama: string;
+	jenis: JenisSatuan;
+	/** null = satuan teratas (tanpa induk). */
+	induk_id: string | null;
+	aktif: boolean;
+	alamat: string | null;
+	kota: string | null;
+	/** Kode provinsi 2 digit (Kemendagri/BPS). */
+	provinsi_kode: string | null;
+	latitude: number | null;
+	longitude: number | null;
+}
+
+/** Satuan di halaman admin: hierarki, lokasi, status & jumlah akun/aplikasi/sub-satuan yang merujuknya. */
+export interface SatuanAdmin extends Satuan, SatuanInput {
+	jenis: JenisSatuan;
+	jalur: string;
+	/** Leluhur dari puncak ke induk langsung (untuk breadcrumb). */
+	leluhur: { id: string; nama: string }[];
+	provinsi: string | null;
 	/** Nonaktif = hilang dari pilihan pendaftaran; akun yang sudah memakainya tetap sah. */
 	aktif: boolean;
 	jumlah_pengguna: number;
+	jumlah_aplikasi: number;
+	jumlah_sub: number;
 	dibuat_pada: string;
 }
 

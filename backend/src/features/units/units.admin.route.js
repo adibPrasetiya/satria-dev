@@ -10,5 +10,6 @@ export const unitsAdminRouter = Router();
 unitsAdminRouter.use(requireRole('admin'));
 
 unitsAdminRouter.get('/', validate(listUnitsAdminSchema, 'query'), unitsAdminController.list);
+unitsAdminRouter.get('/:id', validate(unitIdSchema, 'params'), unitsAdminController.get);
 unitsAdminRouter.post('/', validate(createUnitSchema), unitsAdminController.create);
 unitsAdminRouter.patch('/:id', validate(unitIdSchema, 'params'), validate(updateUnitSchema), unitsAdminController.update);

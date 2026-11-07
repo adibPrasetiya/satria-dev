@@ -10,7 +10,8 @@
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Search from '@lucide/svelte/icons/search';
 
-	type Opsi = { value: string; label: string };
+	/** keterangan: baris kecil di bawah label, mis. jalur induk satuan "Mabes TNI › Kodam Jaya". */
+	type Opsi = { value: string; label: string; keterangan?: string };
 
 	let {
 		id,
@@ -222,7 +223,12 @@
 							onmousemove={() => (aktif = i)}
 							onclick={() => pilih(o)}
 						>
-							<span class="min-w-0 flex-1 break-words">{awal}<b class="font-semibold text-gold">{cocok}</b>{akhir}</span>
+							<span class="grid min-w-0 flex-1">
+								<span class="break-words">{awal}<b class="font-semibold text-gold">{cocok}</b>{akhir}</span>
+								{#if o.keterangan}
+									<span class={cn('truncate text-xs', gelap ? 'text-white/45' : 'text-muted-foreground')}>{o.keterangan}</span>
+								{/if}
+							</span>
 							{#if o.value === value}<Check class="size-3.5 shrink-0" />{/if}
 						</li>
 					{/each}

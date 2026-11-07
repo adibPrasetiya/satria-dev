@@ -16,6 +16,7 @@
     "admin:create": "node src/main.js create-admin",
     "catalog:seed": "node src/main.js seed-catalog",
     "catalog:sync": "node src/main.js sync-catalog",
+    "satuan:seed": "node src/main.js seed-satuan",
     "scan-target:seed": "node scripts/seed-scan-target.mjs"
   },
   "dependencies": {

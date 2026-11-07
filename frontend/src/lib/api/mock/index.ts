@@ -16,6 +16,7 @@ import type {
 	Pengguna,
 	PersiapanAuth,
 	SatuanAdmin,
+	SatuanInput,
 	Scan,
 	StatusAkun,
 	StatusWorker
@@ -24,6 +25,8 @@ import { buatSeed, DAFTAR_SATUAN, PENGGUNA_DEMO, type StateMock } from './seed';
 import { analisisTiruan, hasilMetode } from './simulasi';
 import { peristiwaUji } from './uji';
 import { GalatApi } from '#lib/api/http.js';
+import { JENIS_SATUAN, namaProvinsi } from '#lib/data/satuan.js';
+import { dataContoh, SIKLUS_MS } from '#lib/peta/contoh.js';
 
 const KUNCI = 'satya-mock-v2';
 // Persiapan pengujian disimpan terpisah dari state mock agar juga berlaku untuk aset dari backend (mode hibrida).
@@ -76,19 +79,61 @@ function cariApp(id: string): Aplikasi {
 }
 
 // Satuan kerja tiruan (hanya di memori; kembali ke daftar awal saat halaman dimuat ulang).
-const satuanMock: Omit<SatuanAdmin, 'jumlah_pengguna'>[] = DAFTAR_SATUAN.map((s) => ({
+type SatuanMock = SatuanInput & { id: string; dibuat_pada: string };
+const satuanMock: SatuanMock[] = DAFTAR_SATUAN.map((s) => ({
 	...s,
 	aktif: true,
 	dibuat_pada: new Date().toISOString()
 }));
-const denganJumlah = (s: Omit<SatuanAdmin, 'jumlah_pengguna'>): SatuanAdmin => ({
+const MAKS_KEDALAMAN_SATUAN = 8;
+function leluhurSatuan(id: string | null) {
+	const hasil: { id: string; nama: string }[] = [];
+	for (
+		let u = satuanMock.find((x) => x.id === id);
+		u && hasil.length < MAKS_KEDALAMAN_SATUAN;
+		u = satuanMock.find((x) => x.id === u!.induk_id)
+	)
+		hasil.unshift({ id: u.id, nama: u.nama });
+	return hasil;
+}
+const tinggiSatuan = (id: string): number =>
+	Math.max(0, ...satuanMock.filter((x) => x.induk_id === id).map((x) => 1 + tinggiSatuan(x.id)));
+const jalurSatuan = (s: SatuanMock) =>
+	leluhurSatuan(s.induk_id)
+		.map((l) => l.nama)
+		.join(' › ');
+const denganJumlah = (s: SatuanMock): SatuanAdmin => ({
 	...s,
-	jumlah_pengguna: state.pengguna.filter((u) => u.satuan === s.nama).length
+	jalur: jalurSatuan(s),
+	leluhur: leluhurSatuan(s.induk_id),
+	provinsi: namaProvinsi(s.provinsi_kode),
+	jumlah_pengguna: state.pengguna.filter((u) => u.satuan === s.nama).length,
+	jumlah_aplikasi: state.aplikasi.filter((a) => a.satuan === s.nama).length,
+	jumlah_sub: satuanMock.filter((x) => x.induk_id === s.id).length
 });
 function cekNamaSatuan(nama: string, kecuali?: string) {
 	if (satuanMock.some((s) => s.id !== kecuali && s.nama.toLowerCase() === nama.toLowerCase()))
 		throw new Error('Satuan dengan nama ini sudah ada');
 }
+function cekIndukSatuan(indukId: string | null, id?: string) {
+	if (!indukId) return;
+	if (indukId === id) throw new Error('Satuan tidak bisa menjadi induk bagi dirinya sendiri');
+	if (!satuanMock.some((x) => x.id === indukId)) throw new Error('Satuan induk tidak ditemukan');
+	const leluhur = leluhurSatuan(indukId);
+	if (id && leluhur.some((l) => l.id === id))
+		throw new Error('Satuan induk tidak boleh berasal dari sub-satuannya sendiri');
+	if (leluhur.length + (id ? tinggiSatuan(id) : 0) >= MAKS_KEDALAMAN_SATUAN)
+		throw new Error(`Hierarki satuan maksimal ${MAKS_KEDALAMAN_SATUAN} tingkat`);
+}
+function cekKoordinat(s: Pick<SatuanInput, 'latitude' | 'longitude'>) {
+	if ((s.latitude === null) !== (s.longitude === null))
+		throw new Error('Isi latitude dan longitude berpasangan, atau kosongkan keduanya');
+}
+const kosongkan = <T>(v: T) => (v === '' ? null : v);
+const rapikanSatuan = (data: Partial<SatuanInput>) =>
+	Object.fromEntries(
+		Object.entries(data).map(([k, v]) => [k, kosongkan(v)])
+	) as Partial<SatuanInput>;
 
 // Salinan katalog yang bisa diubah admin di mode demo (hanya di memori).
 const katalogMock = salin(katalog);
@@ -510,6 +555,19 @@ export const mockApi: Api = {
 		return statusWorkerMock();
 	},
 
+	// Mode demo: peta memakai data contoh yang bergeser tiap siklus pembaruan.
+	async getPeta() {
+		await jeda();
+		return dataContoh('24j', Math.floor(Date.now() / SIKLUS_MS));
+	},
+
+	// Mode demo: tanpa jaringan; status tiruan dibaca ulang dari memori berkala.
+	pantauStatusWorker(cb) {
+		cb(statusWorkerMock());
+		const t = setInterval(() => cb(statusWorkerMock()), 10_000);
+		return () => clearInterval(t);
+	},
+
 	async mulaiScan(aplikasiId, opsi) {
 		await jeda();
 		const app = cariApp(aplikasiId);
@@ -687,14 +745,25 @@ export const mockApi: Api = {
 		simpan();
 	},
 
-	async listSatuanAdmin({ search = '', status = '', page = 1 }) {
+	async listSatuanAdmin({
+		search = '',
+		status = '',
+		jenis = '',
+		provinsi = '',
+		induk,
+		page = 1,
+		limit = 50
+	}) {
 		await jeda();
-		const limit = 50;
 		const q = search.trim().toLowerCase();
+		const urutJenis = (j: string) => JENIS_SATUAN.findIndex((x) => x.kode === j);
 		const cocok = satuanMock
 			.filter((s) => s.nama.toLowerCase().includes(q))
 			.filter((s) => (status === 'aktif' ? s.aktif : status === 'nonaktif' ? !s.aktif : true))
-			.sort((a, b) => a.nama.localeCompare(b.nama));
+			.filter((s) => !jenis || s.jenis === jenis)
+			.filter((s) => !provinsi || s.provinsi_kode === provinsi)
+			.filter((s) => !induk || (induk === 'akar' ? !s.induk_id : s.induk_id === induk))
+			.sort((a, b) => urutJenis(a.jenis) - urutJenis(b.jenis) || a.nama.localeCompare(b.nama));
 		return {
 			items: cocok.slice((page - 1) * limit, page * limit).map(denganJumlah),
 			total: cocok.length,
@@ -703,26 +772,54 @@ export const mockApi: Api = {
 		};
 	},
 
-	async tambahSatuan(nama, aktif = true) {
+	async getSatuanAdmin(id) {
 		await jeda();
-		cekNamaSatuan(nama);
-		const s = { id: idBaru('s'), nama, aktif, dibuat_pada: sekarang() };
+		const s = satuanMock.find((x) => x.id === id);
+		if (!s) throw new Error('Satuan tidak ditemukan');
+		return denganJumlah(s);
+	},
+
+	async tambahSatuan(input) {
+		await jeda();
+		const data = rapikanSatuan(input);
+		const s: SatuanMock = {
+			id: idBaru('s'),
+			nama: input.nama,
+			jenis: data.jenis ?? 'SATUAN',
+			induk_id: data.induk_id ?? null,
+			aktif: data.aktif ?? true,
+			alamat: data.alamat ?? null,
+			kota: data.kota ?? null,
+			provinsi_kode: data.provinsi_kode ?? null,
+			latitude: data.latitude ?? null,
+			longitude: data.longitude ?? null,
+			dibuat_pada: sekarang()
+		};
+		cekNamaSatuan(s.nama);
+		cekKoordinat(s);
+		cekIndukSatuan(s.induk_id);
 		satuanMock.push(s);
 		return denganJumlah(s);
 	},
 
-	async ubahSatuan(id, data) {
+	async ubahSatuan(id, input) {
 		await jeda();
 		const s = satuanMock.find((x) => x.id === id);
 		if (!s) throw new Error('Satuan tidak ditemukan');
-		if (data.nama !== undefined) {
-			cekNamaSatuan(data.nama, id);
-			// Akun yang memakai satuan ini ikut menampilkan nama baru (seperti relasi di backend).
+		const data = rapikanSatuan(input);
+		if (data.nama !== undefined) cekNamaSatuan(data.nama, id);
+		if (data.induk_id !== undefined) cekIndukSatuan(data.induk_id, id);
+		cekKoordinat({
+			latitude: data.latitude !== undefined ? data.latitude : s.latitude,
+			longitude: data.longitude !== undefined ? data.longitude : s.longitude
+		});
+		if (data.nama !== undefined && data.nama !== s.nama) {
+			// Akun & aplikasi yang memakai satuan ini ikut menampilkan nama baru (seperti relasi di backend).
 			for (const u of state.pengguna) if (u.satuan === s.nama) u.satuan = data.nama;
-			s.nama = data.nama;
+			for (const a of state.aplikasi) if (a.satuan === s.nama) a.satuan = data.nama;
 			simpan();
 		}
-		if (data.aktif !== undefined) s.aktif = data.aktif;
+		Object.assign(s, data);
 		return denganJumlah(s);
 	},
 

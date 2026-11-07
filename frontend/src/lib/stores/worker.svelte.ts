@@ -1,54 +1,123 @@
-// Status worker pengujian & antrean (GET /workers/status), dipoll berkala selama ada pemakai.
-// Polling berhenti saat tab tersembunyi dan langsung disegarkan saat tab kembali terlihat.
+// Status worker pengujian & antrean. Satu aliran SSE (GET /workers/status/stream) dibagi semua pemakai di
+// tab ini; server hanya mengirim saat status berubah, jadi tidak ada polling berkala.
+// - Aliran dibuka saat ada pemakai pertama, ditutup saat pemakai terakhir pergi.
+// - Tab tersembunyi > 1 menit: aliran ditutup (hemat koneksi); dibuka lagi saat tab terlihat.
+// - Aliran putus: sambung ulang dengan jeda bertahap (2 dtk → … → 60 dtk), bukan dibanjiri percobaan.
+import { untrack } from 'svelte';
 import { api } from '#lib/api/client.js';
 import type { StatusWorker } from '#lib/types.js';
 
-const INTERVAL_MS = 10_000;
+const JEDA_SAMBUNG_MS = [2_000, 5_000, 10_000, 30_000, 60_000];
+const TUTUP_SAAT_TERSEMBUNYI_MS = 60_000;
 
 class StoreWorker {
 	status = $state<StatusWorker | null>(null);
-	/** true = endpoint status gagal (backend tak terjangkau / galat). */
+	/** true = aliran/endpoint status gagal (backend tak terjangkau / galat). */
 	galat = $state(false);
-	memuat = $state(false);
+	/** Waktu (ms epoch) status terakhir diterima — untuk menghitung umur heartbeat yang ditampilkan. */
+	diterimaPada = $state(0);
 
 	#pemakai = 0;
-	#timer: ReturnType<typeof setInterval> | null = null;
+	#tutupAliran: (() => void) | null = null;
+	#tersambung = false;
+	#percobaan = 0;
+	#timerSambung: ReturnType<typeof setTimeout> | null = null;
+	#timerSembunyi: ReturnType<typeof setTimeout> | null = null;
+	#memuat = false;
 
-	readonly #saatTerlihat = () => {
-		if (document.visibilityState === 'visible') void this.segarkan();
+	readonly #saatVisibilitas = () => {
+		if (document.visibilityState === 'visible') {
+			if (this.#timerSembunyi) clearTimeout(this.#timerSembunyi);
+			this.#timerSembunyi = null;
+			if (!this.#tutupAliran && !this.#timerSambung) this.#buka();
+		} else if (!this.#timerSembunyi) {
+			this.#timerSembunyi = setTimeout(() => {
+				this.#timerSembunyi = null;
+				this.#tutup();
+			}, TUTUP_SAAT_TERSEMBUNYI_MS);
+		}
 	};
 
-	/** Daftarkan pemakai; return fungsi pelepas (pakai di $effect / onMount). */
+	/**
+	 * Daftarkan pemakai; return fungsi pelepas (pakai di $effect / onMount).
+	 * Dibungkus `untrack`: tanpa itu $effect pemanggil ikut melacak state store (mis. status) sehingga
+	 * effect dibongkar-pasang setiap kali data datang → membuka permintaan baru tanpa henti.
+	 */
 	pakai(): () => void {
-		this.#pemakai += 1;
-		if (this.#pemakai === 1) {
-			void this.segarkan();
-			this.#timer = setInterval(() => {
-				if (document.visibilityState === 'visible') void this.segarkan();
-			}, INTERVAL_MS);
-			document.addEventListener('visibilitychange', this.#saatTerlihat);
-		}
-		return () => {
-			this.#pemakai -= 1;
-			if (this.#pemakai === 0 && this.#timer) {
-				clearInterval(this.#timer);
-				this.#timer = null;
-				document.removeEventListener('visibilitychange', this.#saatTerlihat);
+		return untrack(() => {
+			this.#pemakai += 1;
+			if (this.#pemakai === 1) {
+				document.addEventListener('visibilitychange', this.#saatVisibilitas);
+				if (document.visibilityState === 'visible') this.#buka();
 			}
-		};
+			let dilepas = false;
+			return () => {
+				if (dilepas) return;
+				dilepas = true;
+				this.#pemakai -= 1;
+				if (this.#pemakai > 0) return;
+				document.removeEventListener('visibilitychange', this.#saatVisibilitas);
+				if (this.#timerSembunyi) clearTimeout(this.#timerSembunyi);
+				this.#timerSembunyi = null;
+				this.#tutup();
+			};
+		});
 	}
 
+	/**
+	 * Minta status terbaru sekali. Saat aliran tersambung tidak perlu (server sudah mendorong perubahan),
+	 * jadi hanya dipakai bila aliran sedang putus.
+	 */
 	async segarkan() {
-		if (this.memuat) return;
-		this.memuat = true;
+		if (this.#tersambung || this.#memuat) return;
+		this.#memuat = true;
 		try {
-			this.status = await api.statusWorker();
-			this.galat = false;
+			this.#terima(await api.statusWorker());
 		} catch {
 			this.galat = true;
 		} finally {
-			this.memuat = false;
+			this.#memuat = false;
 		}
+	}
+
+	#terima(s: StatusWorker) {
+		this.status = s;
+		this.galat = false;
+		this.diterimaPada = Date.now();
+	}
+
+	#buka() {
+		if (this.#tutupAliran) return;
+		this.#tutupAliran = api.pantauStatusWorker(
+			(s) => {
+				this.#tersambung = true;
+				this.#percobaan = 0;
+				this.#terima(s);
+			},
+			() => this.#putus()
+		);
+	}
+
+	#tutup() {
+		if (this.#timerSambung) clearTimeout(this.#timerSambung);
+		this.#timerSambung = null;
+		this.#tutupAliran?.();
+		this.#tutupAliran = null;
+		this.#tersambung = false;
+	}
+
+	#putus() {
+		this.#tutupAliran = null;
+		this.#tersambung = false;
+		if (!this.#pemakai || document.visibilityState !== 'visible') return;
+		// Percobaan pertama gagal belum tentu backend mati (mis. restart); tandai galat setelah gagal berulang.
+		if (this.#percobaan >= 1) this.galat = true;
+		const jeda = JEDA_SAMBUNG_MS[Math.min(this.#percobaan, JEDA_SAMBUNG_MS.length - 1)];
+		this.#percobaan += 1;
+		this.#timerSambung = setTimeout(() => {
+			this.#timerSambung = null;
+			this.#buka();
+		}, jeda);
 	}
 }
 

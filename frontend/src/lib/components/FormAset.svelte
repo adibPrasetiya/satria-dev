@@ -115,7 +115,7 @@
 	}
 
 	const cariSatuan = async (kata: string) =>
-		(await api.cariSatuan(kata)).map((s) => ({ value: s.id, label: s.nama }));
+		(await api.cariSatuan(kata)).map((s) => ({ value: s.id, label: s.nama, keterangan: s.jalur || undefined }));
 
 	const OPSI_LINGKUNGAN = [
 		{ value: '', label: 'Pilih lingkungan…' },

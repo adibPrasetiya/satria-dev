@@ -27,6 +27,8 @@
 
 	// Halaman operasi scan memakai kanvas penuh (seluruh area selain header & sidebar) di lg+.
 	const layarPenuh = $derived(page.route.id === '/scan/[scanId]');
+	// Dasbor diawali peta selebar area konten (tanpa padding/batas lebar); halaman mengatur wadahnya sendiri.
+	const tanpaBingkai = $derived(page.route.id === '/dashboard');
 
 	interface ItemNav {
 		href: Parameters<typeof preloadCode>[0];
@@ -270,7 +272,9 @@
 				'w-full flex-1',
 				layarPenuh
 					? 'relative min-h-0 px-4 py-4 lg:overflow-hidden lg:p-0'
-					: 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'
+					: tanpaBingkai
+						? ''
+						: 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'
 			)}
 		>
 			{@render children()}
@@ -278,7 +282,9 @@
 		<footer
 			class={cn(
 				'no-print border-t border-border px-4 py-4 text-center text-xs text-muted-foreground',
-				layarPenuh && 'lg:hidden'
+				layarPenuh && 'lg:hidden',
+				// Dasbor = peta satu layar; footer di bawahnya hanya menambah gulir.
+				tanpaBingkai && 'hidden'
 			)}
 		>
 			SATRIA · Hasil asesmen bersifat terbatas, untuk kalangan sendiri

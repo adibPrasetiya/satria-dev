@@ -30,6 +30,8 @@ const DI_BACKEND = [
 	'batalkanScan',
 	'pantauScan',
 	'statusWorker',
+	'pantauStatusWorker',
+	'getPeta',
 	'cekKetersediaan',
 	'lupaSandi',
 	'resetSandi',
@@ -38,6 +40,7 @@ const DI_BACKEND = [
 	'tolakPendaftaran',
 	'ubahStatusPengguna',
 	'listSatuanAdmin',
+	'getSatuanAdmin',
 	'tambahSatuan',
 	'ubahSatuan'
 ] as const satisfies readonly (keyof Api)[];
