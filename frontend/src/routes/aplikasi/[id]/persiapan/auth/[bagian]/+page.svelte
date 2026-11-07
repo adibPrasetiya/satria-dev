@@ -126,7 +126,7 @@
 	}
 </script>
 
-<svelte:head><title>{meta?.judul ?? 'Bagian'} — Persiapan — SATYA</title></svelte:head>
+<svelte:head><title>{meta?.judul ?? 'Bagian'} — Persiapan — SATRIA</title></svelte:head>
 
 {#if !valid}
 	<Kosong judul="Bagian tidak dikenal" pesan="Bagian persiapan yang Anda tuju tidak ada.">

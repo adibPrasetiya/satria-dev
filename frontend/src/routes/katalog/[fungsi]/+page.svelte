@@ -135,7 +135,7 @@
 	};
 </script>
 
-<svelte:head><title>{fungsi?.nama ?? 'Katalog'} — Katalog Kontrol — SATYA</title></svelte:head>
+<svelte:head><title>{fungsi?.nama ?? 'Katalog'} — Katalog Kontrol — SATRIA</title></svelte:head>
 
 {#snippet properti(label: string, isi: import('svelte').Snippet)}
 	<div class="min-w-0">

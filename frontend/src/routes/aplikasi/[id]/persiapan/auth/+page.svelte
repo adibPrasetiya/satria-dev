@@ -70,7 +70,7 @@
 	};
 </script>
 
-<svelte:head><title>Persiapan Autentikasi — {app?.nama ?? 'Aplikasi'} — SATYA</title></svelte:head>
+<svelte:head><title>Persiapan Autentikasi — {app?.nama ?? 'Aplikasi'} — SATRIA</title></svelte:head>
 
 {#if galat}
 	<Kosong judul="Aplikasi tidak ditemukan" pesan={galat}><Button href="/aplikasi" variant="outline">Kembali</Button></Kosong>

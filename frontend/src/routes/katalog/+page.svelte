@@ -47,7 +47,7 @@
 	);
 </script>
 
-<svelte:head><title>Katalog Kontrol — SATYA</title></svelte:head>
+<svelte:head><title>Katalog Kontrol — SATRIA</title></svelte:head>
 
 <PageHeader
 	label="Referensi"

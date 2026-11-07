@@ -56,7 +56,7 @@
 	);
 
 	const nomor = $derived(
-		scan ? `LAP/SATYA/${scan.id.replace(/^scan-/, '').toUpperCase()}/${new Date(scan.dimulai_pada).getFullYear()}` : ''
+		scan ? `LAP/SATRIA/${scan.id.replace(/^scan-/, '').toUpperCase()}/${new Date(scan.dimulai_pada).getFullYear()}` : ''
 	);
 
 	const WARNA_BAR = (skor: number | null, gagal: number) =>

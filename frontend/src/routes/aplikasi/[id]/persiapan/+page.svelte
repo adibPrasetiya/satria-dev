@@ -42,7 +42,7 @@
 	const nomor = (n: number) => String(n).padStart(2, '0');
 </script>
 
-<svelte:head><title>Isi data pengujian — {app?.nama ?? 'Aplikasi'} — SATYA</title></svelte:head>
+<svelte:head><title>Isi data pengujian — {app?.nama ?? 'Aplikasi'} — SATRIA</title></svelte:head>
 
 {#if galat}
 	<Kosong judul="Aplikasi tidak ditemukan" pesan={galat}><Button href="/aplikasi" variant="outline">Kembali</Button></Kosong>

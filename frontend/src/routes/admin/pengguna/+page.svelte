@@ -111,7 +111,7 @@
 <PageHeader
 	label="Administrasi"
 	judul="Pengguna"
-	deskripsi="Verifikasi pendaftaran akun baru dan kelola status personel yang mengakses SATYA."
+	deskripsi="Verifikasi pendaftaran akun baru dan kelola status personel yang mengakses SATRIA."
 />
 
 <div class="mb-4 flex flex-col gap-2 sm:flex-row">

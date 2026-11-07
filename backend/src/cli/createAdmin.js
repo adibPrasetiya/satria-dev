@@ -45,7 +45,7 @@ export async function createAdmin({ repository = authenticationRepository, units
   };
 
   try {
-    console.log('== Buat akun administrator SATYA ==');
+    console.log('== Buat akun administrator SATRIA ==');
     const name = await askValid(ask, 'Nama & pangkat : ', nameSchema);
     const nrp = await askValid(ask, 'NRP / NIP      : ', nrpSchema);
     // Daftar satuan bisa ribuan: cari dengan kata kunci, lalu pilih nomor dari hasilnya.
