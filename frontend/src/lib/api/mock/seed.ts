@@ -1,6 +1,6 @@
 // Data contoh untuk mode mock.
 import { titikUjiKosong } from '#lib/catalog.js';
-import type { Aplikasi, PemetaanTitikUji, Pengguna, PengaturanAi, Satuan, Scan } from '#lib/types.js';
+import type { Aplikasi, PemetaanTitikUji, Pengguna, PengaturanAi, SatuanInput, Scan } from '#lib/types.js';
 import { analisisTiruan, hasilLengkap } from './simulasi';
 
 export interface StateMock {
@@ -10,15 +10,79 @@ export interface StateMock {
 	pengaturanAi: PengaturanAi;
 }
 
-/** Sama dengan data contoh di migrasi backend (drizzle/0001_units.sql). Bukan bagian state agar localStorage lama tetap terpakai. */
-export const DAFTAR_SATUAN: Satuan[] = [
-	'Laboratorium Siber',
-	'Pengelola Platform',
-	'Satuan Contoh A',
-	'Satuan Contoh B',
-	'Satuan Contoh C',
-	'Tim Asesor Keamanan Siber'
-].map((nama, i) => ({ id: String(i + 1), nama }));
+/**
+ * Nama sama dengan data contoh di migrasi backend (drizzle/0001_units.sql), ditambah induk tiruan agar
+ * hierarki & lokasi bisa dicoba di mode demo. Bukan bagian state agar localStorage lama tetap terpakai.
+ */
+type SatuanSeed = Pick<SatuanInput, 'nama' | 'jenis'> & Partial<SatuanInput> & { id: string };
+const kosong = {
+	induk_id: null,
+	alamat: null,
+	kota: null,
+	provinsi_kode: null,
+	latitude: null,
+	longitude: null
+};
+export const DAFTAR_SATUAN: (Omit<SatuanInput, 'aktif'> & { id: string })[] = (
+	[
+		{
+			id: '1',
+			nama: 'Mabes Nusantara',
+			jenis: 'MABES',
+			kota: 'Jakarta Timur',
+			provinsi_kode: '31',
+			latitude: -6.2876,
+			longitude: 106.8778
+		},
+		{
+			id: '2',
+			nama: 'Pusat Siber Nusantara',
+			jenis: 'BALAKPUS',
+			induk_id: '1',
+			kota: 'Jakarta Timur',
+			provinsi_kode: '31'
+		},
+		{ id: '3', nama: 'Laboratorium Siber', jenis: 'SATUAN', induk_id: '2', provinsi_kode: '31' },
+		{ id: '4', nama: 'Pengelola Platform', jenis: 'SATUAN', induk_id: '2', provinsi_kode: '31' },
+		{
+			id: '5',
+			nama: 'Tim Asesor Keamanan Siber',
+			jenis: 'SATUAN',
+			induk_id: '2',
+			provinsi_kode: '31'
+		},
+		{
+			id: '6',
+			nama: 'Satuan Contoh A',
+			jenis: 'KOTAMA',
+			induk_id: '1',
+			kota: 'Kota Semarang',
+			provinsi_kode: '33',
+			latitude: -6.9932,
+			longitude: 110.4203
+		},
+		{
+			id: '7',
+			nama: 'Satuan Contoh B',
+			jenis: 'KODIM',
+			induk_id: '6',
+			kota: 'Kota Surakarta',
+			provinsi_kode: '33',
+			latitude: -7.5755,
+			longitude: 110.8243
+		},
+		{
+			id: '8',
+			nama: 'Satuan Contoh C',
+			jenis: 'KOTAMA',
+			induk_id: '1',
+			kota: 'Kota Balikpapan',
+			provinsi_kode: '64',
+			latitude: -1.2379,
+			longitude: 116.8529
+		}
+	] satisfies SatuanSeed[]
+).map((x) => ({ ...kosong, ...x }));
 
 export const PENGGUNA_DEMO: Record<Pengguna['peran'], string> = {
 	pemilik: 'u-pemilik',

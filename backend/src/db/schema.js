@@ -1,6 +1,21 @@
 import { sql } from 'drizzle-orm';
-import { bigint, boolean, char, datetime, index, json, mysqlEnum, mysqlTable, smallint, text, varchar } from 'drizzle-orm/mysql-core';
+import {
+  bigint,
+  boolean,
+  char,
+  datetime,
+  decimal,
+  foreignKey,
+  index,
+  json,
+  mysqlEnum,
+  mysqlTable,
+  smallint,
+  text,
+  varchar,
+} from 'drizzle-orm/mysql-core';
 import { ROLES } from '../config/app.js';
+import { JENIS_SATUAN } from '../config/satuan.js';
 
 /** Status kepegawaian pendaftar: militer (NRP) atau PNS (NIP 18 digit). */
 export const EMPLOYMENT_STATUSES = ['TNI', 'PNS'];
@@ -18,13 +33,33 @@ const updatedAt = () =>
     .$onUpdate(() => new Date());
 
 // Daftar satuan/instansi resmi; pendaftar memilih dari sini (bukan teks bebas).
-export const units = mysqlTable('units', {
-  id: id(),
-  name: varchar('name', { length: 120 }).notNull().unique(),
-  // Satuan nonaktif tidak muncul di pilihan pendaftaran, tetapi akun yang sudah merujuknya tetap sah.
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: createdAt(),
-});
+// Hierarkis: tiap satuan boleh punya induk (mis. Mabes TNI → Kodam Jaya → Kodim 0501); akar = parent_id NULL.
+// Alamat & koordinat dipakai peta sebaran sistem informasi per daerah di dasbor.
+export const units = mysqlTable(
+  'units',
+  {
+    id: id(),
+    parentId: bigint('parent_id', { mode: 'number', unsigned: true }),
+    name: varchar('name', { length: 120 }).notNull().unique(),
+    type: mysqlEnum('type', JENIS_SATUAN).notNull().default('SATUAN'),
+    address: varchar('address', { length: 255 }),
+    city: varchar('city', { length: 100 }),
+    provinceCode: char('province_code', { length: 2 }),
+    latitude: decimal('latitude', { precision: 9, scale: 6 }),
+    longitude: decimal('longitude', { precision: 9, scale: 6 }),
+    // Satuan nonaktif tidak muncul di pilihan pendaftaran, tetapi akun yang sudah merujuknya tetap sah.
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    foreignKey({ name: 'units_parent_id_units_id_fk', columns: [table.parentId], foreignColumns: [table.id] }).onDelete(
+      'restrict',
+    ),
+    index('units_parent_id_idx').on(table.parentId),
+    index('units_province_code_idx').on(table.provinceCode),
+  ],
+);
 
 export const users = mysqlTable(
   'users',

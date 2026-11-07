@@ -138,7 +138,7 @@
 	let namaSatuan = $state('');
 	let namaPangkat = $state('');
 	const cariSatuan = async (kata: string) =>
-		(await api.cariSatuan(kata)).map((s) => ({ value: s.id, label: s.nama }));
+		(await api.cariSatuan(kata)).map((s) => ({ value: s.id, label: s.nama, keterangan: s.jalur || undefined }));
 	const cariPangkatSesuaiStatus = async (kata: string) => cariPangkat(f.status, kata);
 
 	// Ganti status → pangkat yang bukan milik status baru dikosongkan; NRP/NIP dicek ulang.

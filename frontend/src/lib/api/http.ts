@@ -2,7 +2,7 @@
 // Respons backend: { success, message, data }; galat: { success: false, message, code?, errors? }.
 // Sesi: access token JWT (Authorization: Bearer) + refresh token berotasi.
 import type { Api } from '#lib/api/types.js';
-import type { Aplikasi, AsetBaru, EventScan, Pengguna, SatuanAdmin } from '#lib/types.js';
+import type { Aplikasi, AsetBaru, EventScan, Pengguna, SatuanAdmin, SatuanInput, StatusWorker } from '#lib/types.js';
 import { bagianUjiKosong } from '#lib/api/aset.js';
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
@@ -60,6 +60,34 @@ async function kirim(path: string, init: RequestInit & { json?: unknown }): Prom
 	});
 }
 
+/**
+ * Baca aliran SSE lewat fetch (bukan EventSource) agar bisa membawa header Authorization.
+ * Selesai saat aliran ditutup; melempar galat bila koneksi gagal/ditolak.
+ */
+async function bacaSse<T>(path: string, cb: (data: T) => void, signal: AbortSignal): Promise<void> {
+	let res = await kirim(path, { signal });
+	// Token akses kedaluwarsa: perpanjang sekali lalu buka ulang.
+	if (res.status === 401 && (await perpanjangSesi())) res = await kirim(path, { signal });
+	if (!res.ok || !res.body) throw new GalatApi(`Aliran ${path} gagal dibuka`, res.status);
+	const pembaca = res.body.pipeThrough(new TextDecoderStream()).getReader();
+	let sisa = '';
+	for (;;) {
+		const { value, done } = await pembaca.read();
+		if (done) return;
+		sisa += value;
+		const blok = sisa.split('\n\n');
+		sisa = blok.pop() ?? '';
+		for (const b of blok) {
+			const data = b
+				.split('\n')
+				.filter((l) => l.startsWith('data:'))
+				.map((l) => l.slice(5).trim())
+				.join('');
+			if (data) cb(JSON.parse(data) as T);
+		}
+	}
+}
+
 // Satu proses refresh untuk banyak request yang gagal bersamaan.
 let refreshBerjalan: Promise<boolean> | null = null;
 function perpanjangSesi(): Promise<boolean> {
@@ -105,6 +133,11 @@ async function req<T>(path: string, init: RequestInit & { json?: unknown } = {})
 // Aset dari backend hanya berisi data dasar; bagian persiapan uji diisi bawaan (lihat api/aset.ts).
 type AsetDto = Omit<Aplikasi, keyof ReturnType<typeof bagianUjiKosong> | 'pemilik_id'> & { pemilik_id: string | null };
 const keAplikasi = (a: AsetDto): Aplikasi => ({ ...a, ...bagianUjiKosong(), pemilik_id: a.pemilik_id ?? '' });
+// Backend memakai id numerik untuk induk.
+const kirimSatuan = ({ induk_id, ...data }: Partial<SatuanInput>) => ({
+	...data,
+	...(induk_id !== undefined ? { induk_id: induk_id === null ? null : Number(induk_id) } : {})
+});
 const kirimAset = ({ satuan_id, ...data }: Partial<AsetBaru>) => ({
 	...data,
 	...(satuan_id ? { satuan_id: Number(satuan_id) } : {})
@@ -154,15 +187,16 @@ export const httpApi: Api = {
 	verifikasiPengguna: (id, peran) => req(`/users/${id}/verify`, { method: 'PATCH', json: { peran } }),
 	tolakPendaftaran: (id) => req(`/users/${id}`, { method: 'DELETE' }),
 	ubahStatusPengguna: (id, aktif) => req(`/users/${id}/status`, { method: 'PATCH', json: { aktif } }),
-	async listSatuanAdmin({ search = '', status = '', page = 1 }) {
-		const q = new URLSearchParams({ search, status, page: String(page), limit: '50' });
+	async listSatuanAdmin({ search = '', status = '', jenis = '', provinsi = '', induk = '', page = 1, limit = 50 }) {
+		const q = new URLSearchParams({ search, status, jenis, provinsi, induk, page: String(page), limit: String(limit) });
 		const data = await req<{ items: SatuanAdmin[]; meta: { total: number; totalPages: number; limit: number } }>(
 			`/admin/units?${q}`
 		);
 		return { items: data.items, ...data.meta };
 	},
-	tambahSatuan: (nama, aktif = true) => req('/admin/units', { method: 'POST', json: { nama, aktif } }),
-	ubahSatuan: (id, data) => req(`/admin/units/${id}`, { method: 'PATCH', json: data }),
+	getSatuanAdmin: (id) => req(`/admin/units/${id}`),
+	tambahSatuan: (data) => req('/admin/units', { method: 'POST', json: kirimSatuan(data) }),
+	ubahSatuan: (id, data) => req(`/admin/units/${id}`, { method: 'PATCH', json: kirimSatuan(data) }),
 
 	// --- Fitur di bawah ini belum tersedia di backend (lihat client.ts: sementara memakai mock).
 	getKatalog: () => req('/catalog'),
@@ -196,6 +230,7 @@ export const httpApi: Api = {
 	listScan: (aplikasiId) => req(aplikasiId ? `/scans?app=${encodeURIComponent(aplikasiId)}` : '/scans'),
 	getScan: (id) => req(`/scans/${id}`),
 	statusWorker: () => req('/workers/status'),
+	getPeta: () => req('/dashboard/peta'),
 	mulaiScan: (aplikasiId, opsi) =>
 		req(`/apps/${aplikasiId}/scans`, {
 			method: 'POST',
@@ -211,26 +246,18 @@ export const httpApi: Api = {
 	// SSE lewat fetch (bukan EventSource) agar bisa membawa header Authorization.
 	pantauScan(id, cb) {
 		const kendali = new AbortController();
-		(async () => {
-			const res = await kirim(`/scans/${id}/events`, { signal: kendali.signal });
-			const pembaca = res.body?.pipeThrough(new TextDecoderStream()).getReader();
-			let sisa = '';
-			while (pembaca) {
-				const { value, done } = await pembaca.read();
-				if (done) break;
-				sisa += value;
-				const blok = sisa.split('\n\n');
-				sisa = blok.pop() ?? '';
-				for (const b of blok) {
-					const data = b
-						.split('\n')
-						.filter((l) => l.startsWith('data:'))
-						.map((l) => l.slice(5).trim())
-						.join('');
-					if (data) cb(JSON.parse(data) as EventScan);
-				}
-			}
-		})().catch(() => {});
+		bacaSse<EventScan>(`/scans/${id}/events`, cb, kendali.signal).catch(() => {});
+		return () => kendali.abort();
+	},
+	// Status worker didorong server hanya saat berubah (pengganti polling). `putus` dipanggil bila aliran
+	// berakhir/gagal — store yang memutuskan kapan menyambung ulang.
+	pantauStatusWorker(cb, putus) {
+		const kendali = new AbortController();
+		bacaSse<StatusWorker>('/workers/status/stream', cb, kendali.signal)
+			.catch(() => {})
+			.finally(() => {
+				if (!kendali.signal.aborted) putus?.();
+			});
 		return () => kendali.abort();
 	},
 

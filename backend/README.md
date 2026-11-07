@@ -51,6 +51,29 @@ Admin mengelola daftarnya di menu **Administrasi → Satuan Kerja** (`/api/v1/ad
 aktif/nonaktifkan. Nama unik (tidak membedakan huruf besar; spasi ganda dirapikan). Satuan nonaktif hilang dari
 pilihan pendaftaran, tetapi akun yang sudah merujuknya tetap sah; satuan tidak bisa dihapus selama dipakai akun.
 
+Satuan bersifat **hierarkis** (`parent_id` → induk; akar = satuan teratas, mis. Mabes TNI → Kodam → Korem → Kodim →
+Koramil) dengan **jenis** `MABES | KOTAMA | BALAKPUS | KOREM | KODIM | KORAMIL | SATUAN` dan maksimal 8 tingkat.
+Pindah induk ikut memindahkan sub-satuannya; induk yang membuat siklus ditolak `400`. Tiap satuan punya **alamat,
+kabupaten/kota, kode provinsi** (2 digit Kemendagri/BPS, daftar di `src/config/satuan.js`) dan **koordinat**
+opsional (berpasangan, dibatasi wilayah Indonesia) untuk peta sebaran di dasbor. Lokasi hanya tampil di endpoint
+admin; `GET /units` publik cukup mengembalikan `{ id, nama, jenis, jalur }`.
+
+`npm run satuan:seed` (idempoten, juga dijalankan `deploy/deploy-dev.sh`) mengisi hierarki awal dari
+`src/db/seed/satuan.js` dengan **nama fiktif** (tidak merujuk satuan nyata) dan lokasi kota nyata: Mabes Nusantara →
+Mabes Matra Darat/Laut/Udara → 15 Kodam (Alfa…Oscar) + Komando Armada/Udara → Korem/Kodim/Koramil, Balakpus (Pusat Siber
+& Pusdatin Nusantara), Batalyon Siber, serta satuan contoh migrasi 0001 (Laboratorium Siber, Satuan Contoh A/B/C, dst.)
+yang ditempatkan di pohon agar aplikasinya terpetakan. Satuan dicocokkan per nama; yang sudah ada hanya dilengkapi kolom
+yang masih kosong, jadi isian admin tidak tertimpa. Untuk data bersih: kosongkan DB, `db:migrate`, lalu `satuan:seed`.
+
+## Dasbor: peta Indeks Ketahanan Keamanan Siber
+`GET /api/v1/dashboard/peta` (semua pengguna login; data agregat tanpa nama aplikasi):
+- Skor aplikasi = % metode **lulus** dari metode yang teruji (lulus + gagal) pada **scan selesai terakhirnya**.
+- Aplikasi dihitung ke satuan pemiliknya; bila satuan belum punya koordinat, ke **induk terdekat yang berlokasi**.
+- Per titik satuan: `kekuatan` (rata-rata skor aplikasinya), `jumlah_aplikasi`, `kerentanan` (metode gagal +
+  severity katalog + jumlah aplikasi terdampak). Plus daftar Kotama berlokasi (label peta) dan `ringkasan`
+  (`aplikasi_belum_terpetakan` = teruji tetapi satuan & induknya belum berlokasi; `aplikasi_belum_diuji`).
+- Indeks per provinsi & nasional dihitung di frontend (rata-rata tertimbang jumlah aplikasi); dimuat ulang tiap 10 menit.
+
 ## Aset aplikasi
 Tabel `applications` hanya menyimpan **data dasar** aset: nama, deskripsi, satuan pemilik, PIC, URL dasar (unik),
 lingkungan, klasifikasi data, dan teknologi. Persiapan pengujian (verifikasi kepemilikan, titik uji, akun uji, izin
@@ -127,8 +150,9 @@ Semua respons: `{ success, message, data }`; galat: `{ success: false, message, 
 | POST | `/api/v1/catalog/controls/:kode/methods` | admin |
 | PATCH | `/api/v1/catalog/methods/:kode` | admin |
 | GET | `/api/v1/admin/units?search=&status=aktif\|nonaktif&page=&limit=` | admin |
-| POST | `/api/v1/admin/units` `{ nama, aktif? }` (409 bila nama sudah ada) | admin |
-| PATCH | `/api/v1/admin/units/:id` `{ nama?, aktif? }` | admin |
+| POST | `/api/v1/admin/units` `{ nama, jenis?, induk_id?, aktif?, alamat?, kota?, provinsi_kode?, latitude?, longitude? }` (409 bila nama sudah ada) | admin |
+| PATCH | `/api/v1/admin/units/:id` (field yang sama, sebagian; `null` = kosongkan) | admin |
+| GET | `/api/v1/dashboard/peta` (peta indeks ketahanan, agregat) | login |
 | PUT | `/api/v1/apps/:id/scan-target` `{ test_points, forms }` (persiapan uji) | pemilik, admin |
 | POST | `/api/v1/apps/:id/scans` (mulai scan; 400 bila scan-target belum diisi) | pemilik, admin |
 | GET | `/api/v1/scans?app=:id` · `/api/v1/scans/:id` | login |

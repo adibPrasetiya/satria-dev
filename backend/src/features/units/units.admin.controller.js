@@ -7,6 +7,11 @@ export const unitsAdminController = {
     return success(res, { data });
   },
 
+  async get(req, res) {
+    const data = await unitsService.getAdmin(req.params.id);
+    return success(res, { data });
+  },
+
   async create(req, res) {
     const data = await unitsService.create(req.body);
     return success(res, { statusCode: 201, message: `Satuan "${data.nama}" ditambahkan`, data });

@@ -20,11 +20,13 @@ import type {
 	PersiapanAuth,
 	Satuan,
 	SatuanAdmin,
+	SatuanInput,
 	Scan,
 	Status,
 	StatusAkun
 } from '#lib/types.js';
 import type { AkunTarget, TargetUji } from '#lib/persiapan/target.js';
+import type { DataPeta } from '#lib/peta/tipe.js';
 
 /** Opsi mulai scan. Jalur otomatis (eksploratif) menyertakan akun uji + opsi yang disimpan
  *  ke scan_targets sebelum fase penemuan, sehingga discovery dapat login. */
@@ -104,6 +106,13 @@ export interface Api {
 	listScan(aplikasiId?: string): Promise<Scan[]>;
 	/** Status worker pengujian & antrean (indikator header, penjaga tombol Mulai). */
 	statusWorker(): Promise<StatusWorker>;
+	/** Peta Indeks Ketahanan Keamanan Siber (agregat per satuan berlokasi); dasbor memuat ulang tiap 10 menit. */
+	getPeta(): Promise<DataPeta>;
+	/**
+	 * Aliran status worker: `cb` dipanggil saat tersambung dan setiap kali status berubah (bukan berkala).
+	 * `putus` dipanggil bila aliran berakhir/gagal. Mengembalikan fungsi penutup aliran.
+	 */
+	pantauStatusWorker(cb: (s: StatusWorker) => void, putus?: () => void): () => void;
 	getScan(id: string): Promise<Scan>;
 	mulaiScan(aplikasiId: string, opsi?: OpsiMulaiScan): Promise<Scan>;
 	batalkanScan(id: string): Promise<Scan>;
@@ -123,15 +132,23 @@ export interface Api {
 	tolakPendaftaran(id: string): Promise<void>;
 	ubahStatusPengguna(id: string, aktif: boolean): Promise<Pengguna>;
 
-	/** Daftar satuan kerja untuk admin (termasuk nonaktif), dengan pencarian & paginasi di server. */
+	/**
+	 * Daftar satuan kerja untuk admin (termasuk nonaktif), dengan pencarian & paginasi di server.
+	 * `induk`: 'akar' = satuan teratas, id = sub-satuan langsung, tidak diisi = semua tingkat (pencarian).
+	 */
 	listSatuanAdmin(filter: {
 		search?: string;
 		status?: 'aktif' | 'nonaktif' | '';
+		jenis?: string;
+		provinsi?: string;
+		induk?: string;
 		page?: number;
+		limit?: number;
 	}): Promise<{ items: SatuanAdmin[]; total: number; totalPages: number; limit: number }>;
-	/** Galat 409 bila nama sudah ada. */
-	tambahSatuan(nama: string, aktif?: boolean): Promise<SatuanAdmin>;
-	ubahSatuan(id: string, data: { nama?: string; aktif?: boolean }): Promise<SatuanAdmin>;
+	getSatuanAdmin(id: string): Promise<SatuanAdmin>;
+	/** Galat 409 bila nama sudah ada; 400 bila induk membuat siklus / melampaui batas kedalaman. */
+	tambahSatuan(data: Partial<SatuanInput> & { nama: string }): Promise<SatuanAdmin>;
+	ubahSatuan(id: string, data: Partial<SatuanInput>): Promise<SatuanAdmin>;
 
 	getPengaturanAi(): Promise<PengaturanAi>;
 	simpanPengaturanAi(p: PengaturanAi): Promise<PengaturanAi>;

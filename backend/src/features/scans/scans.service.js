@@ -4,6 +4,7 @@ import { audit } from '../../utils/audit.js';
 import { applicationsRepository } from '../applications/applications.repository.js';
 import { butuhTinjauan, penerapanMetode } from './applicability.js';
 import * as scanEvents from './scanEvents.js';
+import * as workerEvents from '../workers/workerEvents.js';
 import { scansRepository } from './scans.repository.js';
 
 // Fungsi keamanan yang dinilai worker tahap ini (Autentikasi, Manajemen Sesi, Kontrol Akses,
@@ -71,7 +72,14 @@ export function createScansService({
   auditor = audit,
   // Koordinasi worker (registry/antrean). null di tes unit → penjaga & info antrean dilewati.
   gerbang = null,
+  // Sinyal perubahan antrean untuk aliran status worker (SSE).
+  antrean = workerEvents,
 } = {}) {
+  async function insertTasks(rows) {
+    await repository.insertTasks(rows);
+    if (rows.some((r) => r.status === 'antre')) antrean.beriTahu();
+  }
+
   /** Aset yang boleh dilihat aktor (pemilik: satuannya); 404 bila di luar cakupan. */
   async function findVisibleApp(actor, appId) {
     const app = await applications.findById(Number(appId));
@@ -171,7 +179,7 @@ export function createScansService({
       };
       return { ...base, status: 'selesai', result };
     });
-    await repository.insertTasks(tasks);
+    await insertTasks(tasks);
     return ringkas;
   }
 
@@ -245,7 +253,7 @@ export function createScansService({
         await finalizeIfDone(scanId);
         return dtoById(scanId);
       }
-      await repository.insertTasks([
+      await insertTasks([
         { scanId, methodCode: '_discovery', checkId: 'discovery.crawl', engine: 'discovery', status: 'antre' },
       ]);
       await repository.insertLog(scanId, 'info', `Pengujian eksploratif dimulai; fase penemuan terhadap ${app.baseUrl}.`);
@@ -303,6 +311,7 @@ export function createScansService({
       const finishedAt = new Date();
       await repository.setScanStatus(scan.id, 'dibatalkan', finishedAt);
       await repository.finishPendingTasksAsCancelled(scan.id);
+      antrean.beriTahu();
       await repository.insertLog(scan.id, 'peringatan', 'Pengujian dibatalkan oleh pengguna.');
       events.siarkan(scan.id, { tipe: 'status', status: 'dibatalkan', selesai_pada: finishedAt.toISOString() });
       auditor('scan.batal', { scanId: String(scan.id), aplikasiId: String(scan.applicationId) });

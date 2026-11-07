@@ -8,16 +8,26 @@
 	let {
 		langkah,
 		label,
-		onpilih
+		onpilih,
+		tema = 'gelap',
+		bebas = false,
+		ariaLabel = 'Langkah pendaftaran'
 	}: {
 		/** Indeks langkah aktif (mulai 0). */
 		langkah: number;
 		label: readonly string[];
 		onpilih: (i: number) => void;
+		/** gelap = halaman publik (login/daftar); terang = di dalam aplikasi (mengikuti tema terang/gelap). */
+		tema?: 'gelap' | 'terang';
+		/** true = semua langkah bisa diklik (mis. mengubah data yang sudah lengkap). */
+		bebas?: boolean;
+		ariaLabel?: string;
 	} = $props();
+
+	const gelap = $derived(tema === 'gelap');
 </script>
 
-<ol class="flex w-full items-start" aria-label="Langkah pendaftaran">
+<ol class="flex w-full items-start" aria-label={ariaLabel}>
 	{#each label as l, i (l)}
 		{@const selesai = i < langkah}
 		{@const aktif = i === langkah}
@@ -26,7 +36,7 @@
 		<li class="relative shrink-0">
 			<button
 				type="button"
-				disabled={!selesai}
+				disabled={!selesai && !(bebas && !aktif)}
 				onclick={() => onpilih(i)}
 				aria-current={aktif ? 'step' : undefined}
 				aria-label="Langkah {i + 1}: {l}{selesai ? ' (selesai)' : ''}"
@@ -38,7 +48,12 @@
 						aktif &&
 							'border-gold bg-gold text-gold-foreground shadow-[0_0_0_4px_rgb(150_175_95/0.18),0_0_18px_rgb(150_175_95/0.35)]',
 						selesai && 'border-gold/70 bg-gold/15 text-gold group-hover/langkah:bg-gold/25',
-						!aktif && !selesai && 'border-white/15 bg-white/[0.04] text-white/45'
+						!aktif &&
+							!selesai &&
+							(gelap
+								? 'border-white/15 bg-white/[0.04] text-white/45'
+								: 'border-border bg-muted text-muted-foreground'),
+						!aktif && !selesai && bebas && 'group-hover/langkah:border-gold/60'
 					)}
 				>
 					{#if selesai}<Check class="size-3.5" />{:else}{i + 1}{/if}
@@ -50,7 +65,15 @@
 				class={cn(
 					'absolute top-[40px] text-[11.5px] whitespace-nowrap transition-colors',
 					pertama ? 'left-0' : terakhir ? 'right-0' : 'left-1/2 -translate-x-1/2',
-					aktif ? 'font-medium text-white' : selesai ? 'text-white/70' : 'text-white/45'
+					gelap
+						? aktif
+							? 'font-medium text-white'
+							: selesai
+								? 'text-white/70'
+								: 'text-white/45'
+						: aktif
+							? 'font-medium text-foreground'
+							: 'text-muted-foreground'
 				)}
 			>
 				{l}
@@ -60,7 +83,7 @@
 			<!-- Garis penghubung: mengisi ruang antar-bulatan. -->
 			<li
 				aria-hidden="true"
-				class="relative mx-2 mt-[15px] h-px flex-1 overflow-hidden bg-white/12"
+				class={cn('relative mx-2 mt-[15px] h-px flex-1 overflow-hidden', gelap ? 'bg-white/12' : 'bg-border')}
 			>
 				<span
 					class={cn(

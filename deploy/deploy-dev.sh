@@ -17,7 +17,9 @@ git reset --hard origin/dev
 echo "==> Backend: install dependensi + migrasi DB + sinkron katalog"
 # catalog:sync idempoten — menyisipkan butir katalog baru (mis. metode SESS baru) & memperbarui
 # definisinya dari YAML tanpa menyentuh is_active atau butir non-YAML. Aman diulang tiap deploy.
-( cd backend && npm ci && npm run db:migrate && npm run catalog:sync )
+# satuan:seed idempoten — menambah hierarki satuan TNI yang belum ada & mengisi kolom lokasi yang masih
+# kosong; tidak menimpa isian admin dan tidak menghapus satuan.
+( cd backend && npm ci && npm run db:migrate && npm run catalog:sync && npm run satuan:seed )
 
 echo "==> Frontend: install + build statis (hasil di frontend/build, disajikan Nginx)"
 ( cd frontend && npm ci && npm run build )
