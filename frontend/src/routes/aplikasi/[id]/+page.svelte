@@ -141,7 +141,7 @@
 
 	<DialogPilihMetode
 		bind:open={dialogMetode}
-		onotomatis={() => goto(`/aplikasi/${app!.id}/pengujian/otomatis`)}
+		onpilih={(p) => goto(`/aplikasi/${app!.id}/pengujian/otomatis?pendekatan=${p}`)}
 	/>
 
 	<div class="grid gap-3 sm:grid-cols-3">

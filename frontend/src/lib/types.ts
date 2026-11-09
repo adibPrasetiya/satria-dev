@@ -347,12 +347,15 @@ export interface AnalisisAi {
 
 /** Mode pengujian: terarah (data persiapan diisi pengguna) | eksploratif (hanya URL → penemuan otomatis). */
 export type ModePengujian = 'terarah' | 'eksploratif';
+/** Grey box: dengan akun uji terbatas. Black box: tanpa akun & informasi internal. */
+export type PendekatanUji = 'greybox' | 'blackbox';
 
 export interface Scan {
 	id: string;
 	aplikasi_id: string;
 	profil: Profil;
 	mode?: ModePengujian;
+	pendekatan?: PendekatanUji;
 	status: StatusScan;
 	dimulai_pada: string;
 	selesai_pada?: string;

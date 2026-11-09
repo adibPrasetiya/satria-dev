@@ -37,6 +37,9 @@
 	import UserPen from '@lucide/svelte/icons/user-pen';
 
 	const id = $derived(page.params.id!);
+	// Pendekatan dari modal Metode Pengujian: grey box (akun uji terbatas) | black box (tanpa akun/akses internal).
+	const blackbox = $derived(page.url.searchParams.get('pendekatan') === 'blackbox');
+	const NAMA_PENDEKATAN = $derived(blackbox ? 'Black Box' : 'Grey Box');
 
 	let app = $state<Aplikasi | null>(null);
 	let galat = $state<string | null>(null);
@@ -76,14 +79,23 @@
 	const discovery = $derived(tersimpan?.discovery ?? null);
 
 	type Langkah = 'akun' | 'penemuan' | 'review' | 'sk';
-	const LANGKAH = $derived<Langkah[]>(discovery ? ['akun', 'penemuan', 'review', 'sk'] : ['akun', 'review', 'sk']);
+	// Alur sama untuk kedua metode; black box hanya tanpa langkah akun. Hasil penemuan tersimpan
+	// ditawarkan ke black box hanya bila penemuan itu dijalankan tanpa login.
+	const penemuanBisaDipakai = $derived(!!discovery && (!blackbox || !discovery.terautentikasi));
+	const LANGKAH = $derived<Langkah[]>([
+		...(blackbox ? [] : (['akun'] as Langkah[])),
+		...(penemuanBisaDipakai ? (['penemuan'] as Langkah[]) : []),
+		'review',
+		'sk'
+	]);
 	const JUDUL: Record<Langkah, string> = { akun: 'Akun Uji', penemuan: 'Recon & Discovery', review: 'Review', sk: 'Syarat & Ketentuan' };
 	const LABEL = $derived(LANGKAH.map((l) => JUDUL[l]));
 	const kini = $derived(LANGKAH[langkah]);
 
 	const akunTerisi = $derived(akun.filter((a) => a.username.trim() && a.password.trim()));
 	const pakaiAkunTersimpan = $derived(adaAkunTersimpan && sumberAkun === 'tersimpan');
-	const akunValid = $derived(pakaiAkunTersimpan || akunTerisi.length >= 2);
+	const akunValid = $derived(blackbox || pakaiAkunTersimpan || akunTerisi.length >= 2);
+	const pakaiPenemuanTerakhir = $derived(penemuanBisaDipakai && sumberPenemuan === 'terakhir');
 
 	const bisaUbah = $derived(
 		!!app &&
@@ -137,7 +149,7 @@
 	}
 
 	// Engine tahap pertama: penemuan ulang → 'discovery'; pakai hasil penemuan terakhir → 'custom'.
-	const engineAwal = $derived(!!discovery && sumberPenemuan === 'terakhir' ? 'custom' : 'discovery');
+	const engineAwal = $derived(pakaiPenemuanTerakhir ? 'custom' : 'discovery');
 	const tanpaWorker = $derived(!!sw && !sw.engines.includes(engineAwal));
 	const workerSibuk = $derived(!!sw && !tanpaWorker && (sw.siaga === 0 || sw.scan_baru.scan_di_depan > 0));
 
@@ -153,10 +165,11 @@
 			}));
 			const s = await api.mulaiScan(app.id, {
 				mode: 'eksploratif',
+				pendekatan: blackbox ? 'blackbox' : 'greybox',
 				persetujuan: true,
-				...(pakaiAkunTersimpan ? {} : { accounts: { daftar } }),
-				options: { izinkan_penguncian: izinkanBerisiko },
-				pakai_discovery: !!discovery && sumberPenemuan === 'terakhir'
+				...(blackbox || pakaiAkunTersimpan ? {} : { accounts: { daftar } }),
+				options: { izinkan_penguncian: !blackbox && izinkanBerisiko },
+				pakai_discovery: pakaiPenemuanTerakhir
 			});
 			await goto(`/scan/${s.id}`);
 		} catch (e) {
@@ -183,7 +196,7 @@
 	</button>
 {/snippet}
 
-<svelte:head><title>Pengujian Otomatis — {app?.nama ?? 'Aplikasi'}</title></svelte:head>
+<svelte:head><title>Pengujian {NAMA_PENDEKATAN} — {app?.nama ?? 'Aplikasi'}</title></svelte:head>
 
 {#if galat}
 	<Kosong judul="Aplikasi tidak ditemukan" pesan={galat}><Button href="/aplikasi" variant="outline">Kembali</Button></Kosong>
@@ -194,7 +207,13 @@
 		<Button href="/aplikasi/{app.id}" variant="outline">Kembali ke aset</Button>
 	</Kosong>
 {:else}
-	<PageHeader label="Operasi Pengujian · Otomatis" judul={app.nama} deskripsi="{app.url_dasar} · mode eksploratif (penemuan otomatis)">
+	<PageHeader
+		label="Operasi Pengujian · {NAMA_PENDEKATAN}"
+		judul={app.nama}
+		deskripsi="{app.url_dasar} · {blackbox
+			? 'tanpa akun uji maupun informasi internal'
+			: 'dengan akun uji terbatas'} · penemuan otomatis"
+	>
 		{#snippet atas()}
 			<a href="/aplikasi/{app!.id}" class="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
 				<ChevronLeft class="size-3.5" /> Berkas aplikasi
@@ -331,14 +350,23 @@
 				<p class="label-stensil text-muted-foreground">Ringkasan</p>
 				<dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2">
 					<div><dt class="text-muted-foreground">Target</dt><dd class="font-mono break-all">{app.url_dasar}</dd></div>
-					<div><dt class="text-muted-foreground">Mode</dt><dd>Eksploratif (penemuan otomatis)</dd></div>
+					<div><dt class="text-muted-foreground">Metode</dt><dd>{NAMA_PENDEKATAN} · eksploratif (penemuan otomatis)</dd></div>
 					<div>
 						<dt class="text-muted-foreground">Penemuan</dt>
-						<dd>{discovery && sumberPenemuan === 'terakhir' ? `Pakai hasil terakhir (${relatif(discovery.waktu ?? undefined)})` : 'Jalankan penemuan baru'}</dd>
+						<dd>{pakaiPenemuanTerakhir && discovery ? `Pakai hasil terakhir (${relatif(discovery.waktu ?? undefined)})` : 'Jalankan penemuan baru'}</dd>
 					</div>
-					<div><dt class="text-muted-foreground">Sumber akun</dt><dd>{pakaiAkunTersimpan ? 'Akun tersimpan' : 'Akun baru'}</dd></div>
+					<div><dt class="text-muted-foreground">Sumber akun</dt><dd>{blackbox ? 'Tanpa akun uji' : pakaiAkunTersimpan ? 'Akun tersimpan' : 'Akun baru'}</dd></div>
 				</dl>
-				{#if pakaiAkunTersimpan}
+				{#if blackbox}
+					<div class="mt-5 flex items-start gap-2 rounded-md border border-info/40 bg-info/5 px-3 py-2 text-xs text-muted-foreground">
+						<TriangleAlert class="mt-0.5 size-3.5 shrink-0 text-info" />
+						<p>
+							Black box menguji aplikasi seperti penyerang dari luar: tanpa login dan tanpa informasi internal.
+							Metode yang memerlukan login akan berstatus <strong class="text-foreground">belum terverifikasi</strong>, sehingga
+							putusan paling tinggi adalah <strong class="text-foreground">Laik Bersyarat</strong>. Untuk penilaian lengkap gunakan Grey Box.
+						</p>
+					</div>
+				{:else if pakaiAkunTersimpan}
 					<p class="label-stensil mt-5 text-muted-foreground">Akun uji ({akunTersimpan.length})</p>
 					<ul class="mt-2 divide-y rounded-md border">
 						{#each akunTersimpan as a, i (i)}
@@ -374,7 +402,9 @@
 				<ul class="mt-3 space-y-2 text-sm">
 					<li class="flex gap-2"><span class="text-gold">•</span> Fase <strong>penemuan</strong> hanya membaca (GET, render SPA, sadap lalu lintas) — tidak mengubah data.</li>
 					<li class="flex gap-2"><span class="text-gold">•</span> Fase <strong>pengujian</strong> mengirim lalu lintas uji ke target dan dapat <strong>membuat data</strong> (mis. registrasi/percobaan).</li>
-					<li class="flex gap-2"><span class="text-gold">•</span> Uji kebijakan sandi dapat <strong>mengubah kata sandi akun uji</strong>; uji penguncian dapat <strong>mengunci akun uji sementara</strong>.</li>
+					{#if !blackbox}
+						<li class="flex gap-2"><span class="text-gold">•</span> Uji kebijakan sandi dapat <strong>mengubah kata sandi akun uji</strong>; uji penguncian dapat <strong>mengunci akun uji sementara</strong>.</li>
+					{/if}
 					<li class="flex gap-2"><span class="text-gold">•</span> Gunakan hanya akun & lingkungan yang Anda berwenang menguji.</li>
 				</ul>
 
@@ -385,10 +415,12 @@
 						<span>Saya berwenang menguji aplikasi ini dan menyetujui <strong>pemindaian aktif</strong> terhadap target.</span>
 					</span>
 				</label>
-				<label class="mt-2 flex items-start gap-2 rounded-md border p-3 text-sm">
-					<Checkbox bind:checked={izinkanBerisiko} class="mt-0.5" />
-					<span>Izinkan uji <strong>berisiko</strong> (penguncian akun / ubah kata sandi) pada akun uji.</span>
-				</label>
+				{#if !blackbox}
+					<label class="mt-2 flex items-start gap-2 rounded-md border p-3 text-sm">
+						<Checkbox bind:checked={izinkanBerisiko} class="mt-0.5" />
+						<span>Izinkan uji <strong>berisiko</strong> (penguncian akun / ubah kata sandi) pada akun uji.</span>
+					</label>
+				{/if}
 			</div>
 		{/if}
 

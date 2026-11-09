@@ -58,6 +58,7 @@ function toScanDto(scan, tasks, logs) {
     aplikasi_id: String(scan.applicationId),
     profil: scan.profile,
     mode: scan.mode ?? 'terarah',
+    pendekatan: scan.approach ?? 'greybox',
     status: scan.status,
     dimulai_pada: scan.startedAt,
     ...(scan.finishedAt ? { selesai_pada: scan.finishedAt } : {}),
@@ -221,8 +222,21 @@ export function createScansService({
     return r.antre;
   }
 
-  async function mulai(actor, appId, { mode = 'terarah', accounts = null, options = null, pakaiDiscovery = false } = {}) {
+  async function mulai(
+    actor,
+    appId,
+    { mode = 'terarah', pendekatan = 'greybox', accounts = null, options = null, pakaiDiscovery = false } = {},
+  ) {
     const app = await findVisibleApp(actor, appId);
+    // Black box memakai alur eksploratif yang sama dengan grey box, hanya tanpa akun uji
+    // (terarah memakai persiapan + akun yang diisi pengguna, jadi tidak berlaku untuk black box).
+    const blackbox = pendekatan === 'blackbox';
+    if (blackbox && mode !== 'eksploratif') {
+      throw AppError.badRequest('Pengujian black box hanya tersedia untuk mode eksploratif', [
+        { field: 'pendekatan', message: 'Gunakan mode eksploratif untuk black box' },
+      ]);
+    }
+    if (blackbox) accounts = null; // akun tidak disimpan maupun dipakai
     // Satu pengujian aktif per aplikasi + harus ada worker aktif untuk engine tahap pertama.
     if (gerbang) await gerbang.gerbangMulai(app.id, mode === 'eksploratif' && !pakaiDiscovery ? 'discovery' : 'custom');
 
@@ -235,7 +249,14 @@ export function createScansService({
           { field: 'pakai_discovery', message: 'Jalankan penemuan (discovery) lebih dulu' },
         ]);
       }
-      if (pakaiDiscovery && !accounts && daftarAkun(tersimpan?.accounts).length === 0) {
+      // Black box boleh memakai ulang penemuan tersimpan hanya bila penemuan itu dijalankan tanpa login,
+      // agar pengetahuan dari sesi login (grey box) tidak terbawa.
+      if (blackbox && pakaiDiscovery && tersimpan.discovery.terautentikasi) {
+        throw AppError.badRequest('Hasil penemuan terakhir diperoleh dengan login; black box perlu penemuan baru', [
+          { field: 'pakai_discovery', message: 'Jalankan penemuan ulang untuk black box' },
+        ]);
+      }
+      if (!blackbox && pakaiDiscovery && !accounts && daftarAkun(tersimpan?.accounts).length === 0) {
         throw AppError.badRequest('Akun uji belum tersimpan untuk aplikasi ini', [
           { field: 'accounts', message: 'Isi akun uji lebih dulu' },
         ]);
@@ -244,7 +265,12 @@ export function createScansService({
       if (accounts || options) {
         await repository.mergeAccounts(app.id, { accounts: accounts ?? null, options: options ?? null });
       }
-      const scanId = await repository.createScan({ applicationId: app.id, profile: 'aman', mode });
+      const scanId = await repository.createScan({
+        applicationId: app.id,
+        profile: 'aman',
+        mode,
+        approach: blackbox ? 'blackbox' : 'greybox',
+      });
       if (pakaiDiscovery) {
         const d = tersimpan.discovery;
         const kapan = d.waktu ? new Date(d.waktu).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : 'tidak diketahui';
@@ -261,8 +287,20 @@ export function createScansService({
       await insertTasks([
         { scanId, methodCode: '_discovery', checkId: 'discovery.crawl', engine: 'discovery', status: 'antre' },
       ]);
-      await repository.insertLog(scanId, 'info', `Pengujian eksploratif dimulai; fase penemuan terhadap ${app.baseUrl}.`);
-      auditor('scan.mulai', { scanId: String(scanId), aplikasiId: String(app.id), mode, fungsi: FUNGSI.join(',') });
+      await repository.insertLog(
+        scanId,
+        'info',
+        blackbox
+          ? `Pengujian black box dimulai (tanpa akun uji); fase penemuan terhadap ${app.baseUrl}.`
+          : `Pengujian eksploratif dimulai; fase penemuan terhadap ${app.baseUrl}.`,
+      );
+      auditor('scan.mulai', {
+        scanId: String(scanId),
+        aplikasiId: String(app.id),
+        mode,
+        pendekatan: blackbox ? 'blackbox' : 'greybox',
+        fungsi: FUNGSI.join(','),
+      });
       return dtoById(scanId);
     }
 

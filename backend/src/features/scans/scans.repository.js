@@ -88,8 +88,8 @@ export const scansRepository = {
 
   // --- Scan ---
 
-  async createScan({ applicationId, profile = 'aman', mode = 'terarah' }) {
-    const [res] = await db.insert(scans).values({ applicationId, profile, mode, status: 'berjalan' });
+  async createScan({ applicationId, profile = 'aman', mode = 'terarah', approach = 'greybox' }) {
+    const [res] = await db.insert(scans).values({ applicationId, profile, mode, approach, status: 'berjalan' });
     return res.insertId;
   },
 

@@ -15,6 +15,7 @@ import type {
 	Metode,
 	MetodeBaru,
 	ModePengujian,
+	PendekatanUji,
 	Pengguna,
 	PengaturanAi,
 	PendaftaranAkun,
@@ -34,6 +35,8 @@ import type { DataPeta } from '#lib/peta/tipe.js';
  *  ke scan_targets sebelum fase penemuan, sehingga discovery dapat login. */
 export interface OpsiMulaiScan {
 	mode?: ModePengujian;
+	/** Grey box (bawaan): memakai akun uji. Black box: tanpa akun — akun tersimpan pun tidak dipakai. */
+	pendekatan?: PendekatanUji;
 	persetujuan?: boolean;
 	accounts?: { daftar: AkunTarget[] };
 	options?: Partial<TargetUji['options']>;

@@ -170,6 +170,9 @@ export const ENGINES = ['custom', 'zap', 'nuclei', 'sslyze', 'playwright', 'manu
 export const PROFILES = ['aman', 'intrusif'];
 // Mode pengujian: 'terarah' (pengguna mengisi data persiapan) | 'eksploratif' (hanya URL → penemuan otomatis).
 export const SCAN_MODES = ['terarah', 'eksploratif'];
+// Pendekatan uji: 'greybox' (memakai akun uji terbatas) | 'blackbox' (tanpa pengetahuan/akses internal,
+// akun uji tersimpan tidak dipakai sama sekali).
+export const SCAN_APPROACHES = ['greybox', 'blackbox'];
 export const EVIDENCE_TYPES = ['request_response', 'screenshot', 'dokumen'];
 
 export const catalogMeta = mysqlTable('catalog_meta', {
@@ -289,6 +292,7 @@ export const scans = mysqlTable(
       .references(() => applications.id, { onDelete: 'cascade' }),
     profile: mysqlEnum('profile', PROFILES).notNull().default('aman'),
     mode: mysqlEnum('mode', SCAN_MODES).notNull().default('terarah'),
+    approach: mysqlEnum('approach', SCAN_APPROACHES).notNull().default('greybox'),
     status: mysqlEnum('status', SCAN_STATUSES).notNull().default('berjalan'),
     startedAt: datetime('started_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     finishedAt: datetime('finished_at'),

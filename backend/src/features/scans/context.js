@@ -39,7 +39,8 @@ export function buildContext({ scan, application, target }) {
     openapi_url: opt.openapi_url ?? '',
     titik_uji: target?.testPoints ?? {},
     form: target?.forms ?? {},
-    akun_uji: buildAkunUji(target?.accounts),
+    // Black box: tanpa akun uji sama sekali (metode yang butuh login → tidak dapat diverifikasi).
+    akun_uji: scan.approach === 'blackbox' ? [] : buildAkunUji(target?.accounts),
     intrusif: {
       izinkan_penguncian: Boolean(opt.izinkan_penguncian),
       jendela_mulai: opt.jendela_mulai ?? '',
