@@ -20,6 +20,7 @@ export const scansController = {
       accounts: req.body?.accounts,
       options: req.body?.options,
       pakaiDiscovery: req.body?.pakai_discovery === true,
+      versiSk: req.body?.persetujuan_sk,
     });
     return success(res, { statusCode: 201, message: 'Pengujian dimulai', data });
   },

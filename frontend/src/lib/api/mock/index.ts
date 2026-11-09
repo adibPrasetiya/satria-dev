@@ -410,7 +410,30 @@ export const mockApi: Api = {
 	},
 	async getTargetUji(aplikasiId) {
 		await jeda(100);
-		return { aplikasi_id: aplikasiId, akun: [], discovery: null };
+		// Uji ulang (mode latihan): bila aplikasi pernah diuji sampai selesai, tawarkan akun & recon tersimpan.
+		const terakhir = state.scan
+			.filter((s) => s.aplikasi_id === aplikasiId && s.status === 'selesai')
+			.sort((a, b) => b.dimulai_pada.localeCompare(a.dimulai_pada))[0];
+		if (!terakhir) return { aplikasi_id: aplikasiId, akun: [], discovery: null };
+		return {
+			aplikasi_id: aplikasiId,
+			akun: [
+				{ username: 'uji.satria1@contoh.mil.id', ada_sandi: true, ada_totp: true },
+				{ username: 'uji.satria2@contoh.mil.id', ada_sandi: true, ada_totp: false }
+			],
+			discovery: {
+				waktu: terakhir.selesai_pada ?? terakhir.dimulai_pada,
+				scan_id: terakhir.id,
+				jumlah_halaman: 14,
+				jumlah_endpoint_unik: 37,
+				jumlah_alur: 4,
+				titik_ditemukan: ['login', 'registrasi', 'ubah_sandi'],
+				terautentikasi: terakhir.pendekatan !== 'blackbox',
+				openapi: null,
+				kandidat: {},
+				contoh_endpoint: []
+			}
+		};
 	},
 
 	// Simulasi registri worker: ketersediaan ditentukan engine metode (data contoh).

@@ -260,7 +260,8 @@ export const httpApi: Api = {
 				...(opsi?.persetujuan ? { persetujuan: true } : {}),
 				...(opsi?.accounts ? { accounts: opsi.accounts } : {}),
 				...(opsi?.options ? { options: opsi.options } : {}),
-				...(opsi?.pakai_discovery ? { pakai_discovery: true } : {})
+				...(opsi?.pakai_discovery ? { pakai_discovery: true } : {}),
+				...(opsi?.persetujuan_sk ? { persetujuan_sk: opsi.persetujuan_sk } : {})
 			}
 		}),
 	batalkanScan: (id) => req(`/scans/${id}/cancel`, { method: 'POST' }),
