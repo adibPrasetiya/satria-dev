@@ -1,29 +1,20 @@
 <script lang="ts">
-	import { api, USE_MOCK } from '#lib/api/client.js';
+	import { USE_MOCK } from '#lib/api/client.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import PetaIndonesia from '#lib/components/peta/PetaIndonesia.svelte';
 	import { indeksTertimbang, ringkasProvinsi } from '#lib/peta/agregat.js';
-	import type { DataPeta } from '#lib/peta/tipe.js';
+	import { SIKLUS_PEMBARUAN_MS, storePeta } from '#lib/peta/store.svelte.js';
 
-	// Dasbor = peta Indeks Ketahanan Keamanan Siber satu layar, dari GET /dashboard/peta
-	// (mode demo: data contoh). Dimuat ulang tiap 10 menit, sesuai siklus pembaruan data.
-	const MUAT_ULANG_MS = 10 * 60_000;
+	// Dasbor = peta Indeks Ketahanan Keamanan Siber satu layar, dari GET /dashboard/peta (ringkas;
+	// mode demo: data contoh). Data disimpan sementara di frontend (storePeta) & diperbarui tiap 10 menit;
+	// rincian provinsi diambil per provinsi saat disorot.
+	const data = $derived(storePeta.data);
+	const galat = $derived(storePeta.galat);
+	const muat = () => storePeta.muat(true);
 
-	let data = $state<DataPeta | null>(null);
-	let galat = $state<string | null>(null);
-
-	async function muat() {
-		try {
-			data = await api.getPeta();
-			galat = null;
-		} catch (e) {
-			// Data lama tetap ditampilkan bila pemuatan ulang gagal.
-			galat = (e as Error).message;
-		}
-	}
 	$effect(() => {
-		void muat();
-		const t = setInterval(muat, MUAT_ULANG_MS);
+		void storePeta.muat(); // memakai data tersimpan bila belum lewat 10 menit
+		const t = setInterval(() => void storePeta.muat(true), SIKLUS_PEMBARUAN_MS);
 		return () => clearInterval(t);
 	});
 
@@ -46,6 +37,7 @@
 		kotama={data?.kotama ?? []}
 		provinsi={ringkasan}
 		{nasional}
+		sebaranNasional={data?.nasional?.sebaran ?? null}
 	>
 		{#snippet kosong()}
 			{#if !data && !galat}

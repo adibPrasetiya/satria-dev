@@ -34,6 +34,7 @@ const DI_BACKEND = [
 	'statusWorker',
 	'pantauStatusWorker',
 	'getPeta',
+	'getPetaProvinsi',
 	'cekKetersediaan',
 	'lupaSandi',
 	'resetSandi',

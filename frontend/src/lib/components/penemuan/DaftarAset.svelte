@@ -3,7 +3,7 @@
 	// Aset JS, Backend per origin, Upload, Docs, Sesi, alert ZAP, kontribusi Katana — dengan
 	// pencarian. Seleksi dibagi dengan graf: klik baris → node tersorot & dipusatkan; klik node →
 	// baris tersorot & digulir ke tampilan.
-	import { labelSumber, PERINGKAT_RISIKO, type Graf, type NodeGraf } from '#lib/penemuan/graf.js';
+	import { labelSumber, type Graf, type NodeGraf } from '#lib/penemuan/graf.js';
 	import { svgEntitas, WARNA_RISIKO, type JenisIkon } from '#lib/penemuan/ikon-entitas.js';
 	import { warnaMetode } from '#lib/penemuan/kanvas.js';
 	import { cn } from '#lib/utils.js';
@@ -11,12 +11,13 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Lock from '@lucide/svelte/icons/lock';
 	import Crosshair from '@lucide/svelte/icons/crosshair';
+	import { WARNA_SEVERITY } from '#lib/operasi/ringkas.js';
 	import Layers from '@lucide/svelte/icons/layers';
 	import Funnel from '@lucide/svelte/icons/funnel';
 
 	let { graf, terpilih = $bindable(null) }: { graf: Graf; terpilih?: string | null } = $props();
 
-	type Baris = { id: string; ikon: JenisIkon; metode?: string; nama: string; ket?: string; sumber: string[]; risiko?: string; auth?: boolean; titik?: boolean };
+	type Baris = { id: string; ikon: JenisIkon; metode?: string; nama: string; ket?: string; sumber: string[]; risiko?: string; alertNama?: string; auth?: boolean; titik?: boolean; temuan?: { id: string; severity: string }[] };
 	type Grup = { id: string; judul: string; ikon: JenisIkon; hub?: string; jumlah: number; baris: Baris[] };
 
 	const SINGKAT: Record<string, string> = { openapi: 'OA', html: 'HTML', browser: 'BRW', 'browser-intersep': 'INT', js: 'JS', katana: 'KTN', zap: 'ZAP', heuristik: 'HEUR', ai: 'AI', browser_urutan: 'BRW' };
@@ -34,6 +35,8 @@
 			ket: n.jenis === 'halaman' ? ((n.info?.judul as string) || undefined) : undefined,
 			sumber: n.sumber ?? [],
 			risiko: risikoTertinggi(n),
+			alertNama: n.alert?.map((a) => a.nama).join(', '),
+			temuan: n.temuan,
 			auth: ep?.butuh_autentikasi,
 			titik: !!n.titik?.length
 		};
@@ -74,22 +77,9 @@
 				baris: alur.map((n) => ({ ...baris(n), nama: n.label, ket: langkah(n) || n.sub, sumber: [String(n.info?.sumber ?? '')].filter(Boolean) }))
 			});
 		}
-		const zap = graf.nodes.find((n) => n.jenis === 'zap');
-		if (zap) {
-			const beralert = per((n) => !!n.alert?.length)
-				.sort((a, b) => (PERINGKAT_RISIKO[risikoTertinggi(b) ?? ''] ?? 0) - (PERINGKAT_RISIKO[risikoTertinggi(a) ?? ''] ?? 0))
-				.map((n) => ({ ...baris(n), ket: n.alert!.map((a) => a.nama).join(' · ') }));
-			out.push({ id: 'zap', judul: 'OWASP ZAP · alert', ikon: 'zap', hub: 'zap', jumlah: graf.hitung.zapAlert, baris: beralert });
-		}
-		const katana = graf.nodes.find((n) => n.jenis === 'katana');
-		if (katana) {
-			const kontribusi = (katana.info?.kontribusi ?? {}) as Record<string, number>;
-			const rows = Object.entries(kontribusi).map(([id, n]) => {
-				const k = graf.nodes.find((x) => x.id === id);
-				return { id, ikon: (k?.jenis ?? 'frontend') as JenisIkon, nama: k?.label ?? id, ket: `${n} temuan dari katana`, sumber: ['katana'] } satisfies Baris;
-			});
-			out.push({ id: 'katana', judul: 'Katana · kontribusi', ikon: 'katana', hub: 'katana', jumlah: graf.hitung.katana, baris: rows });
-		}
+		// Alert OWASP ZAP tidak dijadikan grup aset: tampil sebagai penanda risiko pada baris aset terkait
+		// (filter "Berisiko (alert)" untuk menyaringnya).
+		// Hasil Katana juga tidak dijadikan grup aset: URL-nya sudah tergabung ke aset di atas (lencana "KTN").
 		return out;
 	});
 
@@ -98,6 +88,7 @@
 	// Filter: semua aset, hanya titik uji, yang berisiko (alert ZAP), atau yang butuh autentikasi.
 	const FILTER = [
 		['semua', 'Semua aset'],
+		['temuan', 'Temuan pengujian'],
 		['titik', 'Titik uji'],
 		['risiko', 'Berisiko (alert)'],
 		['auth', 'Butuh autentikasi']
@@ -105,7 +96,8 @@
 	let filter = $state<(typeof FILTER)[number][0]>('semua');
 	let bukaFilter = $state(false);
 	const lolos = (b: Baris) =>
-		filter === 'semua' || (filter === 'titik' ? !!b.titik : filter === 'risiko' ? !!b.risiko : !!b.auth);
+		filter === 'semua' ||
+		(filter === 'temuan' ? !!b.temuan?.length : filter === 'titik' ? !!b.titik : filter === 'risiko' ? !!b.risiko : !!b.auth);
 	const cocokCari = (b: Baris) =>
 		!q || `${b.metode ?? ''} ${b.nama} ${b.ket ?? ''} ${b.sumber.join(' ')}`.toLowerCase().includes(q);
 	const tersaring = $derived(
@@ -206,9 +198,12 @@
 						<span class="min-w-0 flex-1 truncate text-white/80" title={b.ket ? `${b.nama} — ${b.ket}` : b.nama}>
 							{b.nama}{#if b.ket}<span class="text-white/35"> · {b.ket}</span>{/if}
 						</span>
+						{#if b.temuan?.length}
+							<span class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-white/80" title="Temuan pengujian: {b.temuan.map((t) => t.id).join(', ')}"><span class="grid h-3.5 w-3 place-items-center rounded-[3px] text-[9px] leading-none font-black text-white" style="background:{WARNA_SEVERITY[b.temuan[0].severity as keyof typeof WARNA_SEVERITY]};box-shadow:0 0 6px {WARNA_SEVERITY[b.temuan[0].severity as keyof typeof WARNA_SEVERITY]}">!</span>{b.temuan.length}</span>
+						{/if}
 						{#if b.titik}<Crosshair class="size-3 shrink-0 text-[#ffd43b]" />{/if}
 						{#if b.auth}<Lock class="size-3 shrink-0 text-[#9fe08a]" />{/if}
-						{#if b.risiko}<span class="size-2 shrink-0 rounded-full" style="background:{WARNA_RISIKO[b.risiko] ?? WARNA_RISIKO.Informational}" title="Risiko {b.risiko}"></span>{/if}
+						{#if b.risiko}<span class="size-2 shrink-0 rounded-full" style="background:{WARNA_RISIKO[b.risiko] ?? WARNA_RISIKO.Informational}" title="Alert OWASP ZAP ({b.risiko}): {b.alertNama}"></span>{/if}
 						<span class="flex shrink-0 gap-0.5">
 							{#each b.sumber.slice(0, 3) as s (s)}<span class="rounded-sm border border-white/10 px-1 text-[8.5px] leading-[13px] text-white/45" title={labelSumber(s)}>{SINGKAT[s] ?? s}</span>{/each}
 						</span>

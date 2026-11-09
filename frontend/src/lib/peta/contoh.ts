@@ -5,6 +5,8 @@
 import type { JenisSatuan } from '#lib/data/satuan.js';
 import type {
 	DataPeta,
+	RincianProvinsi,
+	SebaranTingkat,
 	Kotama as KotamaDasar,
 	TemuanKerentanan,
 	Tingkat,
@@ -345,12 +347,15 @@ export const SIKLUS_MS = 10 * 60_000;
  * @param siklus nomor siklus pembaruan (mis. floor(waktu / SIKLUS_MS)); tiap siklus nilai bergeser sedikit
  *   agar terasa seperti data yang diperbarui, tetapi tetap sama bila dimuat ulang pada siklus yang sama.
  */
-export function dataContoh(rentang: Rentang = '24j', siklus = 0): DataPeta {
+type TitikContoh = TitikSebaran & { kerentanan: TemuanKerentanan[] };
+
+/** Titik contoh lengkap (internal; berisi daftar kerentanan untuk menurunkan sebaran). */
+function titikContoh(rentang: Rentang, siklus: number): TitikContoh[] {
 	const r = acak(BENIH[rentang]);
 	const g = acak(BENIH[rentang] * 7919 + siklus);
 	const batasi = (n: number) => Math.round(Math.max(3, Math.min(98, n)));
-	const titik: TitikSebaran[] = [];
-	const tambah = (t: Omit<TitikSebaran, 'kerentanan' | 'kekuatan'>, dasar: number) => {
+	const titik: TitikContoh[] = [];
+	const tambah = (t: Omit<TitikSebaran, 'kekuatan'>, dasar: number) => {
 		// Nilai dasar tetap per rentang; geseran kecil per siklus pembaruan.
 		const kekuatan = batasi(dasar + (g() - 0.5) * 6);
 		titik.push({
@@ -397,9 +402,25 @@ export function dataContoh(rentang: Rentang = '24j', siklus = 0): DataPeta {
 			);
 		}
 	}
+	return titik;
+}
+
+/** Sebaran temuan per tingkat = jumlah (jenis kerentanan × sistem informasi terdampak). */
+function sebaranDari(titik: TitikContoh[]): SebaranTingkat {
+	const n: SebaranTingkat = { kritis: 0, tinggi: 0, sedang: 0, rendah: 0 };
+	for (const t of titik) for (const k of t.kerentanan) n[k.tingkat] += k.aplikasi;
+	return n;
+}
+
+/** Data peta ringkas (bentuk sama dengan GET /dashboard/peta). */
+export function dataContoh(rentang: Rentang = '24j', siklus = 0): DataPeta {
+	const lengkap = titikContoh(rentang, siklus);
+	const titik = lengkap.map(({ kerentanan: _k, ...t }) => t);
 	return {
 		kotama: KOTAMA,
 		titik,
+		nasional: { sebaran: sebaranDari(lengkap) },
+		versi: `contoh-${rentang}-${siklus}`,
 		ringkasan: {
 			aplikasi_terpetakan: titik.reduce((s, t) => s + t.jumlah_aplikasi, 0),
 			aplikasi_belum_terpetakan: 0,
@@ -407,5 +428,19 @@ export function dataContoh(rentang: Rentang = '24j', siklus = 0): DataPeta {
 		},
 		// Cap waktu awal siklus (bukan waktu sekarang) agar sama bila dimuat ulang dalam siklus yang sama.
 		diperbarui: new Date(siklus * SIKLUS_MS).toISOString()
+	};
+}
+
+/** Rincian satu provinsi (bentuk sama dengan GET /dashboard/peta/provinsi/:kode). */
+export function rincianProvinsiContoh(kode: string, rentang: Rentang = '24j', siklus = 0): RincianProvinsi {
+	const anggota = titikContoh(rentang, siklus).filter((t) => t.provinsi_kode === kode);
+	const bobot = anggota.reduce((s, t) => s + t.jumlah_aplikasi, 0);
+	return {
+		kode,
+		satuan: anggota.length,
+		aplikasi: bobot,
+		indeks: bobot ? Math.round((anggota.reduce((s, t) => s + t.kekuatan * t.jumlah_aplikasi, 0) / bobot) * 10) / 10 : null,
+		sebaran: sebaranDari(anggota),
+		versi: `contoh-${rentang}-${siklus}`
 	};
 }

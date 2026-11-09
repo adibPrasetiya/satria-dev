@@ -59,6 +59,13 @@ function toScanDto(scan, tasks, logs) {
     profil: scan.profile,
     mode: scan.mode ?? 'terarah',
     pendekatan: scan.approach ?? 'greybox',
+    // Scan sumber data Recon & Discovery: scan ini sendiri bila menjalankan penemuan, atau scan
+    // terdahulu yang hasil penemuannya dipakai ulang (null = tanpa penemuan, mis. mode terarah).
+    recon_scan_id: scan.reconScanId
+      ? String(scan.reconScanId)
+      : tasks.some((t) => t.engine === 'discovery')
+        ? String(scan.id)
+        : null,
     status: scan.status,
     dimulai_pada: scan.startedAt,
     ...(scan.finishedAt ? { selesai_pada: scan.finishedAt } : {}),
@@ -137,7 +144,7 @@ export function createScansService({
   /** Tulis beberapa baris rekap (hitungan per status + daftar temuan GAGAL) ke log scan. */
   async function tulisRekap(scanId) {
     const tasks = (await repository.tasksByScan(scanId)).filter((t) => t.engine !== 'discovery');
-    const n = { lulus: 0, gagal: 0, tidak_dapat_diverifikasi: 0, tidak_berlaku: 0 };
+    const n = { lulus: 0, gagal: 0, tidak_dapat_diverifikasi: 0, luar_cakupan: 0, tidak_berlaku: 0 };
     const gagal = [];
     for (const t of tasks) {
       const s = t.result?.status ?? t.status;
@@ -149,13 +156,13 @@ export function createScansService({
       events.siarkan(scanId, { tipe: 'log', log: { waktu: new Date().toISOString(), level, pesan } });
     };
     await emit('info', '──────── REKAPITULASI ────────');
-    await emit('info', `Total metode diuji: ${tasks.length} — Lulus ${n.lulus}, Gagal ${n.gagal}, Perlu tinjauan ${n.tidak_dapat_diverifikasi}, Tidak berlaku ${n.tidak_berlaku}.`);
+    await emit('info', `Total metode diuji: ${tasks.length} — Pass ${n.lulus}, Failed ${n.gagal}, Out of scope ${n.luar_cakupan}, Perlu tinjauan ${n.tidak_dapat_diverifikasi}, Tidak berlaku ${n.tidak_berlaku}.`);
     if (gagal.length) {
       await emit('peringatan', `Temuan (${gagal.length}):`);
       for (const g of gagal.slice(0, 20)) await emit('peringatan', `  ✗ ${g}`);
       if (gagal.length > 20) await emit('peringatan', `  … dan ${gagal.length - 20} temuan lain.`);
     } else {
-      await emit('info', 'Tidak ada temuan berstatus GAGAL.');
+      await emit('info', 'Tidak ada temuan berstatus FAILED.');
     }
   }
 
@@ -165,22 +172,23 @@ export function createScansService({
    * mode terarah (langsung) dan mode eksploratif (setelah fase penemuan).
    * @returns {Promise<{antre:number, tidak_berlaku:number, asesor:number, total:number, daftarAntre:string[]}>}
    */
-  async function seedTestTasks(scanId, target) {
+  async function seedTestTasks(scanId, target, pendekatan = 'greybox') {
     const fw = await repository.functionsWithControls(FUNGSI);
     if (!fw || !fw.items.length) {
       throw AppError.badRequest(`Katalog ${FUNGSI.join('/')} belum tersedia; jalankan "npm run catalog:seed"`);
     }
-    const ringkas = { antre: 0, tidak_berlaku: 0, asesor: 0, total: 0, daftarAntre: [] };
+    const ringkas = { antre: 0, tidak_berlaku: 0, luar_cakupan: 0, asesor: 0, total: 0, daftarAntre: [] };
     const tasks = fw.items.map(({ method }) => {
       const base = { scanId, methodCode: method.code, checkId: method.checkId, engine: method.engine };
       ringkas.total += 1;
-      const ap = penerapanMetode(target, method);
+      const ap = penerapanMetode(target, method, { pendekatan });
       if (ap.jalan) {
         ringkas.antre += 1;
         ringkas.daftarAntre.push(method.code);
         return { ...base, status: 'antre' };
       }
       if (ap.status === 'tidak_berlaku') ringkas.tidak_berlaku += 1;
+      else if (ap.status === 'luar_cakupan') ringkas.luar_cakupan += 1;
       else ringkas.asesor += 1;
       const result = {
         metode_id: method.code,
@@ -200,7 +208,7 @@ export function createScansService({
     await repository.insertLog(
       scanId,
       'info',
-      `Metode disemai: ${r.total} total → ${r.antre} dijalankan, ${r.tidak_berlaku} tidak berlaku, ${r.asesor} diserahkan asesor.`,
+      `Metode disemai: ${r.total} total → ${r.antre} dijalankan, ${r.tidak_berlaku} tidak berlaku, ${r.luar_cakupan} out of scope, ${r.asesor} belum dapat dijalankan.`,
     );
     if (r.daftarAntre.length) {
       await repository.insertLog(scanId, 'info', `Antrean pengujian: ${r.daftarAntre.join(', ')}.`);
@@ -222,7 +230,7 @@ export function createScansService({
     if (scan.mode === 'eksploratif') {
       target.options = { ...(target.options ?? {}), izinkan_penguncian: true };
     }
-    const r = await seedTestTasks(scanId, target);
+    const r = await seedTestTasks(scanId, target, scan.approach ?? 'greybox');
     await repository.insertLog(scanId, 'info', 'Fase pengujian dimulai.');
     await logSeeding(scanId, r);
     return r.antre;
@@ -276,6 +284,8 @@ export function createScansService({
         profile: 'aman',
         mode,
         approach: blackbox ? 'blackbox' : 'greybox',
+        // Pakai ulang penemuan: rujuk scan yang menjalankan recon tersebut (data recon tidak disalin).
+        reconScanId: pakaiDiscovery ? Number(tersimpan.discovery.scan_id) || null : null,
       });
       if (pakaiDiscovery) {
         const d = tersimpan.discovery;

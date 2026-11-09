@@ -293,6 +293,9 @@ export const scans = mysqlTable(
     profile: mysqlEnum('profile', PROFILES).notNull().default('aman'),
     mode: mysqlEnum('mode', SCAN_MODES).notNull().default('terarah'),
     approach: mysqlEnum('approach', SCAN_APPROACHES).notNull().default('greybox'),
+    // Scan yang hasil Recon & Discovery-nya dipakai ulang oleh scan ini (tanpa menyalin data recon).
+    // NULL = scan menjalankan penemuannya sendiri, atau tanpa penemuan (mode terarah).
+    reconScanId: bigint('recon_scan_id', { mode: 'number', unsigned: true }),
     status: mysqlEnum('status', SCAN_STATUSES).notNull().default('berjalan'),
     startedAt: datetime('started_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     finishedAt: datetime('finished_at'),

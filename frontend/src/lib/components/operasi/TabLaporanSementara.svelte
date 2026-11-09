@@ -243,13 +243,14 @@
 			<div class="min-w-0">
 				<p class={judulKartu}>Cakupan Pengujian</p>
 				<p class="mt-1 text-xs text-white/60 tabular-nums">
-					Lulus <span class="text-white">{n.hitungan.lulus}</span> · Gagal
+					Pass <span class="text-white">{n.hitungan.lulus}</span> · Failed
 					<span class="text-[#ff6b6b]">{n.hitungan.gagal}</span>
 				</p>
 				<p class="text-xs text-white/60 tabular-nums">
 					Belum terverifikasi <span class="text-[#e9cf53]"
 						>{n.hitungan.tidak_dapat_diverifikasi}</span
 					>
+					· Out of scope <span class="text-white/80">{n.hitungan.luar_cakupan}</span>
 				</p>
 			</div>
 		</div>
@@ -298,7 +299,7 @@
 				>
 					<option value="semua" class="bg-[#141a17]">Semua Fungsi</option>
 					<option value="perbaikan" class="bg-[#141a17]">Perlu perbaikan</option>
-					<option value="penuh" class="bg-[#141a17]">Lulus penuh</option>
+					<option value="penuh" class="bg-[#141a17]">Pass penuh (100%)</option>
 				</select>
 			</div>
 			<div class="grid gap-3.5">
@@ -306,8 +307,9 @@
 					{@const skor = f.skor ?? 0}
 					<div
 						class="group grid grid-cols-[3.25rem_minmax(7rem,12rem)_minmax(0,1fr)_3rem] items-center gap-3"
-						title="{f.fungsi.nama}: lulus {f.hitungan.lulus} · gagal {f.hitungan
-							.gagal} · belum terverifikasi {f.hitungan.tidak_dapat_diverifikasi}"
+						title="{f.fungsi.nama}: pass {f.hitungan.lulus} · failed {f.hitungan
+							.gagal} · belum terverifikasi {f.hitungan.tidak_dapat_diverifikasi} · out of scope {f.hitungan
+							.luar_cakupan}"
 					>
 						<span
 							class="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-center font-mono text-[10.5px] text-white/70"

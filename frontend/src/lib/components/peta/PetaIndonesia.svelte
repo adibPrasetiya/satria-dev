@@ -7,11 +7,12 @@
 	import { Tween } from 'svelte/motion';
 	import { cubicOut } from 'svelte/easing';
 	import { PETA, kmPerSatuan, kodeBentuk, proyeksi } from '#lib/peta/proyeksi.js';
-	import type { Kotama, TitikSebaran } from '#lib/peta/tipe.js';
+	import type { Kotama, SebaranTingkat, TitikSebaran } from '#lib/peta/tipe.js';
 	import type { RingkasProvinsi } from '#lib/peta/agregat.js';
 	import { statusIndeks, warnaIndeks as warna } from '#lib/peta/warna.js';
 	import { labelJenis, namaProvinsi } from '#lib/data/satuan.js';
 	import PanelSorotan from './PanelSorotan.svelte';
+	import PanelNasional from './PanelNasional.svelte';
 	import { cn } from '#lib/utils.js';
 	import Crosshair from '@lucide/svelte/icons/crosshair';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -24,6 +25,7 @@
 		kotama,
 		provinsi,
 		nasional,
+		sebaranNasional = null,
 		kosong
 	}: {
 		titik: TitikSebaran[];
@@ -32,6 +34,8 @@
 		provinsi: RingkasProvinsi[];
 		/** Indeks ketahanan rata-rata nasional. */
 		nasional: number | null;
+		/** Sebaran severity temuan secara nasional (dari ringkasan peta). */
+		sebaranNasional?: SebaranTingkat | null;
 		/** Pesan di tengah peta saat belum ada titik (memuat / galat / belum ada data). */
 		kosong?: Snippet;
 	} = $props();
@@ -425,19 +429,29 @@
 			Indeks Ketahanan Keamanan Siber Nasional
 		</p>
 		{#if nasional !== null}
-			<!-- Level kerawanan di atas angka: satu blok solid berwarna level. -->
-			<span
-				class="mt-3 rounded-md px-3.5 py-1.5 text-[11px] leading-none font-bold tracking-[0.16em] uppercase transition-colors duration-500"
-				style="color: #0a0d0b; background: {warna(nasional)}"
-			>
-				{statusIndeks(nasional)}
-			</span>
-			<p
-				class="mt-2.5 font-heading text-5xl leading-none font-semibold tabular-nums sm:text-6xl"
-				style="color: {warna(nasional)}"
-			>
-				{angkaNasional.current.toFixed(1)}
-			</p>
+			<!-- Angka indeks & sebaran severity nasional berdampingan, ditengahkan terhadap judul. -->
+			<div class="mt-3 flex items-center justify-center gap-5">
+				<div class="flex flex-col items-center">
+					<!-- Level kerawanan di atas angka: satu blok solid berwarna level. -->
+					<span
+						class="rounded-md px-3.5 py-1.5 text-[11px] leading-none font-bold tracking-[0.16em] uppercase transition-colors duration-500"
+						style="color: #0a0d0b; background: {warna(nasional)}"
+					>
+						{statusIndeks(nasional)}
+					</span>
+					<p
+						class="mt-2.5 font-heading text-5xl leading-none font-semibold tabular-nums sm:text-6xl"
+						style="color: {warna(nasional)}"
+					>
+						{angkaNasional.current.toFixed(1)}
+					</p>
+				</div>
+				{#if sebaranNasional && ruangKanan}
+					<div class="pointer-events-auto w-[340px] text-left">
+						<PanelNasional sebaran={sebaranNasional} />
+					</div>
+				{/if}
+			</div>
 		{/if}
 	</div>
 
@@ -470,7 +484,7 @@
 	<!-- Kanan: sorotan provinsi bergilir (layar lebar) -->
 	{#if ruangKanan}
 		<div
-			class="absolute top-5 right-6 bottom-36 flex w-[340px] flex-col justify-start overflow-hidden"
+			class="absolute top-5 right-6 bottom-36 flex w-[340px] flex-col justify-start gap-3 overflow-y-auto"
 		>
 			<PanelSorotan daftar={provinsi} bind:kode={sorotKode} />
 		</div>
@@ -584,7 +598,7 @@
 				>
 			</div>
 			<p class="mt-1 text-[11px] text-white/55">
-				{t.jumlah_aplikasi} sistem informasi · {t.kerentanan.length} kerentanan
+				{t.jumlah_aplikasi} sistem informasi
 			</p>
 		</div>
 	{:else if sorotProv && !menyeret}

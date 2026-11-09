@@ -28,7 +28,7 @@ import { analisisTiruan, hasilMetode } from './simulasi';
 import { peristiwaUji } from './uji';
 import { GalatApi } from '#lib/api/http.js';
 import { JENIS_SATUAN, namaProvinsi } from '#lib/data/satuan.js';
-import { dataContoh, SIKLUS_MS } from '#lib/peta/contoh.js';
+import { dataContoh, rincianProvinsiContoh, SIKLUS_MS } from '#lib/peta/contoh.js';
 
 const KUNCI = 'satya-mock-v2';
 // Persiapan pengujian disimpan terpisah dari state mock agar juga berlaku untuk aset dari backend (mode hibrida).
@@ -680,6 +680,11 @@ export const mockApi: Api = {
 	async getPeta() {
 		await jeda();
 		return dataContoh('24j', Math.floor(Date.now() / SIKLUS_MS));
+	},
+
+	async getPetaProvinsi(kode) {
+		await jeda(300);
+		return rincianProvinsiContoh(kode, '24j', Math.floor(Date.now() / SIKLUS_MS));
 	},
 
 	// Mode demo: tanpa jaringan; status tiruan dibaca ulang dari memori berkala.

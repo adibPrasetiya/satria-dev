@@ -250,6 +250,7 @@ export const httpApi: Api = {
 	getScan: (id) => req(`/scans/${id}`),
 	statusWorker: () => req('/workers/status'),
 	getPeta: () => req('/dashboard/peta'),
+	getPetaProvinsi: (kode) => req(`/dashboard/peta/provinsi/${encodeURIComponent(kode)}`),
 	mulaiScan: (aplikasiId, opsi) =>
 		req(`/apps/${aplikasiId}/scans`, {
 			method: 'POST',

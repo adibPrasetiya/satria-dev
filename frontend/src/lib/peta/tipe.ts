@@ -24,7 +24,20 @@ export interface TitikSebaran {
 	/** Indeks ketahanan 0 (rawan) .. 100 (tangguh). */
 	kekuatan: number;
 	jumlah_aplikasi: number;
-	kerentanan: TemuanKerentanan[];
+}
+
+/** Jumlah temuan (metode FAILED) per tingkat severity. */
+export type SebaranTingkat = Record<Tingkat, number>;
+
+/** Rincian satu provinsi (GET /dashboard/peta/provinsi/:kode) — diambil per provinsi saat disorot. */
+export interface RincianProvinsi {
+	kode: string;
+	satuan: number;
+	aplikasi: number;
+	indeks: number | null;
+	sebaran: SebaranTingkat;
+	/** Versi data dasbor; cache rincian dibuang bila versi peta berubah. */
+	versi: string;
 }
 
 export interface Kotama {
@@ -47,5 +60,9 @@ export interface DataPeta {
 		aplikasi_belum_terpetakan: number;
 		aplikasi_belum_diuji: number;
 	};
+	/** Sebaran severity temuan secara nasional (seluruh aplikasi teruji). */
+	nasional: { sebaran: SebaranTingkat };
+	/** Versi data (berubah bila isinya berubah) — kunci cache rincian provinsi di frontend. */
+	versi: string;
 	diperbarui: string;
 }

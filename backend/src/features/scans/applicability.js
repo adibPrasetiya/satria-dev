@@ -26,11 +26,6 @@ export const akunUtamaAda = (target) => {
 };
 
 /**
- * @param {{ testPoints?: Record<string, {tersedia?: boolean}>, accounts?: object, options?: {izinkan_penguncian?: boolean} }} target
- * @param {{ testPoint: string, kind: string, engine: string, requiresAuth: boolean, profile: string }} method
- * @returns {{ jalan: true } | { jalan: false, status: 'tidak_berlaku'|'tidak_dapat_diverifikasi', alasan: string }}
- */
-/**
  * Titik uji fungsi Validasi Input diturunkan dari inventaris penemuan bila belum dipetakan
  * (hasil penemuan lama belum mencatat `api`/`form_input`): `api` = ada endpoint API,
  * `form_input` = ada endpoint API yang menerima field body/query.
@@ -43,7 +38,13 @@ export function titikDariInventaris(target, testPoint) {
   return api.some((e) => (e.request_fields ?? []).some((f) => f?.lokasi === 'body' || f?.lokasi === 'query'));
 }
 
-export function penerapanMetode(target, method) {
+/**
+ * @param {{ testPoints?: Record<string, {tersedia?: boolean}>, accounts?: object, options?: {izinkan_penguncian?: boolean} }} target
+ * @param {{ testPoint: string, kind: string, engine: string, requiresAuth: boolean, profile: string }} method
+ * @param {{ pendekatan?: 'greybox'|'blackbox' }} [opsi]
+ * @returns {{ jalan: true } | { jalan: false, status: 'tidak_berlaku'|'luar_cakupan'|'tidak_dapat_diverifikasi', alasan: string }}
+ */
+export function penerapanMetode(target, method, { pendekatan = 'greybox' } = {}) {
   const titikTetap = TITIK_UJI_TETAP.includes(method.testPoint);
   if (!titikTetap && !target.testPoints?.[method.testPoint]?.tersedia && !titikDariInventaris(target, method.testPoint)) {
     return {
@@ -52,11 +53,20 @@ export function penerapanMetode(target, method) {
       alasan: `Titik uji "${method.testPoint}" tidak tersedia pada aplikasi.`,
     };
   }
+  // Out of scope: metode yang tak dapat diotomasi dengan pendekatan grey box / black box — manual,
+  // engine yang tak didukung worker, atau (black box) yang memerlukan login. Tidak ikut dinilai.
   if (method.kind === 'manual' || method.engine === 'manual') {
     return {
       jalan: false,
-      status: 'tidak_dapat_diverifikasi',
-      alasan: 'Metode manual — menunggu tinjauan asesor.',
+      status: 'luar_cakupan',
+      alasan: 'Out of scope pengujian otomatis — metode manual (menunggu tinjauan asesor).',
+    };
+  }
+  if (method.requiresAuth && pendekatan === 'blackbox') {
+    return {
+      jalan: false,
+      status: 'luar_cakupan',
+      alasan: 'Out of scope pengujian black box — metode memerlukan login dengan akun uji.',
     };
   }
   if (method.requiresAuth && !akunUtamaAda(target)) {
@@ -76,8 +86,8 @@ export function penerapanMetode(target, method) {
   if (!ENGINE_DIDUKUNG.has(method.engine)) {
     return {
       jalan: false,
-      status: 'tidak_dapat_diverifikasi',
-      alasan: `Engine "${method.engine}" belum didukung worker (diserahkan asesor).`,
+      status: 'luar_cakupan',
+      alasan: `Out of scope pengujian otomatis — engine "${method.engine}" tidak tersedia (diserahkan asesor).`,
     };
   }
   return { jalan: true };

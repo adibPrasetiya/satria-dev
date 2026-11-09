@@ -147,8 +147,8 @@ export function hasilMetode(app: Aplikasi, metode: Metode): HasilMetode {
 	if (metode.jenis === 'manual' || metode.engine === 'manual') {
 		return {
 			metode_id: metode.id,
-			status: 'tidak_dapat_diverifikasi',
-			ringkasan: 'Menunggu bukti dari pemilik aplikasi dan putusan asesor.',
+			status: 'luar_cakupan',
+			ringkasan: 'Out of scope pengujian otomatis — metode manual (menunggu tinjauan asesor).',
 			bukti: [],
 			menunggu_tinjauan: true
 		};

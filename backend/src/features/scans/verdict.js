@@ -23,12 +23,11 @@ function statusAkhir(status) {
  */
 export function statusKontrol(kontrol, hasil) {
   // Metode bertingkat severity "info" hanya informasi dan tidak memengaruhi status.
-  const status = kontrol.methods
-    .filter((m) => m.severity !== 'info')
-    .map((m) => statusAkhir(hasil.get(m.code)))
-    .filter((s) => s !== 'tidak_berlaku');
+  // Tidak berlaku & out of scope (tak dapat diotomasi) tidak ikut dinilai.
+  const semua = kontrol.methods.filter((m) => m.severity !== 'info').map((m) => statusAkhir(hasil.get(m.code)));
+  const status = semua.filter((s) => s !== 'tidak_berlaku' && s !== 'luar_cakupan');
 
-  if (status.length === 0) return 'tidak_berlaku';
+  if (status.length === 0) return semua.includes('luar_cakupan') ? 'luar_cakupan' : 'tidak_berlaku';
   if (kontrol.aggregation === 'minimal_satu') {
     if (status.includes('lulus')) return 'lulus';
     if (status.includes('tidak_dapat_diverifikasi')) return 'tidak_dapat_diverifikasi';
@@ -57,7 +56,7 @@ export function hitungTemuan(hasil) {
  * @returns {{ putusan: 'laik'|'laik_bersyarat'|'tidak_laik', skor: number }}
  */
 export function nilaiKelaikan(kontrol, hasil) {
-  const n = { lulus: 0, gagal: 0, tidak_berlaku: 0, tidak_dapat_diverifikasi: 0 };
+  const n = { lulus: 0, gagal: 0, tidak_berlaku: 0, luar_cakupan: 0, tidak_dapat_diverifikasi: 0 };
   let gagalKritisTinggi = 0;
   for (const k of kontrol) {
     const s = statusKontrol(k, hasil);

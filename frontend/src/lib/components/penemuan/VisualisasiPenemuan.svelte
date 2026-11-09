@@ -123,10 +123,10 @@
 		{#each LEGENDA as [j, l] (j)}
 			<span class="inline-flex items-center gap-1"><span class="inline-block size-3.5">{@html svgEntitas(j, { ukuran: 14 })}</span>{l}</span>
 		{/each}
-		<span class="inline-flex items-center gap-1"><span class="h-px w-4 bg-[#9fe08a]"></span>temuan</span>
+		<span class="inline-flex items-center gap-1"><span class="h-px w-4 bg-[#9fe08a]"></span>struktur</span>
 		<span class="inline-flex items-center gap-1"><span class="h-px w-4 border-t border-dashed border-white/50"></span>sumber</span>
-		<span class="inline-flex items-center gap-1"><span class="h-px w-4 bg-[#ff7b6b]"></span>alert</span>
-		<span class="inline-flex items-center gap-1"><span class="size-0 border-x-[4px] border-b-[7px] border-x-transparent" style="border-bottom-color:{WARNA_RISIKO.High}"></span>risiko</span>
+		<span class="inline-flex items-center gap-1"><span class="grid h-3.5 w-3 place-items-center rounded-[3px] bg-[#d93f45] text-[9px] leading-none font-black text-white shadow-[0_0_6px_#d93f45]">!</span>temuan uji</span>
+		<span class="inline-flex items-center gap-1"><span class="size-0 border-x-[4px] border-b-[7px] border-x-transparent" style="border-bottom-color:{WARNA_RISIKO.High}"></span>alert ZAP</span>
 	</div>
 
 	{#if nodeTerpilih}

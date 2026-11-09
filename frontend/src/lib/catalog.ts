@@ -149,12 +149,11 @@ function statusAkhir(h: HasilMetode | undefined): Status {
 /** Status kontrol dari hasil metodenya sesuai aturan `agregasi` di katalog. */
 export function statusKontrol(kontrol: Kontrol, hasil: Record<string, HasilMetode>): Status {
 	// Metode bertingkat severity "info" hanya informasi dan tidak memengaruhi status.
-	const status = kontrol.metode_pengujian
-		.filter((m) => m.severity !== 'info')
-		.map((m) => statusAkhir(hasil[m.id]))
-		.filter((s) => s !== 'tidak_berlaku');
+	// Tidak berlaku & out of scope (tak dapat diotomasi grey/black box) tidak ikut dinilai.
+	const semua = kontrol.metode_pengujian.filter((m) => m.severity !== 'info').map((m) => statusAkhir(hasil[m.id]));
+	const status = semua.filter((s) => s !== 'tidak_berlaku' && s !== 'luar_cakupan');
 
-	if (status.length === 0) return 'tidak_berlaku';
+	if (status.length === 0) return semua.includes('luar_cakupan') ? 'luar_cakupan' : 'tidak_berlaku';
 	if (kontrol.agregasi === 'minimal_satu') {
 		if (status.includes('lulus')) return 'lulus';
 		if (status.includes('tidak_dapat_diverifikasi')) return 'tidak_dapat_diverifikasi';
@@ -168,7 +167,7 @@ export function statusKontrol(kontrol: Kontrol, hasil: Record<string, HasilMetod
 export type Hitungan = Record<Status, number>;
 
 export function hitunganKosong(): Hitungan {
-	return { lulus: 0, gagal: 0, tidak_berlaku: 0, tidak_dapat_diverifikasi: 0 };
+	return { lulus: 0, gagal: 0, tidak_berlaku: 0, luar_cakupan: 0, tidak_dapat_diverifikasi: 0 };
 }
 
 export interface SkorFungsi {
@@ -244,9 +243,10 @@ export function nilaiKelaikan(hasil: Record<string, HasilMetode>): Penilaian {
 // Label tampilan
 
 export const LABEL_STATUS: Record<Status | 'antre' | 'berjalan', string> = {
-	lulus: 'Lulus',
-	gagal: 'Gagal',
+	lulus: 'Pass',
+	gagal: 'Failed',
 	tidak_berlaku: 'Tidak Berlaku',
+	luar_cakupan: 'Out of Scope',
 	tidak_dapat_diverifikasi: 'Belum Terverifikasi',
 	antre: 'Antre',
 	berjalan: 'Berjalan'

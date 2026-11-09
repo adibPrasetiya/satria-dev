@@ -1,7 +1,8 @@
 import { pool } from '../../db/index.js';
 
-// Data mentah untuk peta Indeks Ketahanan Keamanan Siber. SQL langsung (mysql2): tiga query ringan,
-// agregasinya dikerjakan di dashboard.service agar mudah diuji tanpa DB.
+// Data mentah untuk peta Indeks Ketahanan Keamanan Siber. SQL langsung (mysql2): dua query ringan —
+// tidak menyentuh scan_tasks karena skor & jumlah temuan sudah tersimpan per scan (lihat
+// scans/verdict.service). Agregasi dikerjakan di dashboard.service agar mudah diuji tanpa DB.
 export const dashboardRepository = {
   /** Semua satuan aktif (pohon kecil; dipakai untuk mencari induk terdekat yang punya lokasi). */
   async satuan() {
@@ -12,29 +13,18 @@ export const dashboardRepository = {
     return rows;
   },
 
-  /** Tiap aplikasi + scan SELESAI terakhirnya (null bila belum pernah selesai diuji). */
-  async aplikasiDanScanTerakhir() {
+  /** Tiap aplikasi + ringkasan scan SELESAI terakhirnya (skor & jumlah temuan per severity; null bila belum). */
+  async aplikasiRingkas() {
     const [rows] = await pool.query(
-      `SELECT a.id AS aplikasiId, a.unit_id AS unitId,
-              (SELECT s.id FROM scans s
-               WHERE s.application_id = a.id AND s.status = 'selesai'
-               ORDER BY s.finished_at DESC, s.id DESC LIMIT 1) AS scanId
-       FROM applications a`,
-    );
-    return rows;
-  },
-
-  /** Hasil metode (lulus/gagal saja) dari scan-scan tertentu, beserta nama & severity metode di katalog. */
-  async hasilMetode(scanIds) {
-    if (!scanIds.length) return [];
-    const [rows] = await pool.query(
-      `SELECT t.scan_id AS scanId, t.method_code AS kode, m.name AS nama, m.severity AS severity,
-              JSON_UNQUOTE(JSON_EXTRACT(t.result, '$.status')) AS status
-       FROM scan_tasks t
-       LEFT JOIN catalog_methods m ON m.code = t.method_code
-       WHERE t.scan_id IN (?) AND t.status = 'selesai'
-         AND JSON_UNQUOTE(JSON_EXTRACT(t.result, '$.status')) IN ('lulus', 'gagal')`,
-      [scanIds],
+      `SELECT a.id AS aplikasiId, a.unit_id AS unitId, f.id AS scanId, f.score,
+              f.findings_critical AS kritis, f.findings_high AS tinggi,
+              f.findings_medium AS sedang, f.findings_low AS rendah
+       FROM applications a
+       LEFT JOIN scans f ON f.id = (
+         SELECT s.id FROM scans s
+         WHERE s.application_id = a.id AND s.status = 'selesai'
+         ORDER BY s.finished_at DESC, s.id DESC LIMIT 1
+       )`,
     );
     return rows;
   },

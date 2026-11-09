@@ -16,7 +16,6 @@
 	// Batas akses per awalan route.
 	const AKSES: [string, Peran[]][] = [
 		['/admin', ['admin']],
-		['/asesor', ['asesor', 'admin']],
 		['/aplikasi/baru', ['pemilik', 'admin']]
 	];
 

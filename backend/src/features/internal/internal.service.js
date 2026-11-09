@@ -111,10 +111,11 @@ export function createInternalService({
     await repository.completeTask(task.id, { result: finalHasil, durationMs: hasil.durasi_ms });
     events.siarkan(task.scanId, { tipe: 'metode', hasil: finalHasil });
 
+    const LABEL = { lulus: 'PASS', gagal: 'FAILED', luar_cakupan: 'OUT OF SCOPE', tidak_berlaku: 'tidak berlaku' };
     const ringkas =
       finalHasil.status === 'gagal'
-        ? `${task.methodCode}: GAGAL — ${finalHasil.ringkasan ?? ''}`
-        : `${task.methodCode}: ${finalHasil.status}`;
+        ? `${task.methodCode}: FAILED — ${finalHasil.ringkasan ?? ''}`
+        : `${task.methodCode}: ${LABEL[finalHasil.status] ?? finalHasil.status}`;
     const level = finalHasil.status === 'gagal' ? 'peringatan' : 'info';
     await repository.insertLog(task.scanId, level, ringkas);
     events.siarkan(task.scanId, { tipe: 'log', log: { waktu: new Date().toISOString(), level, pesan: ringkas } });
