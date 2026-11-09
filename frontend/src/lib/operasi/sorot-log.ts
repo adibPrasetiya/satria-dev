@@ -60,12 +60,3 @@ export const jamLog = (w: string) => new Date(w).toLocaleTimeString('id-ID', { h
 /** Baris rekapitulasi/pemisah ditebalkan. */
 export const barisTebal = (p: string) =>
 	/^(─|═|-{3,})|REKAPITULASI|Total metode diuji/.test(p.trim());
-
-/** Teks log polos untuk diunduh/disalin. */
-export const teksLog = (log: LogScan[]) =>
-	log
-		.filter((l) => l.pesan)
-		.map(
-			(l) => `${new Date(l.waktu).toISOString()} ${LABEL_LEVEL[l.level].label.padEnd(5)} ${l.pesan}`
-		)
-		.join('\n');

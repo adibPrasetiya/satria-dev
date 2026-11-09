@@ -113,7 +113,10 @@
 		{/if}
 	</div>
 
-	<AdeganTahap tahap={tahapKini?.tahap ?? (berjalan ? 'situs' : null)} pesan={tahapKini?.pesan} jalur={jalurRecon} docs={docs ?? null} {riwayat} {tepi} />
+	<!-- Kartu tahap hanya relevan saat penemuan berlangsung; tampilan riwayat (polos + selesai) cukup grafnya. -->
+	{#if !(polos && !berjalan)}
+		<AdeganTahap tahap={tahapKini?.tahap ?? (berjalan ? 'situs' : null)} pesan={tahapKini?.pesan} jalur={jalurRecon} docs={docs ?? null} {riwayat} {tepi} />
+	{/if}
 
 	<!-- Legenda entitas & tautan -->
 	<div style:max-width="calc(100% - {tepi.kanan}px - 4rem)" style:bottom="{(tepi.bawah ?? 0) + 12}px" class="pointer-events-none absolute left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-white/5 bg-[#0c1014]/85 px-2 py-1 font-mono text-[9px] text-white/55">
