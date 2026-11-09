@@ -2,6 +2,7 @@ import { AppError } from '../../utils/AppError.js';
 import { audit } from '../../utils/audit.js';
 import { isDuplicateEntry } from '../../utils/dbErrors.js';
 import { unitsRepository } from '../units/units.repository.js';
+import { verdictService } from '../scans/verdict.service.js';
 import { applicationsRepository } from './applications.repository.js';
 
 /** Bentuk aset yang dikirim ke frontend (field dasar tipe `Aplikasi` di frontend). */
@@ -26,6 +27,27 @@ const toApplicationDto = (a) => ({
   dibuat_pada: a.createdAt,
   diubah_pada: a.updatedAt,
 });
+
+/** Ringkasan pengujian terakhir untuk baris daftar aplikasi. */
+const toTestSummary = (r) => {
+  const selesai = r.finishedScanId && r.verdict;
+  return {
+    scan_terakhir_pada: r.lastScanAt ?? null,
+    berjalan: Boolean(Number(r.running)),
+    scan_selesai_id: r.finishedScanId ? String(r.finishedScanId) : null,
+    selesai_pada: r.finishedAt ?? null,
+    putusan: selesai ? r.verdict : null,
+    skor: selesai ? Number(r.score) : null,
+    temuan: selesai
+      ? {
+          kritis: Number(r.findingsCritical ?? 0),
+          tinggi: Number(r.findingsHigh ?? 0),
+          sedang: Number(r.findingsMedium ?? 0),
+          rendah: Number(r.findingsLow ?? 0),
+        }
+      : null,
+  };
+};
 
 const FIELD_COLUMNS = {
   nama: 'name',
@@ -60,6 +82,8 @@ export function createApplicationsService({
   repository = applicationsRepository,
   units = unitsRepository,
   auditor = audit,
+  // Pelengkap ringkasan penilaian scan lama (scans/verdict.service). Bawaan no-op agar tes tidak butuh DB.
+  penilai = { lengkapiYangKosong: async () => 0 },
 } = {}) {
   /** Aset di luar cakupan dijawab 404 (bukan 403) agar keberadaannya tidak bocor. */
   async function findVisible(actor, id) {
@@ -88,13 +112,34 @@ export function createApplicationsService({
   }
 
   return {
-    async list(actor, { page, limit, search }) {
+    /**
+     * Daftar aplikasi berhalaman (filter, urut, paginasi di DB) beserta ringkasan pengujian terakhir.
+     * `ringkasan: true` menambahkan jumlah per putusan & opsi satuan ke `meta`.
+     */
+    async list(actor, { page, limit, search, lingkungan, klasifikasi, satuan_id, putusan, sort, order, ringkasan }) {
       const unitId = seesAll(actor) ? undefined : Number(actor.satuan_id);
-      const { rows, total } = await repository.list({ offset: (page - 1) * limit, limit, search, unitId });
-      return {
-        items: rows.map(toApplicationDto),
-        meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
-      };
+      // Scan lama (sebelum ringkasan disimpan) dilengkapi dulu agar filter putusan/urut skor akurat.
+      await penilai.lengkapiYangKosong();
+
+      const filters = { unitId, search, lingkungan, klasifikasi, satuanId: satuan_id, putusan };
+      const [{ rows, total }, perPutusan, satuan] = await Promise.all([
+        repository.list({ ...filters, offset: (page - 1) * limit, limit, sort, order }),
+        ringkasan ? repository.countByVerdict(filters) : null,
+        ringkasan ? repository.unitsWithApplications({ unitId }) : null,
+      ]);
+
+      const meta = { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)), sort, order };
+      if (ringkasan) {
+        const jumlah = { semua: 0, laik: 0, laik_bersyarat: 0, tidak_laik: 0, belum: 0 };
+        for (const r of perPutusan) {
+          const n = Number(r.n);
+          jumlah.semua += n;
+          if (r.putusan in jumlah) jumlah[r.putusan] += n;
+        }
+        meta.ringkasan = jumlah;
+        meta.opsi_satuan = satuan.map((u) => ({ id: String(u.id), nama: u.name, jumlah: Number(u.n) }));
+      }
+      return { items: rows.map((r) => ({ ...toApplicationDto(r), pengujian: toTestSummary(r) })), meta };
     },
 
     async get(actor, id) {
@@ -128,4 +173,4 @@ export function createApplicationsService({
   };
 }
 
-export const applicationsService = createApplicationsService();
+export const applicationsService = createApplicationsService({ penilai: verdictService });

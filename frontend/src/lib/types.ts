@@ -245,6 +245,57 @@ export type AsetBaru = Pick<
 	satuan_id?: string;
 };
 
+/** Jumlah temuan (metode uji GAGAL) per severity; info tidak dihitung. */
+export interface TemuanSeverity {
+	kritis: number;
+	tinggi: number;
+	sedang: number;
+	rendah: number;
+}
+
+/** Ringkasan pengujian terakhir sebuah aplikasi (dihitung backend saat scan selesai). */
+export interface RingkasanPengujian {
+	/** Waktu mulai scan terakhir (apa pun statusnya). */
+	scan_terakhir_pada: string | null;
+	berjalan: boolean;
+	/** Scan SELESAI terakhir — sumber putusan, skor, & temuan. */
+	scan_selesai_id: string | null;
+	selesai_pada: string | null;
+	putusan: Putusan | null;
+	skor: number | null;
+	temuan: TemuanSeverity | null;
+}
+
+export type BarisAplikasi = Aplikasi & { pengujian: RingkasanPengujian };
+
+export type UrutAplikasi = 'nama' | 'satuan' | 'lingkungan' | 'klasifikasi' | 'skor' | 'temuan' | 'uji' | 'dibuat';
+export type FilterPutusan = Putusan | 'belum';
+
+export interface FilterAplikasi {
+	page?: number;
+	limit?: 10 | 25 | 50 | 100;
+	search?: string;
+	lingkungan?: Lingkungan | '';
+	klasifikasi?: KlasifikasiData | '';
+	satuan_id?: string;
+	putusan?: FilterPutusan | '';
+	sort?: UrutAplikasi;
+	order?: 'asc' | 'desc';
+	/** Sertakan jumlah per putusan & opsi satuan. */
+	ringkasan?: boolean;
+}
+
+export interface HalamanAplikasi {
+	items: BarisAplikasi[];
+	page: number;
+	limit: number;
+	total: number;
+	totalPages: number;
+	/** Jumlah per putusan dengan filter lain tetap berlaku (hanya bila `ringkasan`). */
+	ringkasan?: Record<'semua' | FilterPutusan, number>;
+	opsi_satuan?: { id: string; nama: string; jumlah: number }[];
+}
+
 // ---------------------------------------------------------------------------
 // Scan & hasil
 

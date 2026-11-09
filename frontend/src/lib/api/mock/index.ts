@@ -1,6 +1,6 @@
 // Implementasi Api tiruan: state di memori + localStorage, scan disimulasikan dengan timer.
 import { urutanPenemuan } from './penemuan.js';
-import { indeksMetode, katalog, LABEL_ENGINE, LABEL_STATUS, semuaMetode, penerapanMetode } from '#lib/catalog.js';
+import { indeksMetode, katalog, LABEL_ENGINE, LABEL_STATUS, nilaiKelaikan, semuaMetode, penerapanMetode } from '#lib/catalog.js';
 import type { Api } from '#lib/api/types.js';
 import { USE_MOCK } from '#lib/api/mode.js';
 import { bagianUjiKosong } from '#lib/api/aset.js';
@@ -8,7 +8,9 @@ import type {
 	AntreanScan,
 	AkunPersiapan,
 	Aplikasi,
+	BarisAplikasi,
 	EventScan,
+	HalamanAplikasi,
 	HasilMetode,
 	Kontrol,
 	LogScan,
@@ -469,6 +471,125 @@ export const mockApi: Api = {
 		await jeda();
 		const u = state.pengguna.find((x) => x.id === sesiId);
 		return salin(u?.peran === 'pemilik' ? state.aplikasi.filter((a) => a.satuan === u.satuan) : state.aplikasi);
+	},
+
+	async cariAplikasi({
+		page = 1,
+		limit = 25,
+		search = '',
+		lingkungan = '',
+		klasifikasi = '',
+		satuan_id = '',
+		putusan = '',
+		sort = 'dibuat',
+		order = 'desc',
+		ringkasan = false
+	}) {
+		await jeda();
+		const u = state.pengguna.find((x) => x.id === sesiId);
+		const cakupan =
+			u?.peran === 'pemilik' ? state.aplikasi.filter((a) => a.satuan === u.satuan) : state.aplikasi;
+		const idSatuan = (a: Aplikasi) => a.satuan_id ?? a.satuan;
+
+		// Ringkasan pengujian seperti yang dihitung backend saat scan selesai.
+		const baris: BarisAplikasi[] = cakupan.map((app) => {
+			const milik = state.scan
+				.filter((s) => s.aplikasi_id === app.id)
+				.sort((a, b) => b.dimulai_pada.localeCompare(a.dimulai_pada));
+			const selesai = milik.find((s) => s.status === 'selesai');
+			const n = selesai ? nilaiKelaikan(selesai.hasil) : null;
+			const temuan = { kritis: 0, tinggi: 0, sedang: 0, rendah: 0 };
+			for (const h of Object.values(selesai?.hasil ?? {})) {
+				const sev = indeksMetode.get(h.metode_id)?.metode.severity;
+				if (h.status === 'gagal' && sev && sev in temuan) temuan[sev as keyof typeof temuan]++;
+			}
+			return {
+				...salin(app),
+				pengujian: {
+					scan_terakhir_pada: milik[0]?.dimulai_pada ?? null,
+					berjalan: milik.some((s) => s.status === 'berjalan'),
+					scan_selesai_id: selesai?.id ?? null,
+					selesai_pada: selesai?.selesai_pada ?? null,
+					putusan: n?.putusan ?? null,
+					skor: n?.skor ?? null,
+					temuan: n ? temuan : null
+				}
+			};
+		});
+
+		const q = search.trim().toLowerCase();
+		const cocokTanpaPutusan = baris.filter(
+			(a) =>
+				(!q ||
+					[a.nama, a.satuan, a.url_dasar, a.pic_nama].some((s) => s?.toLowerCase().includes(q))) &&
+				(!lingkungan || a.lingkungan === lingkungan) &&
+				(!klasifikasi || a.klasifikasi_data === klasifikasi) &&
+				(!satuan_id || idSatuan(a) === satuan_id)
+		);
+		const status = (a: BarisAplikasi) => a.pengujian.putusan ?? 'belum';
+		const cocok = cocokTanpaPutusan.filter((a) => !putusan || status(a) === putusan);
+
+		const URUT_KLAS = { biasa: 0, terbatas: 1, rahasia: 2 };
+		const URUT_LING = { produksi: 0, staging: 1, pengembangan: 2 };
+		const kunci = (a: BarisAplikasi): (string | number)[] | null => {
+			const t = a.pengujian.temuan;
+			switch (sort) {
+				case 'nama':
+					return [a.nama.toLowerCase()];
+				case 'satuan':
+					return [a.satuan.toLowerCase(), a.nama.toLowerCase()];
+				case 'lingkungan':
+					return [URUT_LING[a.lingkungan]];
+				case 'klasifikasi':
+					return [URUT_KLAS[a.klasifikasi_data]];
+				case 'skor':
+					return a.pengujian.skor === null ? null : [a.pengujian.skor];
+				case 'temuan':
+					return t ? [t.kritis, t.tinggi, t.sedang, t.rendah] : null;
+				case 'uji':
+					return a.pengujian.scan_terakhir_pada ? [a.pengujian.scan_terakhir_pada] : null;
+				default:
+					return [a.dibuat_pada];
+			}
+		};
+		const k = order === 'asc' ? 1 : -1;
+		cocok.sort((x, y) => {
+			const a = kunci(x);
+			const b = kunci(y);
+			if (!a || !b) return a === b ? 0 : a ? -1 : 1; // kosong di akhir
+			for (let i = 0; i < a.length; i++) {
+				const d =
+					typeof a[i] === 'number'
+						? (a[i] as number) - (b[i] as number)
+						: String(a[i]).localeCompare(String(b[i]));
+				if (d) return d * k;
+			}
+			return 0;
+		});
+
+		const hasil: HalamanAplikasi = {
+			items: cocok.slice((page - 1) * limit, page * limit),
+			page,
+			limit,
+			total: cocok.length,
+			totalPages: Math.max(1, Math.ceil(cocok.length / limit))
+		};
+		if (ringkasan) {
+			const j = { semua: 0, laik: 0, laik_bersyarat: 0, tidak_laik: 0, belum: 0 };
+			for (const a of cocokTanpaPutusan) {
+				j.semua++;
+				j[status(a)]++;
+			}
+			const perSatuan = new Map<string, { id: string; nama: string; jumlah: number }>();
+			for (const a of cakupan) {
+				const s = perSatuan.get(idSatuan(a)) ?? { id: idSatuan(a), nama: a.satuan, jumlah: 0 };
+				s.jumlah++;
+				perSatuan.set(s.id, s);
+			}
+			hasil.ringkasan = j;
+			hasil.opsi_satuan = [...perSatuan.values()].sort((a, b) => a.nama.localeCompare(b.nama));
+		}
+		return hasil;
 	},
 
 	async getAplikasi(id) {

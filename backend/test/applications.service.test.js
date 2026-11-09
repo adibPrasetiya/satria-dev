@@ -6,7 +6,7 @@ process.env.DATABASE_URL = 'mysql://test:test@localhost:3306/test';
 process.env.JWT_ACCESS_SECRET = 'test-secret-yang-panjangnya-lebih-dari-32-karakter';
 
 const { createApplicationsService } = await import('../src/features/applications/applications.service.js');
-const { createApplicationSchema, updateApplicationSchema } = await import('../src/features/applications/applications.validation.js');
+const { createApplicationSchema, listApplicationsSchema, updateApplicationSchema } = await import('../src/features/applications/applications.validation.js');
 const { pool } = await import('../src/db/index.js');
 
 after(() => pool.end());
@@ -108,6 +108,59 @@ describe('applications.service', () => {
     await service.update(pemilikA, '1', { nama: 'SIPERS v2' });
     assert.equal(events.length, 1, 'tanpa perubahan tidak ada audit');
     assert.equal((await service.update(admin, '1', { satuan_id: 2 })).satuan_id, '2');
+  });
+
+  it('daftar: filter diteruskan ke repository; ringkasan pengujian & facet di meta', async () => {
+    let diterima;
+    const svc = createApplicationsService({
+      penilai: { lengkapiYangKosong: async () => (diterima = { ...diterima, dilengkapi: true }) },
+      repository: {
+        list: async (args) => {
+          diterima = { ...diterima, args };
+          return {
+            total: 2,
+            rows: [
+              { id: 1, name: 'A', unitId: 1, unit: 'Satuan A', lastScanAt: NOW, running: 0, finishedScanId: 9,
+                finishedAt: NOW, verdict: 'tidak_laik', score: 60, findingsCritical: 1, findingsHigh: 2,
+                findingsMedium: 0, findingsLow: 3 },
+              { id: 2, name: 'B', unitId: 1, unit: 'Satuan A', lastScanAt: NOW, running: 1, finishedScanId: null },
+            ],
+          };
+        },
+        countByVerdict: async () => [
+          { putusan: 'tidak_laik', n: 1 },
+          { putusan: 'belum', n: 4 },
+        ],
+        unitsWithApplications: async ({ unitId }) => [{ id: unitId, name: 'Satuan A', n: 5 }],
+      },
+    });
+    const hasil = await svc.list(pemilikA, {
+      page: 2, limit: 10, search: 'x', putusan: 'tidak_laik', satuan_id: 1, sort: 'temuan', order: 'desc', ringkasan: true,
+    });
+    assert.equal(diterima.dilengkapi, true);
+    assert.deepEqual(diterima.args, {
+      unitId: 1, search: 'x', lingkungan: undefined, klasifikasi: undefined, satuanId: 1, putusan: 'tidak_laik',
+      offset: 10, limit: 10, sort: 'temuan', order: 'desc',
+    });
+    assert.deepEqual(hasil.items[0].pengujian.temuan, { kritis: 1, tinggi: 2, sedang: 0, rendah: 3 });
+    assert.equal(hasil.items[0].pengujian.putusan, 'tidak_laik');
+    assert.deepEqual(hasil.items[1].pengujian, {
+      scan_terakhir_pada: NOW, berjalan: true, scan_selesai_id: null, selesai_pada: null, putusan: null, skor: null, temuan: null,
+    });
+    assert.deepEqual(hasil.meta.ringkasan, { semua: 5, laik: 0, laik_bersyarat: 0, tidak_laik: 1, belum: 4 });
+    assert.deepEqual(hasil.meta.opsi_satuan, [{ id: '1', nama: 'Satuan A', jumlah: 5 }]);
+    assert.equal(hasil.meta.totalPages, 1);
+  });
+
+  it('skema daftar: kolom urut & putusan di-whitelist; nilai kosong diabaikan', () => {
+    const ok = listApplicationsSchema.validate({ putusan: '', lingkungan: '', sort: 'skor', ringkasan: 'true' });
+    assert.ifError(ok.error);
+    assert.equal(ok.value.putusan, undefined);
+    assert.equal(ok.value.ringkasan, true);
+    assert.equal(ok.value.order, 'desc');
+    assert.ok(listApplicationsSchema.validate({ sort: 'a.id; DROP TABLE x' }).error);
+    assert.ok(listApplicationsSchema.validate({ putusan: 'hampir' }).error);
+    assert.ok(listApplicationsSchema.validate({ limit: 1000 }).error);
   });
 
   it('skema: URL harus http(s) dan garis miring akhir dibuang; ubah butuh minimal satu field', () => {

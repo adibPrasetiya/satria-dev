@@ -2,6 +2,8 @@ import type {
 	StatusWorker,
 	Aplikasi,
 	AsetBaru,
+	FilterAplikasi,
+	HalamanAplikasi,
 	Bukti,
 	EventScan,
 	IzinIntrusif,
@@ -95,6 +97,8 @@ export interface Api {
 	ubahMetode(kode: string, data: Partial<MetodeBaru> & { aktif?: boolean }): Promise<Metode>;
 
 	listAplikasi(): Promise<Aplikasi[]>;
+	/** Daftar aplikasi berhalaman (filter, urut, paginasi di server) beserta ringkasan pengujian terakhir. */
+	cariAplikasi(filter: FilterAplikasi): Promise<HalamanAplikasi>;
 	getAplikasi(id: string): Promise<Aplikasi>;
 	/** Registrasi aset (data dasar saja). Galat 409 bila URL dasar sudah terdaftar. */
 	buatAplikasi(data: AsetBaru): Promise<Aplikasi>;

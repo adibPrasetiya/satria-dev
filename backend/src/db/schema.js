@@ -255,6 +255,7 @@ export const catalogMethods = mysqlTable(
 export const SCAN_STATUSES = ['antre', 'berjalan', 'selesai', 'dibatalkan'];
 export const TASK_STATUSES = ['antre', 'berjalan', 'selesai'];
 export const LOG_LEVELS = ['info', 'peringatan', 'galat'];
+export const VERDICTS = ['laik', 'laik_bersyarat', 'tidak_laik'];
 
 // Persiapan pengujian per aplikasi: pemetaan titik uji -> URL nyata & template form.
 // Dipakai worker untuk tahu endpoint mana yang diuji dan nama field form-nya.
@@ -291,8 +292,20 @@ export const scans = mysqlTable(
     status: mysqlEnum('status', SCAN_STATUSES).notNull().default('berjalan'),
     startedAt: datetime('started_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     finishedAt: datetime('finished_at'),
+    // Putusan kelaikan & skor kepatuhan (0–100) dihitung saat scan selesai (lihat scans/verdict.js),
+    // agar daftar aplikasi bisa disaring/diurutkan di DB. NULL = belum dihitung / scan belum selesai.
+    verdict: mysqlEnum('verdict', VERDICTS),
+    score: smallint('score', { unsigned: true }),
+    // Jumlah temuan (metode GAGAL) per severity metode; info tidak dihitung (sama dengan laporan).
+    findingsCritical: smallint('findings_critical', { unsigned: true }),
+    findingsHigh: smallint('findings_high', { unsigned: true }),
+    findingsMedium: smallint('findings_medium', { unsigned: true }),
+    findingsLow: smallint('findings_low', { unsigned: true }),
   },
-  (table) => [index('scans_application_id_idx').on(table.applicationId)],
+  (table) => [
+    index('scans_application_id_idx').on(table.applicationId),
+    index('scans_application_status_idx').on(table.applicationId, table.status),
+  ],
 );
 
 // Satu baris per metode pengujian dalam satu scan. Metode manual/tidak-berlaku
