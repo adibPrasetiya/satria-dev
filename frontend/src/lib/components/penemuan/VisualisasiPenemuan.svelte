@@ -16,8 +16,28 @@
 		berjalan,
 		host,
 		terpilih = $bindable(null),
-		tepi = { atas: 0, kanan: 0 }
-	}: { graf: Graf; berjalan: boolean; host: string; terpilih?: string | null; tepi?: { atas: number; kanan: number; bawah?: number } } = $props();
+		tepi = { atas: 0, kanan: 0 },
+		polos = false
+	}: {
+		graf: Graf;
+		berjalan: boolean;
+		host: string;
+		terpilih?: string | null;
+		tepi?: { atas: number; kanan: number; bawah?: number };
+		/** Dipasang di kartu induk yang punya toolbar sendiri: tanpa bingkai, HUD judul, & tombol zoom bawaan. */
+		polos?: boolean;
+	} = $props();
+
+	// Kendali tampilan untuk toolbar induk.
+	let grafEl = $state<ReturnType<typeof GrafPenemuan>>();
+	export const perbesar = () => grafEl?.zoom(1.25);
+	export const perkecil = () => grafEl?.zoom(0.8);
+	export const paskan = () => grafEl?.pas();
+	export const pusatkan = () => grafEl?.pusatkan();
+	export function aturUlang() {
+		terpilih = null;
+		grafEl?.pas();
+	}
 
 	const MIN_MS: Partial<Record<KodeTahap, number>> = { situs: 1600, recon: 2000 };
 	const MIN_DEFAULT = 1200;
@@ -71,13 +91,14 @@
 	];
 </script>
 
-<div class={cn('relative h-full w-full overflow-hidden bg-[#0c1014]', !(tepi.atas > 0) && 'sudut-taktis rounded-lg border border-[#9fe08a]/20')}>
+<div class={cn('relative h-full w-full overflow-hidden bg-[#0c1014]', !(tepi.atas > 0) && !polos && 'sudut-taktis rounded-lg border border-[#9fe08a]/20')}>
 	<div class="absolute inset-0">
-		<GrafPenemuan {graf} {berjalan} {terpilih} {tepi} onpilih={(id) => (terpilih = id)} />
+		<GrafPenemuan bind:this={grafEl} {graf} {berjalan} {terpilih} {tepi} kontrol={!polos} onpilih={(id) => (terpilih = id)} />
 	</div>
 
 	<!-- HUD atas -->
-	<div class="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-4" style:top="{tepi.atas}px" style:right="{tepi.kanan}px">
+	<div
+		class:hidden={polos} class="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-4" style:top="{tepi.atas}px" style:right="{tepi.kanan}px">
 		<div class="min-w-0">
 			<p class="flex items-center gap-1.5 font-heading text-[11px] tracking-[0.25em] text-[#9fe08a] uppercase">
 				{#if berjalan && !graf.selesai}<span class="size-1.5 animate-pulse rounded-full bg-[#9fe08a] shadow-[0_0_6px_#9fe08a]"></span>{/if}

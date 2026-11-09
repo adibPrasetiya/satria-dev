@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
 	import { api } from '#lib/api/client.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { relatif } from '#lib/format.js';
@@ -65,6 +66,19 @@
 	function bukaAset(id: string) {
 		dipilih = id;
 		dlgTindakan = true;
+	}
+
+	// Riwayat pengujian → halaman operasi pengujian terakhir (riwayat lain dipilih di sana);
+	// aplikasi yang belum pernah diuji → berkas aplikasi.
+	async function bukaRiwayat(id: string) {
+		try {
+			const [terakhir] = await api.listScan(id);
+			if (terakhir) return goto(`/scan/${terakhir.id}`);
+			toast.info('Aplikasi ini belum pernah diuji.');
+		} catch {
+			/* gagal memuat riwayat → tampilkan berkas aplikasi */
+		}
+		goto(`/aplikasi/${id}`);
 	}
 
 	// Pencarian dikirim setelah pengguna berhenti mengetik.
@@ -571,7 +585,7 @@
 
 <DialogPilihTindakan
 	bind:open={dlgTindakan}
-	onlihatRiwayat={() => dipilih && goto(`/aplikasi/${dipilih}`)}
+	onlihatRiwayat={() => dipilih && bukaRiwayat(dipilih)}
 	onpengujian={() => (dlgMetode = true)}
 />
 <DialogPilihMetode
