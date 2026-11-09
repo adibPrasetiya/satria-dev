@@ -715,6 +715,7 @@ export const mockApi: Api = {
 			aplikasi_id: aplikasiId,
 			profil: app.izin_intrusif.status === 'disetujui' ? app.profil_pengujian : 'aman',
 			mode,
+			pendekatan: opsi?.pendekatan ?? 'greybox',
 			status: 'berjalan',
 			dimulai_pada: sekarang(),
 			hasil,

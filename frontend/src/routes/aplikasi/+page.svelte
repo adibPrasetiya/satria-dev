@@ -576,5 +576,5 @@
 />
 <DialogPilihMetode
 	bind:open={dlgMetode}
-	onotomatis={() => dipilih && goto(`/aplikasi/${dipilih}/pengujian/otomatis`)}
+	onpilih={(p) => dipilih && goto(`/aplikasi/${dipilih}/pengujian/otomatis?pendekatan=${p}`)}
 />

@@ -92,6 +92,13 @@
       "when": 1793180000000,
       "tag": "0012_scans_putusan",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1793240000000,
+      "tag": "0013_scans_pendekatan",
+      "breakpoints": true
     }
   ]
 }

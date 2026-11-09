@@ -255,6 +255,7 @@ export const httpApi: Api = {
 			method: 'POST',
 			json: {
 				mode: opsi?.mode ?? 'terarah',
+				...(opsi?.pendekatan ? { pendekatan: opsi.pendekatan } : {}),
 				...(opsi?.persetujuan ? { persetujuan: true } : {}),
 				...(opsi?.accounts ? { accounts: opsi.accounts } : {}),
 				...(opsi?.options ? { options: opsi.options } : {}),

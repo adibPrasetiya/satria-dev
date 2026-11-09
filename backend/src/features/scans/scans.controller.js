@@ -16,6 +16,7 @@ export const scansController = {
   async mulai(req, res) {
     const data = await scansService.mulai(req.user, req.params.id, {
       mode: req.body?.mode,
+      pendekatan: req.body?.pendekatan,
       accounts: req.body?.accounts,
       options: req.body?.options,
       pakaiDiscovery: req.body?.pakai_discovery === true,

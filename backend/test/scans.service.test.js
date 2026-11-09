@@ -45,9 +45,9 @@ function fakeRepo(initial = {}) {
       const control = { parameters: { panjang_minimum: 8, wajib: ['huruf_besar'] } };
       return { items: METODE.map((method) => ({ control, method })) };
     },
-    async createScan({ applicationId, profile, mode = 'terarah' }) {
+    async createScan({ applicationId, profile, mode = 'terarah', approach = 'greybox' }) {
       const id = ++state.seq;
-      state.scans.push({ id, applicationId, profile, mode, status: 'berjalan', startedAt: new Date(), finishedAt: null });
+      state.scans.push({ id, applicationId, profile, mode, approach, status: 'berjalan', startedAt: new Date(), finishedAt: null });
       return id;
     },
     async countTestTasks(scanId) {
@@ -198,6 +198,37 @@ describe('scans.service', () => {
     assert.equal(scan.status, 'berjalan');
     assert.equal(repo2._state.tasks.length, 1);
     assert.equal(repo2._state.tasks[0].engine, 'discovery');
+  });
+
+  it('black box: akun tidak disimpan, scan bertanda blackbox; terarah & pakai discovery ditolak', async () => {
+    const repo2 = fakeRepo();
+    let disimpan = null;
+    repo2.mergeAccounts = async (_id, data) => (disimpan = data);
+    const svc = createScansService({ repository: repo2, applications: fakeApps(), events: { siarkan() {} }, auditor() {} });
+    const scan = await svc.mulai(pemilikA, '1', {
+      mode: 'eksploratif',
+      pendekatan: 'blackbox',
+      accounts: { daftar: [{ username: 'a', password: 'b' }] },
+      options: { izinkan_penguncian: false },
+    });
+    assert.equal(scan.pendekatan, 'blackbox');
+    assert.equal(repo2._state.scans.at(-1).approach, 'blackbox');
+    assert.equal(disimpan.accounts, null, 'akun dari klien diabaikan');
+    assert.ok(repo2._state.logs.some((l) => /black box/.test(l.message)));
+    await assert.rejects(svc.mulai(pemilikA, '1', { mode: 'terarah', pendekatan: 'blackbox' }), { statusCode: 400 });
+  });
+
+  it('black box memakai ulang penemuan hanya bila penemuan itu tanpa login; tak butuh akun tersimpan', async () => {
+    const opsi = { mode: 'eksploratif', pendekatan: 'blackbox', pakaiDiscovery: true };
+    repo._state.targets.set(1, { ...targetRegistrasi[0][1], accounts: null, discovery: { terautentikasi: true } });
+    await assert.rejects(service.mulai(pemilikA, '1', opsi), { statusCode: 400 });
+
+    repo._state.targets.set(1, { ...targetRegistrasi[0][1], accounts: null, discovery: { terautentikasi: false } });
+    const scan = await service.mulai(pemilikA, '1', opsi);
+    assert.equal(scan.pendekatan, 'blackbox');
+    const tasks = repo._state.tasks.filter((t) => t.scanId === Number(scan.id));
+    assert.equal(tasks.some((t) => t.engine === 'discovery'), false);
+    assert.ok(tasks.length > 0);
   });
 
   it('seedPhase2 menyemai task pengujian setelah penemuan & idempoten', async () => {

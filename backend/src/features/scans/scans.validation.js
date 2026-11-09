@@ -38,6 +38,11 @@ export const mulaiScanSchema = Joi.object({
     then: Joi.valid(true).required().messages({ 'any.only': 'Persetujuan pemindaian aktif wajib untuk mode eksploratif' }),
     otherwise: Joi.optional(),
   }),
+  // Grey box: memakai akun uji terbatas. Black box: tanpa akun (akun tersimpan pun tidak dipakai).
+  pendekatan: Joi.string()
+    .valid('greybox', 'blackbox')
+    .default('greybox')
+    .messages({ 'any.only': 'Pendekatan pengujian tidak valid' }),
   accounts: daftarAkun.optional(),
   options: opsiUji.optional(),
   // Uji ulang: pakai hasil penemuan tersimpan (lewati fase penemuan).

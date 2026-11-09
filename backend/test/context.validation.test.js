@@ -32,6 +32,12 @@ describe('buildContext → buildAkunUji', () => {
     assert.equal(ctx.akun_uji[1].totp_secret, null);
   });
 
+  it('scan black box tidak membawa akun uji walau akun tersimpan', () => {
+    const target = { accounts: { daftar: [{ username: 'admin', password: 'Admin@123' }] } };
+    assert.deepEqual(buildContext({ scan: { id: 8, approach: 'blackbox' }, application, target }).akun_uji, []);
+    assert.equal(buildContext({ scan: { id: 8, approach: 'greybox' }, application, target }).akun_uji.length, 1);
+  });
+
   it('tetap mendukung bentuk lama { utama, penguncian }', () => {
     const target = {
       accounts: {
