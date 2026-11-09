@@ -54,7 +54,22 @@ class Auth {
 	punya(...peran: Peran[]) {
 		return !!this.pengguna && peran.includes(this.pengguna.peran);
 	}
+
+	// Matriks hak akses (selaras dengan requireRole di backend):
+	// - pemilik : mendaftarkan/mengubah aplikasi satuannya & melihat hasil pengujian.
+	// - asesor  : melakukan pengujian (persiapan, mulai, hentikan) — tanpa mendaftarkan aplikasi.
+	// - admin   : semua akses. Peta/dasbor terbuka untuk semua peran.
+	get bisaMendaftarkan() {
+		return this.punya(...PERAN_PENDAFTAR);
+	}
+
+	get bisaMenguji() {
+		return this.punya(...PERAN_PENGUJI);
+	}
 }
+
+export const PERAN_PENDAFTAR: Peran[] = ['pemilik', 'admin'];
+export const PERAN_PENGUJI: Peran[] = ['asesor', 'admin'];
 
 export const auth = new Auth();
 

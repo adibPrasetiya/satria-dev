@@ -259,7 +259,7 @@
 		!!scan &&
 			!!app &&
 			scan.status === 'berjalan' &&
-			(auth.pengguna?.id === app.pemilik_id || auth.punya('admin'))
+			auth.bisaMenguji
 	);
 
 	const LABEL_STATUS_SCAN = {

@@ -13,6 +13,11 @@ import { verdictService } from './verdict.service.js';
 const FUNGSI = ['AUTH', 'SESS', 'ACCS', 'INPV', 'COMM', 'APIS', 'ERRL', 'DATA', 'FILE', 'CONF', 'CRYP', 'MALC', 'BLOG'];
 
 const seesAll = (actor) => actor.peran === 'asesor' || actor.peran === 'admin';
+// Menjalankan/menyiapkan/menghentikan pengujian: asesor & admin. Pemilik hanya melihat hasil.
+const bisaMenguji = (actor) => actor?.peran === 'asesor' || actor?.peran === 'admin';
+function wajibPenguji(actor) {
+  if (!bisaMenguji(actor)) throw AppError.forbidden('Pengujian hanya dapat dilakukan oleh asesor atau administrator');
+}
 
 /** Hasil per metode untuk DTO: task selesai -> result tersimpan; selain itu status antre/berjalan. */
 function taskToHasil(task) {
@@ -241,6 +246,7 @@ export function createScansService({
     appId,
     { mode = 'terarah', pendekatan = 'greybox', accounts = null, options = null, pakaiDiscovery = false, versiSk = null } = {},
   ) {
+    wajibPenguji(actor);
     const app = await findVisibleApp(actor, appId);
     // Black box memakai alur eksploratif yang sama dengan grey box, hanya tanpa akun uji
     // (terarah memakai persiapan + akun yang diisi pengguna, jadi tidak berlaku untuk black box).
@@ -369,6 +375,7 @@ export function createScansService({
   }
 
   async function batalkan(actor, scanId) {
+    wajibPenguji(actor);
     const scan = await repository.findScanById(Number(scanId));
     if (!scan) throw AppError.notFound('Pengujian tidak ditemukan');
     await findVisibleApp(actor, scan.applicationId);
@@ -385,8 +392,8 @@ export function createScansService({
   }
 
   async function simpanTarget(actor, appId, data) {
+    wajibPenguji(actor);
     const app = await findVisibleApp(actor, appId);
-    if (!seesAll(actor) && actor.peran !== 'pemilik') throw AppError.forbidden('Anda tidak memiliki akses ke fitur ini');
     const target = await repository.upsertTarget(app.id, {
       testPoints: data.test_points,
       forms: data.forms,
@@ -404,8 +411,8 @@ export function createScansService({
 
   /** Persiapan tersimpan untuk uji ulang: akun (tanpa sandi/seed) + ringkasan penemuan terakhir. */
   async function getTarget(actor, appId) {
+    wajibPenguji(actor);
     const app = await findVisibleApp(actor, appId);
-    if (!seesAll(actor) && actor.peran !== 'pemilik') throw AppError.forbidden('Anda tidak memiliki akses ke fitur ini');
     const target = await repository.getTarget(app.id);
     return {
       aplikasi_id: String(app.id),

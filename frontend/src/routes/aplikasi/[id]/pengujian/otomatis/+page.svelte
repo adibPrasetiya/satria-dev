@@ -96,12 +96,8 @@
 	const akunValid = $derived(blackbox || pakaiAkunTersimpan || akunTerisi.length >= 2);
 	const pakaiPenemuanTerakhir = $derived(penemuanBisaDipakai && sumberPenemuan === 'terakhir');
 
-	const bisaUbah = $derived(
-		!!app &&
-			(auth.punya('admin') ||
-				(auth.punya('pemilik') &&
-					(app.satuan_id ? app.satuan_id === auth.pengguna?.satuan_id : app.pemilik_id === auth.pengguna?.id)))
-	);
+	// Pengujian dilakukan asesor/admin; pemilik hanya melihat hasil.
+	const bisaUji = $derived(!!app && auth.bisaMenguji);
 	$effect(() => {
 		const aid = id;
 		api.listScan(aid)
@@ -236,8 +232,8 @@
 	<Kosong judul="Aplikasi tidak ditemukan" pesan={galat}><Button href="/aplikasi" variant="outline">Kembali</Button></Kosong>
 {:else if !app}
 	<Memuat />
-{:else if !bisaUbah}
-	<Kosong judul="Tidak berwenang" pesan="Hanya pemilik aset atau admin yang dapat memulai pengujian.">
+{:else if !bisaUji}
+	<Kosong judul="Tidak berwenang" pesan="Hanya asesor atau administrator yang dapat melakukan pengujian.">
 		<Button href="/aplikasi/{app.id}" variant="outline">Kembali ke aset</Button>
 	</Kosong>
 {:else}
