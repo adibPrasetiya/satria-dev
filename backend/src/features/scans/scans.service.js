@@ -239,7 +239,7 @@ export function createScansService({
   async function mulai(
     actor,
     appId,
-    { mode = 'terarah', pendekatan = 'greybox', accounts = null, options = null, pakaiDiscovery = false } = {},
+    { mode = 'terarah', pendekatan = 'greybox', accounts = null, options = null, pakaiDiscovery = false, versiSk = null } = {},
   ) {
     const app = await findVisibleApp(actor, appId);
     // Black box memakai alur eksploratif yang sama dengan grey box, hanya tanpa akun uji
@@ -287,6 +287,12 @@ export function createScansService({
         // Pakai ulang penemuan: rujuk scan yang menjalankan recon tersebut (data recon tidak disalin).
         reconScanId: pakaiDiscovery ? Number(tersimpan.discovery.scan_id) || null : null,
       });
+      // Jejak persetujuan Syarat & Ketentuan (identitas pengguna + waktu log tercatat di log pengujian).
+      await repository.insertLog(
+        scanId,
+        'info',
+        `Syarat & Ketentuan pengujian${versiSk ? ` versi ${versiSk}` : ''} disetujui oleh ${actor?.nama ?? 'pengguna'}${actor?.id ? ` (#${actor.id})` : ''}.`,
+      );
       if (pakaiDiscovery) {
         const d = tersimpan.discovery;
         const kapan = d.waktu ? new Date(d.waktu).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : 'tidak diketahui';

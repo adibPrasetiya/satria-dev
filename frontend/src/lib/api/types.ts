@@ -42,6 +42,8 @@ export interface OpsiMulaiScan {
 	options?: Partial<TargetUji['options']>;
 	/** Uji ulang: pakai hasil penemuan tersimpan (lewati fase penemuan). Tanpa `accounts` = pakai akun tersimpan. */
 	pakai_discovery?: boolean;
+	/** Versi dokumen Syarat & Ketentuan yang disetujui pengguna (dicatat di log pengujian). */
+	persetujuan_sk?: string;
 }
 
 /** Persiapan tersimpan untuk uji ulang (GET /apps/:id/scan-target). Sandi & seed TOTP tidak pernah dikembalikan. */

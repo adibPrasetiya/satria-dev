@@ -47,6 +47,8 @@ export const mulaiScanSchema = Joi.object({
   options: opsiUji.optional(),
   // Uji ulang: pakai hasil penemuan tersimpan (lewati fase penemuan).
   pakai_discovery: Joi.boolean().default(false),
+  // Versi dokumen Syarat & Ketentuan yang disetujui (dicatat di log pengujian).
+  persetujuan_sk: Joi.string().trim().max(40),
 });
 
 // Persiapan uji (scan_targets). Bentuk longgar: pemetaan titik uji -> URL & template form.
