@@ -27,6 +27,7 @@
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Box from '@lucide/svelte/icons/box';
+	import FileText from '@lucide/svelte/icons/file-text';
 	import Square from '@lucide/svelte/icons/square';
 	import Network from '@lucide/svelte/icons/network';
 	import ClipboardList from '@lucide/svelte/icons/clipboard-list';
@@ -300,9 +301,21 @@
 				</div>
 			</div>
 
-			<!-- Riwayat pengujian aplikasi (satu-satunya aksi header) -->
-			<div class="lg:shrink-0">
+			<!-- Riwayat pengujian aplikasi + generate laporan untuk riwayat yang dipilih -->
+			<div class="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
 				<PilihRiwayat {scan} {riwayat} />
+				{#if !aktif}
+					<a
+						href="/laporan/{scan.id}"
+						title={scan.ai
+							? 'Buka laporan tersimpan (riwayat terakhir)'
+							: 'Susun laporan dengan AI untuk riwayat pengujian ini'}
+						class="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e0a526] px-4 text-[13.5px] font-semibold whitespace-nowrap text-black transition hover:bg-[#f0b53a]"
+					>
+						<FileText class="size-4" />
+						{scan.ai ? 'Lihat Laporan' : 'Generate Laporan'}
+					</a>
+				{/if}
 			</div>
 		</div>
 
@@ -447,7 +460,7 @@
 					{:else if tabUtama === 'temuan'}
 						<TabTemuan {temuan} berjalan={scan.status === 'berjalan'} onrinci={rinciMetode} />
 					{:else}
-						<TabLaporanSementara {scan} {temuan} />
+						<TabLaporanSementara {scan} {temuan} ondetail={() => (tabUtama = 'temuan')} />
 					{/if}
 				</div>
 			{/if}

@@ -337,12 +337,25 @@ export interface LogScan {
 	data?: DataPenemuan | DataUji;
 }
 
+/** Laporan AI (ringkasan eksekutif + rekomendasi temuan). Hanya disimpan backend untuk riwayat
+ *  pengujian terakhir aplikasi; riwayat lain di-generate ulang tiap dibuka (`disimpan: false`). */
 export interface AnalisisAi {
 	ringkasan_eksekutif: string;
-	rekomendasi: { metode_id: string; judul: string; penjelasan: string; langkah: string[] }[];
+	rekomendasi: {
+		metode_id: string;
+		judul: string;
+		penjelasan: string;
+		langkah: string[];
+		prioritas?: 'segera' | 'tinggi' | 'sedang' | 'rendah';
+		verifikasi?: string;
+	}[];
+	rekomendasi_umum?: string[];
+	provider?: string;
 	model: string;
 	dibuat_pada: string;
 	disamarkan: boolean;
+	/** true = tersimpan di backend (riwayat terakhir). */
+	disimpan?: boolean;
 }
 
 /** Mode pengujian: terarah (data persiapan diisi pengguna) | eksploratif (hanya URL → penemuan otomatis). */

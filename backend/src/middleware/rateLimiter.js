@@ -52,3 +52,11 @@ export const passwordResetLimiter = limiter('reset_sandi', {
   limit: 10,
   message: 'Terlalu banyak permintaan, coba lagi dalam 15 menit',
 });
+
+// Generate laporan AI: tiap panggilan memakan kuota/biaya provider AI. Per pengguna.
+export const laporanAiLimiter = limiter('laporan_ai', {
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  keyGenerator: (req) => `user:${req.user?.id ?? ipKeyGenerator(req.ip)}`,
+  message: 'Terlalu banyak permintaan generate laporan, coba lagi dalam 1 jam',
+});

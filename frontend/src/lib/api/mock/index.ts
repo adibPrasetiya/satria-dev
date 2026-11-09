@@ -833,9 +833,18 @@ export const mockApi: Api = {
 	async analisisAi(scanId) {
 		await jeda(1800);
 		const scan = cariScan(scanId);
-		scan.ai = analisisTiruan(scan.hasil, state.pengaturanAi.model);
-		simpan();
-		return salin(scan);
+		const ai = analisisTiruan(scan.hasil, state.pengaturanAi.model);
+		// Sama dengan backend: hanya riwayat SELESAI terakhir aplikasi yang menyimpan laporan.
+		const terakhir = state.scan
+			.filter((s) => s.aplikasi_id === scan.aplikasi_id && s.status === 'selesai')
+			.sort((a, b) => (b.selesai_pada ?? '').localeCompare(a.selesai_pada ?? ''))[0];
+		const disimpan = scan.status === 'selesai' && terakhir?.id === scan.id;
+		if (disimpan) {
+			for (const s of state.scan) if (s.aplikasi_id === scan.aplikasi_id) delete s.ai;
+			scan.ai = { ...ai, disimpan: true };
+			simpan();
+		}
+		return { ...salin(scan), ai: { ...ai, disimpan } };
 	},
 
 	async listPengguna(filter = {}) {

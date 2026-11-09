@@ -63,6 +63,8 @@ function toScanDto(scan, tasks, logs) {
     dimulai_pada: scan.startedAt,
     ...(scan.finishedAt ? { selesai_pada: scan.finishedAt } : {}),
     hasil: Object.fromEntries(tasks.map((t) => [t.methodCode, taskToHasil(t)])),
+    // Laporan AI tersimpan (hanya ada pada scan selesai terakhir aplikasi).
+    ...(scan.aiAnalysis ? { ai: { ...scan.aiAnalysis, disimpan: true } } : {}),
     log: logs.map((l) => ({ waktu: l.createdAt, level: l.level, pesan: l.message, ...(l.data ? { data: l.data } : {}) })),
   };
 }
@@ -118,6 +120,10 @@ export function createScansService({
     await repository.setScanStatus(scanId, 'selesai', finishedAt);
     // Ringkasan penilaian untuk daftar aplikasi; bila gagal, dilengkapi belakangan (lengkapiYangKosong).
     if (penilai) await penilai.nilaiScan(scanId).catch(() => {});
+    // Hanya laporan riwayat TERAKHIR yang disimpan: laporan pengujian sebelumnya kini usang.
+    if (repository.hapusLaporanLain) {
+      await repository.hapusLaporanLain(scan.applicationId, scanId).catch(() => {});
+    }
 
     // Rekapitulasi akhir ke log operasi agar pengguna melihat ringkasan tanpa membuka laporan.
     await tulisRekap(scanId);

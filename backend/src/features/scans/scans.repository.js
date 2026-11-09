@@ -164,6 +164,14 @@ export const scansRepository = {
     await db.insert(scanLogs).values({ scanId, level, message: message.slice(0, 500), data });
   },
 
+  /** Hapus laporan AI tersimpan pada scan lain aplikasi (hanya riwayat terakhir yang menyimpan laporan). */
+  async hapusLaporanLain(applicationId, kecualiScanId) {
+    await pool.query(
+      'UPDATE scans SET ai_analysis = NULL WHERE application_id = ? AND id <> ? AND ai_analysis IS NOT NULL',
+      [applicationId, kecualiScanId],
+    );
+  },
+
   async setScanStatus(id, status, finishedAt) {
     await db.update(scans).set({ status, ...(finishedAt ? { finishedAt } : {}) }).where(eq(scans.id, id));
   },

@@ -29,6 +29,15 @@ const schema = Joi.object({
   // Worker dianggap aktif bila heartbeat terakhir masih dalam jendela ini.
   WORKER_HEARTBEAT_TIMEOUT_MS: Joi.number().integer().min(5_000).default(45_000),
   WORKER_MAKS_PERCOBAAN: Joi.number().integer().min(1).default(3),
+  // AI penyusun laporan (ringkasan eksekutif + rekomendasi). Nama env sama dengan worker.
+  // AI_PROVIDER: gemini | anthropic | none; kosong = otomatis (gemini dulu, lalu anthropic bila ada kunci).
+  AI_PROVIDER: Joi.string().valid('gemini', 'anthropic', 'none', '').default(''),
+  GEMINI_API_KEY: Joi.string().allow('').default(''),
+  ANTHROPIC_API_KEY: Joi.string().allow('').default(''),
+  // Dipakai bila kunci spesifik provider kosong.
+  AI_API_KEY: Joi.string().allow('').default(''),
+  // Model untuk provider terpilih; kosong = bawaan provider.
+  AI_MODEL: Joi.string().allow('').default(''),
   // Sementara log hanya ke terminal; true = juga tulis file JSON harian di LOG_DIR.
   LOG_TO_FILE: Joi.boolean().default(false),
   LOG_DIR: Joi.string().default('logs'),
@@ -69,6 +78,12 @@ export const env = Object.freeze({
   mail: {
     resendApiKey: value.RESEND_API_KEY,
     from: value.MAIL_FROM,
+  },
+  ai: {
+    provider: value.AI_PROVIDER,
+    geminiKey: value.GEMINI_API_KEY || value.AI_API_KEY,
+    anthropicKey: value.ANTHROPIC_API_KEY || value.AI_API_KEY,
+    model: value.AI_MODEL,
   },
   log: {
     toFile: value.LOG_TO_FILE,

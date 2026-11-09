@@ -20,6 +20,8 @@
     "scan-target:seed": "node scripts/seed-scan-target.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
+    "@google/genai": "^3.0.0",
     "bcryptjs": "^3.0.3",
     "cors": "2.8.6",
     "dotenv": "18.0.6",
