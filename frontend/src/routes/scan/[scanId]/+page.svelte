@@ -3,17 +3,16 @@
 	// (Rekon & Discovery / Operasi Uji), tab utama (Topologi · Detail Analisis · Temuan · Laporan
 	// Sementara), kartu kanvas + panel kanan (daftar aset / daftar uji), panel log bawah, dan bilah status.
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import { api } from '#lib/api/client.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
-	import { durasi, tanggal } from '#lib/format.js';
+	import { durasi } from '#lib/format.js';
 	import type { Aplikasi, Scan } from '#lib/types.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import VisualisasiPenemuan from '#lib/components/penemuan/VisualisasiPenemuan.svelte';
 	import DaftarAset from '#lib/components/penemuan/DaftarAset.svelte';
 	import VisualisasiUji from '#lib/components/pengujian/VisualisasiUji.svelte';
 	import DaftarUji from '#lib/components/pengujian/DaftarUji.svelte';
 	import PanelLog from '#lib/components/operasi/PanelLog.svelte';
+	import PilihRiwayat from '#lib/components/operasi/PilihRiwayat.svelte';
 	import TabDetailAnalisis from '#lib/components/operasi/TabDetailAnalisis.svelte';
 	import TabTemuan from '#lib/components/operasi/TabTemuan.svelte';
 	import TabLaporanSementara from '#lib/components/operasi/TabLaporanSementara.svelte';
@@ -28,10 +27,7 @@
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Box from '@lucide/svelte/icons/box';
-	import FileText from '@lucide/svelte/icons/file-text';
-	import Play from '@lucide/svelte/icons/play';
 	import Square from '@lucide/svelte/icons/square';
-	import FileBarChart from '@lucide/svelte/icons/file-chart-column';
 	import Network from '@lucide/svelte/icons/network';
 	import ClipboardList from '@lucide/svelte/icons/clipboard-list';
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
@@ -42,7 +38,6 @@
 	import Crosshair from '@lucide/svelte/icons/crosshair';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Server from '@lucide/svelte/icons/server';
-	import History from '@lucide/svelte/icons/history';
 
 	const scanId = $derived(page.params.scanId!);
 
@@ -58,7 +53,6 @@
 		let berhenti = () => {};
 		let batal = false;
 		scan = null;
-		modePilihan = null;
 		tabUtama = 'topologi';
 		api.getScan(sid).then(async (s) => {
 			if (batal) return;
@@ -178,11 +172,15 @@
 	});
 	const metodeTerkini = $derived(terkini ? indeksMetode.get(terkini) : null);
 
-	// Mode visual (tombol header): Rekon & Discovery (graf penemuan) atau Operasi Uji (adegan umum).
+	// Pengujian yang sedang berjalan menampilkan mode live (animasi uji + log). Riwayat (selesai /
+	// dihentikan) hanya menampilkan hasil: peta recon, daftar aset, dan tab hasil — tanpa animasi & log.
+	const aktif = $derived(scan?.status === 'berjalan');
+
+	// Tampilan kanvas mengikuti fase: Rekon & Discovery (graf) selama penemuan, Operasi Uji (adegan
+	// umum) setelah pengujian dimulai; riwayat selalu menampilkan hasil recon.
 	type Mode = 'rekon' | 'uji';
-	let modePilihan = $state<Mode | null>(null);
 	const mode = $derived<Mode>(
-		modePilihan ?? (adaPeta && (fase === 'penemuan' || !adaUji) ? 'rekon' : 'uji')
+		!aktif || (adaPeta && (fase === 'penemuan' || !adaUji)) ? 'rekon' : 'uji'
 	);
 
 	type TabUtama = 'topologi' | 'detail' | 'temuan' | 'laporan';
@@ -197,6 +195,20 @@
 
 	// Kendali kanvas graf penemuan (toolbar kartu).
 	let visPeta = $state<ReturnType<typeof VisualisasiPenemuan>>();
+
+	// Panel log: terbuka bila layar cukup tinggi agar kanvas tetap lega; di layar pendek otomatis
+	// diminimalkan. Setelah pengguna menekan tombol minimize/tampilkan, pilihannya dipertahankan.
+	const TINGGI_MIN_LOG = 860;
+	let logCiut = $state(false);
+	let logDiaturPengguna = false;
+	$effect(() => {
+		const sesuaikan = () => {
+			if (!logDiaturPengguna) logCiut = window.innerHeight < TINGGI_MIN_LOG;
+		};
+		sesuaikan();
+		window.addEventListener('resize', sesuaikan);
+		return () => window.removeEventListener('resize', sesuaikan);
+	});
 
 	// Status DB langsung "dibatalkan"; worker berhenti di batas tahap berikutnya (sinyal via heartbeat).
 	let menghentikan = $state(false);
@@ -237,7 +249,11 @@
 		{ k: 'topologi' as const, label: 'Topologi', Ikon: Network },
 		{ k: 'detail' as const, label: 'Detail Analisis', Ikon: ClipboardList },
 		{ k: 'temuan' as const, label: 'Temuan', Ikon: ShieldAlert, jumlah: temuan.length },
-		{ k: 'laporan' as const, label: 'Laporan Sementara', Ikon: ChartColumn }
+		{
+			k: 'laporan' as const,
+			label: aktif ? 'Laporan Sementara' : 'Ringkasan Hasil',
+			Ikon: ChartColumn
+		}
 	]);
 	const alatKanvas =
 		'grid size-8 place-items-center rounded-md border border-white/10 bg-black/40 text-white/75 transition hover:bg-white/10 hover:text-white';
@@ -246,10 +262,12 @@
 {#if !scan || !app}
 	<Memuat />
 {:else}
-	<div class="dark flex flex-col gap-3 bg-[#0a0f0d] text-white lg:h-full lg:min-h-0 lg:p-4">
+	<div
+		class="dark flex flex-col gap-3 bg-[#0a0f0d] text-white lg:h-full lg:min-h-0 lg:overflow-y-auto lg:p-4"
+	>
 		<!-- Breadcrumb + judul + aksi -->
-		<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-			<div class="min-w-0">
+		<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-6">
+			<div class="min-w-0 flex-1">
 				<nav class="flex items-center gap-1.5 text-xs text-white/55" aria-label="Breadcrumb">
 					<a
 						href="/aplikasi/{app.id}"
@@ -282,71 +300,9 @@
 				</div>
 			</div>
 
-			<div class="flex flex-wrap items-center gap-2">
-				{#if riwayat.length > 1}
-					<label
-						class="flex h-10 items-center gap-1.5 rounded-lg border border-white/10 bg-black/30 px-2.5 text-xs text-white/70"
-					>
-						<History class="size-4 shrink-0" />
-						<select
-							value={scan.id}
-							onchange={(e) => goto(`/scan/${e.currentTarget.value}`)}
-							class="max-w-56 bg-transparent text-[13px] text-white/90 outline-none"
-							aria-label="Riwayat pengujian"
-						>
-							{#each riwayat as r (r.id)}
-								<option value={r.id} class="bg-[#141a17]"
-									>#{r.id} · {tanggal(r.dimulai_pada)} · {LABEL_STATUS_SCAN[r.status]}</option
-								>
-							{/each}
-						</select>
-					</label>
-				{/if}
-				<button
-					type="button"
-					onclick={() => ((modePilihan = 'rekon'), (tabUtama = 'topologi'))}
-					disabled={!adaPeta}
-					title={adaPeta
-						? 'Peta permukaan serangan hasil penemuan'
-						: 'Tidak ada fase penemuan pada pengujian ini'}
-					class={cn(
-						'inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40',
-						mode === 'rekon'
-							? 'border-[#4ade80]/60 bg-[#4ade80]/10 text-[#4ade80]'
-							: 'border-white/15 bg-black/30 text-white/80 hover:text-white'
-					)}
-				>
-					<FileText class="size-4" /> Rekon & Discovery
-				</button>
-				<button
-					type="button"
-					onclick={() => ((modePilihan = 'uji'), (tabUtama = 'topologi'))}
-					class={cn(
-						'inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-medium transition',
-						mode === 'uji'
-							? 'border-[#4ade80]/60 bg-[#4ade80]/10 text-[#4ade80]'
-							: 'border-white/15 bg-black/30 text-white/80 hover:text-white'
-					)}
-				>
-					<Play class="size-4" /> Operasi Uji
-				</button>
-				{#if bisaHentikan}
-					<Button
-						onclick={batalkan}
-						disabled={menghentikan}
-						class="h-10 rounded-lg bg-[#e0a526] px-5 text-sm font-semibold text-black hover:bg-[#f0b53a]"
-					>
-						<Square class="fill-current" />
-						{menghentikan ? 'Menghentikan…' : 'Hentikan'}
-					</Button>
-				{:else if scan.status === 'selesai'}
-					<Button
-						href="/laporan/{scan.id}"
-						class="h-10 rounded-lg bg-[#e0a526] px-5 text-sm font-semibold text-black hover:bg-[#f0b53a]"
-					>
-						<FileBarChart /> Buka Laporan
-					</Button>
-				{/if}
+			<!-- Riwayat pengujian aplikasi (satu-satunya aksi header) -->
+			<div class="lg:shrink-0">
+				<PilihRiwayat {scan} {riwayat} />
 			</div>
 		</div>
 
@@ -389,7 +345,7 @@
 
 		<!-- Area utama -->
 		<div
-			class="grid min-h-0 gap-3 lg:flex-1 {tabUtama === 'topologi'
+			class="grid min-h-0 gap-3 lg:min-h-[22rem] lg:flex-1 {tabUtama === 'topologi'
 				? 'lg:grid-cols-[minmax(0,1fr)_minmax(320px,26rem)]'
 				: ''}"
 		>
@@ -445,16 +401,34 @@
 								<RotateCcw class="size-3.5" /> Reset View
 							</button>
 						</div>
-					{:else}
+					{:else if aktif}
 						<VisualisasiUji
 							{uji}
 							judul="Operasi uji"
-							berjalan={scan.status === 'berjalan'}
+							berjalan
 							host={app.url_dasar}
 							bind:dipilih={ujiPilih}
 							bind:aktif={ujiAktif}
 							polos
 						/>
+					{:else}
+						<!-- Riwayat tanpa fase penemuan (mode terarah): tidak ada peta recon untuk ditampilkan -->
+						<div class="grid h-full place-items-center p-6 text-center">
+							<div class="max-w-sm">
+								<Network class="mx-auto size-8 text-white/30" />
+								<p class="mt-3 text-sm font-medium text-white/80">
+									Tidak ada hasil Recon & Discovery
+								</p>
+								<p class="mt-1 text-xs text-white/50">
+									Pengujian ini dijalankan tanpa fase penemuan. Lihat hasil per metode di
+									<button
+										type="button"
+										class="text-[#4ade80] hover:underline"
+										onclick={() => (tabUtama = 'detail')}>Detail Analisis</button
+									>.
+								</p>
+							</div>
+						</div>
 					{/if}
 				</div>
 				<div class="h-[50vh] min-h-0 lg:h-auto">
@@ -479,70 +453,89 @@
 			{/if}
 		</div>
 
-		<!-- Panel log bawah -->
-		<div class="h-[45vh] min-h-0 lg:h-[30%] lg:min-h-48 lg:shrink-0">
-			<PanelLog
-				log={scan.log}
-				berjalan={scan.status === 'berjalan'}
-				{temuan}
-				namaBerkas="satria-scan-{scan.id}.log"
-				onpilihTemuan={rinciMetode}
-			>
-				{#snippet info()}
-					<dl class="grid gap-x-8 gap-y-2 text-[13px] sm:grid-cols-2 xl:grid-cols-3">
-						{#each [['ID pengujian', `#${scan!.id}`], ['Aplikasi', app!.nama], ['Target', app!.url_dasar], ['Pendekatan', scan!.pendekatan === 'blackbox' ? 'Black Box (tanpa akun uji)' : 'Grey Box (dengan akun uji)'], ['Mode', scan!.mode === 'eksploratif' ? 'Eksploratif (penemuan otomatis)' : 'Terarah'], ['Profil', scan!.profil], ['Status', LABEL_STATUS_SCAN[scan!.status]], ['Dimulai', new Date(scan!.dimulai_pada).toLocaleString('id-ID')], ['Selesai', scan!.selesai_pada ? new Date(scan!.selesai_pada).toLocaleString('id-ID') : '—']] as [k, v] (k)}
-							<div class="min-w-0">
-								<dt class="text-[11px] tracking-wider text-white/45 uppercase">{k}</dt>
-								<dd class="truncate text-white/85">{v}</dd>
+		<!-- Panel log bawah: hanya saat pengujian berjalan (riwayat cukup menampilkan hasil) -->
+		{#if aktif}
+			<div class={cn('min-h-0 shrink-0', !logCiut && 'h-[45vh] lg:h-[30%] lg:min-h-48')}>
+				<PanelLog
+					bind:ciut={
+						() => logCiut,
+						(v) => {
+							logCiut = v;
+							logDiaturPengguna = true;
+						}
+					}
+					log={scan.log}
+					berjalan={scan.status === 'berjalan'}
+					{temuan}
+					onpilihTemuan={rinciMetode}
+				>
+					{#snippet info()}
+						<dl class="grid gap-x-8 gap-y-2 text-[13px] sm:grid-cols-2 xl:grid-cols-3">
+							{#each [['ID pengujian', `#${scan!.id}`], ['Aplikasi', app!.nama], ['Target', app!.url_dasar], ['Pendekatan', scan!.pendekatan === 'blackbox' ? 'Black Box (tanpa akun uji)' : 'Grey Box (dengan akun uji)'], ['Mode', scan!.mode === 'eksploratif' ? 'Eksploratif (penemuan otomatis)' : 'Terarah'], ['Profil', scan!.profil], ['Status', LABEL_STATUS_SCAN[scan!.status]], ['Dimulai', new Date(scan!.dimulai_pada).toLocaleString('id-ID')], ['Selesai', scan!.selesai_pada ? new Date(scan!.selesai_pada).toLocaleString('id-ID') : '—']] as [k, v] (k)}
+								<div class="min-w-0">
+									<dt class="text-[11px] tracking-wider text-white/45 uppercase">{k}</dt>
+									<dd class="truncate text-white/85">{v}</dd>
+								</div>
+							{/each}
+						</dl>
+					{/snippet}
+					{#snippet eksekusi()}
+						<div class="grid gap-4 text-[13px] lg:grid-cols-[1.4fr_1fr]">
+							<div>
+								<p class="text-[11px] tracking-wider text-white/45 uppercase">Progres metode uji</p>
+								<p class="mt-1 text-white/85">
+									<span class="text-xl font-semibold tabular-nums">{progres.selesai}</span> / {progres.total}
+									selesai ({progres.persen}%)
+								</p>
+								<div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+									<div
+										class="h-full rounded-full bg-[#4ade80] transition-all"
+										style:width="{progres.persen}%"
+									></div>
+								</div>
+								<p class="mt-3 text-[11px] tracking-wider text-white/45 uppercase">
+									Sedang dijalankan
+								</p>
+								<p class="mt-0.5 truncate text-white/85">
+									{#if metodeTerkini}<span class="font-mono text-[#5bc8af]"
+											>{metodeTerkini.metode.id}</span
+										>
+										— {metodeTerkini.metode.nama}
+									{:else if scan!.status === 'berjalan'}{fase === 'penemuan'
+											? 'Memetakan permukaan serangan (recon & discovery)…'
+											: 'Menunggu metode berikutnya…'}
+									{:else}—{/if}
+								</p>
 							</div>
-						{/each}
-					</dl>
-				{/snippet}
-				{#snippet eksekusi()}
-					<div class="grid gap-4 text-[13px] lg:grid-cols-[1.4fr_1fr]">
-						<div>
-							<p class="text-[11px] tracking-wider text-white/45 uppercase">Progres metode uji</p>
-							<p class="mt-1 text-white/85">
-								<span class="text-xl font-semibold tabular-nums">{progres.selesai}</span> / {progres.total}
-								selesai ({progres.persen}%)
-							</p>
-							<div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-								<div
-									class="h-full rounded-full bg-[#4ade80] transition-all"
-									style:width="{progres.persen}%"
-								></div>
-							</div>
-							<p class="mt-3 text-[11px] tracking-wider text-white/45 uppercase">
-								Sedang dijalankan
-							</p>
-							<p class="mt-0.5 truncate text-white/85">
-								{#if metodeTerkini}<span class="font-mono text-[#5bc8af]"
-										>{metodeTerkini.metode.id}</span
+							<div>
+								<p class="text-[11px] tracking-wider text-white/45 uppercase">Worker & antrean</p>
+								<p class="mt-1 text-white/85">
+									{banner?.teks ??
+										(scan!.status === 'berjalan'
+											? 'Memeriksa worker…'
+											: `Pengujian ${LABEL_STATUS_SCAN[scan!.status]}.`)}
+								</p>
+								<p class="mt-3 text-[11px] tracking-wider text-white/45 uppercase">Durasi</p>
+								<p class="mt-0.5 text-white/85">
+									{durasi(scan!.dimulai_pada, scan!.selesai_pada, sekarang)}
+								</p>
+								{#if bisaHentikan}
+									<button
+										type="button"
+										onclick={batalkan}
+										disabled={menghentikan}
+										class="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-[#e5484d]/40 bg-[#e5484d]/10 px-3 text-[13px] text-[#ff7b7b] hover:bg-[#e5484d]/20 disabled:opacity-50"
 									>
-									— {metodeTerkini.metode.nama}
-								{:else if scan!.status === 'berjalan'}{fase === 'penemuan'
-										? 'Memetakan permukaan serangan (recon & discovery)…'
-										: 'Menunggu metode berikutnya…'}
-								{:else}—{/if}
-							</p>
+										<Square class="size-3.5 fill-current" />
+										{menghentikan ? 'Menghentikan…' : 'Hentikan pengujian'}
+									</button>
+								{/if}
+							</div>
 						</div>
-						<div>
-							<p class="text-[11px] tracking-wider text-white/45 uppercase">Worker & antrean</p>
-							<p class="mt-1 text-white/85">
-								{banner?.teks ??
-									(scan!.status === 'berjalan'
-										? 'Memeriksa worker…'
-										: `Pengujian ${LABEL_STATUS_SCAN[scan!.status]}.`)}
-							</p>
-							<p class="mt-3 text-[11px] tracking-wider text-white/45 uppercase">Durasi</p>
-							<p class="mt-0.5 text-white/85">
-								{durasi(scan!.dimulai_pada, scan!.selesai_pada, sekarang)}
-							</p>
-						</div>
-					</div>
-				{/snippet}
-			</PanelLog>
-		</div>
+					{/snippet}
+				</PanelLog>
+			</div>
+		{/if}
 
 		<!-- Bilah status -->
 		<div

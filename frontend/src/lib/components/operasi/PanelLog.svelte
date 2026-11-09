@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Panel bawah halaman operasi: tab Log Aktivitas (pewarnaan sintaks, filter level, auto-follow),
-	// Temuan (metode gagal), Info & Eksekusi (diisi induk lewat snippet). "Unduh Log" menyimpan seluruh
-	// log sebagai berkas teks; "Bersihkan" hanya mengosongkan tampilan (data log tidak dihapus).
+	// Temuan (metode gagal), Info & Eksekusi (diisi induk lewat snippet). Bisa diminimalkan agar kanvas
+	// di atasnya mendapat ruang penuh di layar pendek.
 	import type { Snippet } from 'svelte';
 	import type { LogScan } from '#lib/types.js';
 	import type { BarisMetode } from '#lib/operasi/ringkas.js';
@@ -11,7 +11,6 @@
 		LABEL_LEVEL,
 		barisTebal,
 		jamLog,
-		teksLog,
 		tokenisasi,
 		type Level
 	} from '#lib/operasi/sorot-log.js';
@@ -20,24 +19,24 @@
 	import Bug from '@lucide/svelte/icons/bug';
 	import Info from '@lucide/svelte/icons/info';
 	import Cpu from '@lucide/svelte/icons/cpu';
-	import Download from '@lucide/svelte/icons/download';
-	import Eraser from '@lucide/svelte/icons/eraser';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 
 	let {
 		log,
 		berjalan,
 		temuan,
-		namaBerkas,
 		info,
 		eksekusi,
-		onpilihTemuan
+		onpilihTemuan,
+		ciut = $bindable(false)
 	}: {
+		/** Diminimalkan: hanya bilah tab yang tampil (kanvas di atasnya mendapat ruang penuh). */
+		ciut?: boolean;
 		log: LogScan[];
 		berjalan: boolean;
 		temuan: BarisMetode[];
-		/** Nama berkas unduhan, mis. `scan-12.log`. */
-		namaBerkas: string;
 		info: Snippet;
 		eksekusi: Snippet;
 		onpilihTemuan?: (id: string) => void;
@@ -47,9 +46,7 @@
 	let tab = $state<Tab>('log');
 
 	let filterLevel = $state<Record<Level, boolean>>({ info: true, peringatan: true, galat: true });
-	// Bersihkan tampilan: sembunyikan baris sebelum indeks ini (data log tetap utuh).
-	let sejak = $state(0);
-	const logTampil = $derived(log.slice(sejak).filter((l) => l.pesan && filterLevel[l.level]));
+	const logTampil = $derived(log.filter((l) => l.pesan && filterLevel[l.level]));
 
 	let konsol = $state<HTMLDivElement>();
 	let ikut = $state(true);
@@ -65,15 +62,6 @@
 	function keDasar() {
 		ikut = true;
 		if (konsol) konsol.scrollTop = konsol.scrollHeight;
-	}
-
-	function unduh() {
-		const url = URL.createObjectURL(
-			new Blob([teksLog(log) + '\n'], { type: 'text/plain;charset=utf-8' })
-		);
-		const a = Object.assign(document.createElement('a'), { href: url, download: namaBerkas });
-		a.click();
-		URL.revokeObjectURL(url);
 	}
 
 	const AKSEN: Record<Level, string> = {
@@ -97,8 +85,8 @@
 		{#each TAB as t (t.k)}
 			<button
 				type="button"
-				onclick={() => (tab = t.k)}
-				aria-pressed={tab === t.k}
+				onclick={() => ((tab = t.k), (ciut = false))}
+				aria-pressed={tab === t.k && !ciut}
 				class={cn(
 					'-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition',
 					tab === t.k
@@ -117,7 +105,7 @@
 			</button>
 		{/each}
 		<div class="ml-auto flex items-center gap-2 py-1">
-			{#if tab === 'log'}
+			{#if tab === 'log' && !ciut}
 				<div
 					class="hidden items-center gap-0.5 rounded-md border border-white/10 bg-black/30 p-0.5 md:flex"
 					role="group"
@@ -136,40 +124,28 @@
 					{/each}
 				</div>
 			{/if}
+			{#if tab === 'log' && !ciut}<span class="mx-0.5 hidden h-5 w-px bg-white/10 md:block"
+				></span>{/if}
 			<button
 				type="button"
-				onclick={unduh}
-				class="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/15 bg-black/30 px-3 text-[13px] text-white/85 hover:bg-white/5"
+				onclick={() => (ciut = !ciut)}
+				aria-expanded={!ciut}
+				aria-label={ciut ? 'Tampilkan panel log' : 'Minimalkan panel log'}
+				title={ciut ? 'Tampilkan panel log' : 'Minimalkan panel log'}
+				class="grid size-8 place-items-center rounded-md border border-white/15 bg-black/30 text-white/80 hover:bg-white/5 hover:text-white"
 			>
-				<Download class="size-4" /> Unduh Log
-			</button>
-			<button
-				type="button"
-				onclick={() => (sejak = log.length)}
-				disabled={!logTampil.length}
-				title="Kosongkan tampilan log (data log tidak dihapus)"
-				class="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#e5484d]/40 bg-[#e5484d]/10 px-3 text-[13px] text-[#ff7b7b] hover:bg-[#e5484d]/20 disabled:opacity-40"
-			>
-				<Eraser class="size-4" /> Bersihkan
+				{#if ciut}<ChevronUp class="size-4" />{:else}<ChevronDown class="size-4" />{/if}
 			</button>
 		</div>
 	</div>
 
-	<div class="relative min-h-0 flex-1">
+	<div class="relative min-h-0 flex-1" class:hidden={ciut}>
 		{#if tab === 'log'}
 			<div
 				bind:this={konsol}
 				onscroll={saatGulir}
 				class="isi h-full overflow-y-auto py-1.5 text-[12.5px] leading-[1.6] text-[#deddda]"
 			>
-				{#if sejak > 0}
-					<p class="px-4 py-1 text-[11px] text-white/40">
-						Tampilan dibersihkan ({sejak} baris disembunyikan).
-						<button type="button" class="text-[#9fe08a] hover:underline" onclick={() => (sejak = 0)}
-							>Tampilkan semua</button
-						>
-					</p>
-				{/if}
 				{#each logTampil as l, i (i)}
 					<div
 						class={cn(
