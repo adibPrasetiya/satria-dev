@@ -6,6 +6,7 @@ import { butuhTinjauan, penerapanMetode } from './applicability.js';
 import * as scanEvents from './scanEvents.js';
 import * as workerEvents from '../workers/workerEvents.js';
 import { scansRepository } from './scans.repository.js';
+import { verdictService } from './verdict.service.js';
 
 // Fungsi keamanan yang dinilai worker tahap ini (Autentikasi, Manajemen Sesi, Kontrol Akses,
 // Validasi Input, Keamanan Komunikasi).
@@ -74,6 +75,8 @@ export function createScansService({
   gerbang = null,
   // Sinyal perubahan antrean untuk aliran status worker (SSE).
   antrean = workerEvents,
+  // Penghitung putusan/skor/temuan yang disimpan di tabel scans (daftar aplikasi). null di tes unit.
+  penilai = null,
 } = {}) {
   async function insertTasks(rows) {
     await repository.insertTasks(rows);
@@ -112,6 +115,8 @@ export function createScansService({
     if (!scan || scan.status !== 'berjalan') return false;
     const finishedAt = new Date();
     await repository.setScanStatus(scanId, 'selesai', finishedAt);
+    // Ringkasan penilaian untuk daftar aplikasi; bila gagal, dilengkapi belakangan (lengkapiYangKosong).
+    if (penilai) await penilai.nilaiScan(scanId).catch(() => {});
 
     // Rekapitulasi akhir ke log operasi agar pengguna melihat ringkasan tanpa membuka laporan.
     await tulisRekap(scanId);
@@ -356,4 +361,4 @@ export function createScansService({
   return { mulai, get, list, batalkan, simpanTarget, getTarget, finalizeIfDone, seedPhase2, _internal: { toScanDto, taskToHasil } };
 }
 
-export const scansService = createScansService({ gerbang: workersService });
+export const scansService = createScansService({ gerbang: workersService, penilai: verdictService });

@@ -29,6 +29,8 @@
 	const layarPenuh = $derived(page.route.id === '/scan/[scanId]');
 	// Dasbor diawali peta selebar area konten (tanpa padding/batas lebar); halaman mengatur wadahnya sendiri.
 	const tanpaBingkai = $derived(page.route.id === '/dashboard');
+	// Halaman daftar bertabel memakai seluruh lebar area konten (tanpa batas max-w).
+	const lebarPenuh = $derived(page.route.id === '/aplikasi');
 
 	interface ItemNav {
 		href: Parameters<typeof preloadCode>[0];
@@ -274,7 +276,9 @@
 					? 'relative min-h-0 px-4 py-4 lg:overflow-hidden lg:p-0'
 					: tanpaBingkai
 						? ''
-						: 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'
+						: lebarPenuh
+							? 'px-4 py-6 sm:px-6 lg:px-8'
+							: 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'
 			)}
 		>
 			{@render children()}

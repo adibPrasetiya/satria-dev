@@ -2,7 +2,17 @@
 // Respons backend: { success, message, data }; galat: { success: false, message, code?, errors? }.
 // Sesi: access token JWT (Authorization: Bearer) + refresh token berotasi.
 import type { Api } from '#lib/api/types.js';
-import type { Aplikasi, AsetBaru, EventScan, Pengguna, SatuanAdmin, SatuanInput, StatusWorker } from '#lib/types.js';
+import type {
+	Aplikasi,
+	AsetBaru,
+	EventScan,
+	HalamanAplikasi,
+	Pengguna,
+	RingkasanPengujian,
+	SatuanAdmin,
+	SatuanInput,
+	StatusWorker
+} from '#lib/types.js';
 import { bagianUjiKosong } from '#lib/api/aset.js';
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
@@ -216,6 +226,15 @@ export const httpApi: Api = {
 	async listAplikasi() {
 		const data = await req<{ items: AsetDto[] }>('/applications?limit=100');
 		return data.items.map(keAplikasi);
+	},
+	async cariAplikasi(filter) {
+		const q = new URLSearchParams();
+		for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== '') q.set(k, String(v));
+		const data = await req<{
+			items: (AsetDto & { pengujian: RingkasanPengujian })[];
+			meta: Omit<HalamanAplikasi, 'items'>;
+		}>(`/applications?${q}`);
+		return { ...data.meta, items: data.items.map((a) => ({ ...keAplikasi(a), pengujian: a.pengujian })) };
 	},
 	getAplikasi: async (id) => keAplikasi(await req<AsetDto>(`/applications/${id}`)),
 	buatAplikasi: async (data) =>
