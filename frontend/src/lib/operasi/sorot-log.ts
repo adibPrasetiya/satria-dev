@@ -17,7 +17,7 @@ export const LABEL_LEVEL = Object.fromEntries(LEVEL.map((l) => [l.k, l])) as Rec
 export type Token = { t: string; k?: string };
 
 const RX =
-	/(▶|■|→|←|•|↳)|(\b[A-Z]{3,5}-\d+\.\d+-T\d+\b)|(\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b)|(https?:\/\/[^\s·,)]+)|(\bHTTP \d{3}\b)|(\b(?:GAGAL|gagal|FAILED)\b)|(\b(?:Lulus|lulus|LULUS|berhasil)\b)|(\b(?:menunggu tinjauan asesor|Belum Terverifikasi|tidak_dapat_diverifikasi)\b)|(\d+(?:[.,]\d+)?\s?(?:ms|s|detik))/g;
+	/(▶|■|→|←|•|↳)|(\b[A-Z]{3,5}-\d+\.\d+-T\d+\b)|(\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b)|(https?:\/\/[^\s·,)]+)|(\bHTTP \d{3}\b)|(\b(?:GAGAL|gagal|FAILED|Failed)\b)|(\b(?:Lulus|lulus|LULUS|PASS|Pass|berhasil)\b)|(\b(?:menunggu tinjauan asesor|Belum Terverifikasi|tidak_dapat_diverifikasi|OUT OF SCOPE|Out of [Ss]cope)\b)|(\d+(?:[.,]\d+)?\s?(?:ms|s|detik))/g;
 const KELAS = [
 	'',
 	'text-[#c0bfbc]',

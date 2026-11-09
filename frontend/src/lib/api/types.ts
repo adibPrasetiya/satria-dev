@@ -29,7 +29,7 @@ import type {
 	StatusAkun
 } from '#lib/types.js';
 import type { AkunTarget, TargetUji } from '#lib/persiapan/target.js';
-import type { DataPeta } from '#lib/peta/tipe.js';
+import type { DataPeta, RincianProvinsi } from '#lib/peta/tipe.js';
 
 /** Opsi mulai scan. Jalur otomatis (eksploratif) menyertakan akun uji + opsi yang disimpan
  *  ke scan_targets sebelum fase penemuan, sehingga discovery dapat login. */
@@ -115,6 +115,8 @@ export interface Api {
 	statusWorker(): Promise<StatusWorker>;
 	/** Peta Indeks Ketahanan Keamanan Siber (agregat per satuan berlokasi); dasbor memuat ulang tiap 10 menit. */
 	getPeta(): Promise<DataPeta>;
+	/** Rincian satu provinsi (diambil per provinsi saat disorot; di-cache per versi data). */
+	getPetaProvinsi(kode: string): Promise<RincianProvinsi>;
 	/**
 	 * Aliran status worker: `cb` dipanggil saat tersambung dan setiap kali status berubah (bukan berkala).
 	 * `putus` dipanggil bila aliran berakhir/gagal. Mengembalikan fungsi penutup aliran.

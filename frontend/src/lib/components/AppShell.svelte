@@ -12,12 +12,9 @@
 	import IndikatorWorker from './IndikatorWorker.svelte';
 	import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
 	import AppWindow from '@lucide/svelte/icons/app-window';
-	import CirclePlus from '@lucide/svelte/icons/circle-plus';
-	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 	import BookOpen from '@lucide/svelte/icons/book-open';
 	import Users from '@lucide/svelte/icons/users';
 	import Building from '@lucide/svelte/icons/building-2';
-	import Bot from '@lucide/svelte/icons/bot';
 	import Menu from '@lucide/svelte/icons/menu';
 	import X from '@lucide/svelte/icons/x';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
@@ -45,33 +42,16 @@
 			grup: 'Umum',
 			item: [
 				{ href: '/dashboard', label: 'Dasbor', ikon: LayoutDashboard, peran: SEMUA },
+				// Registrasi aplikasi dibuka dari tombol di halaman Aplikasi (bukan menu sidebar).
 				{ href: '/aplikasi', label: 'Aplikasi', ikon: AppWindow, peran: SEMUA },
-				{
-					href: '/aplikasi/baru',
-					label: 'Registrasi Aplikasi',
-					ikon: CirclePlus,
-					peran: ['pemilik', 'admin']
-				},
 				{ href: '/katalog', label: 'Katalog Kontrol', ikon: BookOpen, peran: SEMUA }
-			]
-		},
-		{
-			grup: 'Asesmen',
-			item: [
-				{
-					href: '/asesor/antrian',
-					label: 'Antrian Tinjauan',
-					ikon: ClipboardCheck,
-					peran: ['asesor', 'admin']
-				}
 			]
 		},
 		{
 			grup: 'Administrasi',
 			item: [
 				{ href: '/admin/pengguna', label: 'Pengguna', ikon: Users, peran: ['admin'] },
-				{ href: '/admin/satuan', label: 'Satuan Kerja', ikon: Building, peran: ['admin'] },
-				{ href: '/admin/ai', label: 'Pengaturan AI', ikon: Bot, peran: ['admin'] }
+				{ href: '/admin/satuan', label: 'Satuan Kerja', ikon: Building, peran: ['admin'] }
 			]
 		}
 	];

@@ -19,6 +19,7 @@
 	import { JENIS_HUB, type EdgeGraf, type Graf, type JenisNode, type NodeGraf } from '#lib/penemuan/graf.js';
 	import { HIJAU, MERAH, UNGU, hexA } from '#lib/penemuan/kanvas.js';
 	import { WARNA_RISIKO, gambarIkon } from '#lib/penemuan/ikon-entitas.js';
+	import { WARNA_SEVERITY as WARNA_SEVERITY_TOPO } from '#lib/operasi/ringkas.js';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Minus from '@lucide/svelte/icons/minus';
 	import Maximize from '@lucide/svelte/icons/maximize';
@@ -494,6 +495,8 @@
 					ctx.beginPath(); ctx.roundRect(p.x - r - 5, p.y - r - 5, (r + 5) * 2, (r + 5) * 2, 6); ctx.fill(); ctx.stroke();
 				}
 
+				const temuanN = n.ref.temuan;
+
 				const img = gambarIkon(n.jenis, n.ref.endpoint?.metode_http);
 				if (img.complete && img.naturalWidth) {
 					ctx.drawImage(img, p.x - r, p.y - r, r * 2, r * 2);
@@ -526,6 +529,28 @@
 					const bx = p.x - r * 0.85, by = p.y + r * 0.85, d = tanda * 0.75;
 					ctx.fillStyle = '#ffd43b'; ctx.strokeStyle = LATAR; ctx.lineWidth = 1.5;
 					ctx.beginPath(); ctx.moveTo(bx, by - d); ctx.lineTo(bx + d, by); ctx.lineTo(bx, by + d); ctx.lineTo(bx - d, by); ctx.closePath(); ctx.stroke(); ctx.fill();
+				}
+
+				// Aset yang menjadi temuan pengujian: tanda seru ter-highlight (warna severity terberat,
+				// berpendar pelan) di atas ikon. Rincian & jumlah temuan ada di panel detail / daftar aset.
+				if (temuanN?.length) {
+					const w = WARNA_SEVERITY_TOPO[temuanN[0].severity] ?? '#ff6b6b';
+					const denyut = reduced ? 0.5 : (Math.sin(waktu / 9) + 1) / 2;
+					const s = Math.max(7, tanda * 1.15);
+					const bx = p.x, by = p.y - r - s - 3;
+					ctx.save();
+					ctx.shadowColor = w;
+					ctx.shadowBlur = 6 + denyut * 10;
+					ctx.fillStyle = w;
+					ctx.strokeStyle = LATAR; ctx.lineWidth = 1.5;
+					// perisai membulat (badge) berisi tanda seru
+					ctx.beginPath(); ctx.roundRect(bx - s * 0.62, by - s * 0.78, s * 1.24, s * 1.56, s * 0.38); ctx.fill();
+					ctx.shadowBlur = 0; ctx.stroke();
+					ctx.fillStyle = '#fff';
+					ctx.font = `900 ${Math.round(s * 1.2)}px ui-sans-serif, system-ui, sans-serif`;
+					ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+					ctx.fillText('!', bx, by + s * 0.04);
+					ctx.restore();
 				}
 
 				// label di bawah ikon

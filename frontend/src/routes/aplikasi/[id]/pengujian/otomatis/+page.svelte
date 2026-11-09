@@ -362,8 +362,8 @@
 						<TriangleAlert class="mt-0.5 size-3.5 shrink-0 text-info" />
 						<p>
 							Black box menguji aplikasi seperti penyerang dari luar: tanpa login dan tanpa informasi internal.
-							Metode yang memerlukan login akan berstatus <strong class="text-foreground">belum terverifikasi</strong>, sehingga
-							putusan paling tinggi adalah <strong class="text-foreground">Laik Bersyarat</strong>. Untuk penilaian lengkap gunakan Grey Box.
+							Metode yang memerlukan login dinyatakan <strong class="text-foreground">Out of Scope</strong> dan tidak ikut
+							dinilai. Untuk menguji fungsi setelah login, gunakan Grey Box.
 						</p>
 					</div>
 				{:else if pakaiAkunTersimpan}

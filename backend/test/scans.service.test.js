@@ -45,9 +45,9 @@ function fakeRepo(initial = {}) {
       const control = { parameters: { panjang_minimum: 8, wajib: ['huruf_besar'] } };
       return { items: METODE.map((method) => ({ control, method })) };
     },
-    async createScan({ applicationId, profile, mode = 'terarah', approach = 'greybox' }) {
+    async createScan({ applicationId, profile, mode = 'terarah', approach = 'greybox', reconScanId = null }) {
       const id = ++state.seq;
-      state.scans.push({ id, applicationId, profile, mode, approach, status: 'berjalan', startedAt: new Date(), finishedAt: null });
+      state.scans.push({ id, applicationId, profile, mode, approach, reconScanId, status: 'berjalan', startedAt: new Date(), finishedAt: null });
       return id;
     },
     async countTestTasks(scanId) {
@@ -150,8 +150,8 @@ describe('scans.service', () => {
     assert.equal(h['AUTH-1.3-T03'].status, 'antre');
     // T04 butuh akun uji (belum ada)
     assert.equal(h['AUTH-1.3-T04'].status, 'tidak_dapat_diverifikasi');
-    // T05 manual -> menunggu tinjauan
-    assert.equal(h['AUTH-1.3-T05'].status, 'tidak_dapat_diverifikasi');
+    // T05 manual -> out of scope pengujian otomatis (tetap menunggu tinjauan asesor)
+    assert.equal(h['AUTH-1.3-T05'].status, 'luar_cakupan');
     assert.equal(h['AUTH-1.3-T05'].menunggu_tinjauan, true);
     assert.equal(scan.status, 'berjalan'); // masih ada T01/T02 antre
   });
@@ -286,6 +286,19 @@ describe('scans.service', () => {
     assert.equal(tasks.some((t) => t.engine === 'discovery'), false);
     assert.ok(tasks.length > 0);
     assert.ok(repo._state.logs.some((l) => /hasil penemuan terakhir/.test(l.message)));
+  });
+
+  it('pakai ulang penemuan merujuk scan sumber recon (tanpa menyalin data); scan ber-penemuan merujuk dirinya', async () => {
+    repo._state.targets.set(1, {
+      ...targetRegistrasi[0][1],
+      accounts: { daftar: [{ username: 'u1', password: 'p' }, { username: 'u2', password: 'p' }] },
+      discovery: { waktu: '2026-10-26T01:00:00.000Z', scan_id: '41' },
+    });
+    const ulang = await service.mulai(pemilikA, '1', { mode: 'eksploratif', pakaiDiscovery: true });
+    assert.equal(ulang.recon_scan_id, '41');
+    assert.equal(repo._state.scans.at(-1).reconScanId, 41);
+    const baru = await service.mulai(pemilikA, '1', { mode: 'eksploratif' });
+    assert.equal(baru.recon_scan_id, baru.id);
   });
 
   it('log ber-data (peristiwa penemuan) ikut di DTO; log biasa tanpa data', async () => {

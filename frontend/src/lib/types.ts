@@ -14,7 +14,7 @@ export type Agregasi = 'semua_lulus' | 'minimal_satu';
 export type JenisBukti = 'request_response' | 'screenshot' | 'dokumen';
 
 /** Status akhir metode/kontrol sesuai katalog. */
-export type Status = 'lulus' | 'gagal' | 'tidak_berlaku' | 'tidak_dapat_diverifikasi';
+export type Status = 'lulus' | 'gagal' | 'tidak_berlaku' | 'luar_cakupan' | 'tidak_dapat_diverifikasi';
 /** Status metode selama scan berjalan. */
 export type StatusMetode = Status | 'antre' | 'berjalan';
 
@@ -369,6 +369,8 @@ export interface Scan {
 	profil: Profil;
 	mode?: ModePengujian;
 	pendekatan?: PendekatanUji;
+	/** Scan sumber Recon & Discovery (scan ini sendiri, atau scan terdahulu yang hasil penemuannya dipakai ulang). */
+	recon_scan_id?: string | null;
 	status: StatusScan;
 	dimulai_pada: string;
 	selesai_pada?: string;

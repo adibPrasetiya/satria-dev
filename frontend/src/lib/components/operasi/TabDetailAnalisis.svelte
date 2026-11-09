@@ -62,8 +62,9 @@
 		</select>
 		<select bind:value={fStatus} class={pilihan} aria-label="Filter status">
 			<option value="" class="bg-[#141a17]">Semua status</option>
-			<option value="gagal" class="bg-[#141a17]">Gagal</option>
-			<option value="lulus" class="bg-[#141a17]">Lulus</option>
+			<option value="gagal" class="bg-[#141a17]">Failed</option>
+			<option value="lulus" class="bg-[#141a17]">Pass</option>
+			<option value="luar_cakupan" class="bg-[#141a17]">Out of Scope</option>
 			<option value="tidak_dapat_diverifikasi" class="bg-[#141a17]">Belum terverifikasi</option>
 			<option value="tidak_berlaku" class="bg-[#141a17]">Tidak berlaku</option>
 			<option value="berjalan" class="bg-[#141a17]">Berjalan / antre</option>

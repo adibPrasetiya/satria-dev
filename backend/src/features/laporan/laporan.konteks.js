@@ -94,7 +94,7 @@ export function susunKonteks({ aplikasi, scan, metode, akunUji = [], acuan = '' 
 
   const statusDari = (m) => m.result?.status ?? (m.status === 'selesai' ? 'tidak_dapat_diverifikasi' : m.status);
   const perFungsi = new Map();
-  const hitungan = { lulus: 0, gagal: 0, tidak_dapat_diverifikasi: 0, tidak_berlaku: 0 };
+  const hitungan = { lulus: 0, gagal: 0, tidak_dapat_diverifikasi: 0, tidak_berlaku: 0, luar_cakupan: 0 };
   for (const m of metode) {
     const st = statusDari(m);
     if (st in hitungan) hitungan[st] += 1;

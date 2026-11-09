@@ -6,7 +6,7 @@
 // ZAP TIDAK berdiri sendiri: tiap URL masuk ke klaster frontend/backend/aset sesuai lapisannya,
 // sedangkan node Katana/ZAP menjadi entitas *sumber* yang ditautkan (berlabel jumlah) ke klaster
 // yang ia perkaya; alert ZAP ditempel ke URL terkait dan ditautkan merah.
-import type { LogScan } from '#lib/types.js';
+import type { LogScan, Severity } from '#lib/types.js';
 import type { AlertUrl, EndpointTemuan, ItemCrawl, KodeTahap, Lapisan } from './peristiwa.js';
 
 export type JenisNode =
@@ -48,6 +48,8 @@ export interface NodeGraf {
 	titik?: string[];
 	/** Endpoint menerima unggahan berkas. */
 	upload?: boolean;
+	/** Temuan pengujian (metode FAILED) pada aset ini — diisi dari integrasi hasil uji (operasi/temuan-topologi). */
+	temuan?: { id: string; nama: string; severity: Severity }[];
 	/** Alert pasif ZAP pada URL ini. */
 	alert?: { nama: string; risk: string }[];
 	info?: Record<string, unknown>;
@@ -207,6 +209,9 @@ export function bangunGraf(logs: LogScan[], urlSitus?: string): Graf {
 	let selesai = false;
 	let urutan = 0;
 	let halamanLebih = 0;
+	// Ringkasan OWASP ZAP (bukan node graf; dipakai hitungan).
+	let zapRingkas: { jumlah_url?: number; alert?: number } | undefined;
+	let katanaRingkas: { jumlah?: number } | undefined;
 	let jsLebih = 0;
 
 	const tambahNode = (n: Omit<NodeGraf, 'urutan'>) => {
@@ -389,16 +394,18 @@ export function bangunGraf(logs: LogScan[], urlSitus?: string): Graf {
 				}
 				break;
 			case 'zap': {
+				// OWASP ZAP bukan aset: URL temuannya digabung ke aset yang ada (sumber "ZAP") dan
+				// alert pasifnya ditempel sebagai penanda risiko pada aset terkait — tanpa node/hub sendiri.
 				const alert = d.temuan.reduce((s, t) => s + t.n, 0);
-				tambahNode({ id: 'zap', jenis: 'zap', label: 'OWASP ZAP', sub: `${d.jumlah_url} URL · ${alert} alert`, induk: idSitus, info: { ...d, alert } });
-				tautkan(idSitus, 'zap', 'sumber');
+				zapRingkas = { jumlah_url: d.jumlah_url, alert };
 				for (const it of d.items ?? []) tambahItemCrawl(it, 'zap');
 				alertTertunda.push(...(d.alert_url ?? []));
 				break;
 			}
 			case 'katana':
-				tambahNode({ id: 'katana', jenis: 'katana', label: 'Katana', sub: `${d.jumlah} URL`, induk: idSitus, info: { ...d } });
-				tautkan(idSitus, 'katana', 'sumber');
+				// Katana (crawler) bukan aset: URL temuannya digabung ke aset yang ada (sumber "KTN")
+				// tanpa node/hub sendiri.
+				katanaRingkas = { jumlah: d.jumlah };
 				for (const it of d.items ?? []) tambahItemCrawl(it, 'katana');
 				break;
 		}
@@ -434,18 +441,14 @@ export function bangunGraf(logs: LogScan[], urlSitus?: string): Graf {
 		tautkan(induk, id);
 	}
 
-	// Alert ZAP → daun terkait + tautan merah dari node ZAP.
+	// Alert ZAP → penanda risiko pada aset (daun) terkait.
 	for (const a of alertTertunda) {
 		const daun = cariDaun(a.url);
 		if (!daun) continue;
 		if (!daun.alert?.some((x) => x.nama === a.nama)) daun.alert = [...(daun.alert ?? []), { nama: a.nama, risk: a.risk }];
-		tautkan('zap', daun.id, 'alert');
 	}
 	for (const n of nodes.values()) {
-		if (!n.alert?.length) continue;
-		n.alert.sort((a, b) => (PERINGKAT_RISIKO[b.risk] ?? 0) - (PERINGKAT_RISIKO[a.risk] ?? 0));
-		const e = edges.get(`zap>${n.id}`);
-		if (e && e.jenis === 'alert') e.label = n.alert[0].risk;
+		if (n.alert?.length) n.alert.sort((a, b) => (PERINGKAT_RISIKO[b.risk] ?? 0) - (PERINGKAT_RISIKO[a.risk] ?? 0));
 	}
 
 	const daftar = [...nodes.values()];
@@ -453,7 +456,7 @@ export function bangunGraf(logs: LogScan[], urlSitus?: string): Graf {
 	const nHalaman = daftar.filter((n) => n.jenis === 'halaman').length + halamanLebih;
 	const nJs = daftar.filter((n) => n.jenis === 'js').length + jsLebih;
 	const nUpload = endpoints.filter((n) => n.upload).length;
-	const zapInfo = nodes.get('zap')?.info as { jumlah_url?: number; alert?: number } | undefined;
+	const zapInfo = zapRingkas;
 	const nAlertTertaut = daftar.filter((n) => n.alert?.length).length;
 
 	// Ringkasan hub + label tautan berisi jumlah.
@@ -520,7 +523,7 @@ export function bangunGraf(logs: LogScan[], urlSitus?: string): Graf {
 			upload: nUpload,
 			zapUrl: Number(zapInfo?.jumlah_url ?? 0),
 			zapAlert: Number(zapInfo?.alert ?? nAlertTertaut),
-			katana: Number(nodes.get('katana')?.info?.jumlah ?? 0)
+			katana: Number(katanaRingkas?.jumlah ?? 0)
 		},
 		terautentikasi,
 		selesai,

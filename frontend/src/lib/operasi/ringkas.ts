@@ -53,6 +53,7 @@ export const WARNA_STATUS: Record<string, string> = {
 	gagal: '#ff7b6b',
 	tidak_dapat_diverifikasi: '#f5c451',
 	tidak_berlaku: '#8c9bab',
+	luar_cakupan: '#6b7785',
 	antre: 'rgba(255,255,255,0.35)',
 	berjalan: '#7fe9d8'
 };

@@ -30,6 +30,8 @@
 	import FileText from '@lucide/svelte/icons/file-text';
 	import Square from '@lucide/svelte/icons/square';
 	import Network from '@lucide/svelte/icons/network';
+	import Play from '@lucide/svelte/icons/play';
+	import { petaTemuanTopologi, tandaiGraf } from '#lib/operasi/temuan-topologi.js';
 	import ClipboardList from '@lucide/svelte/icons/clipboard-list';
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import ChartColumn from '@lucide/svelte/icons/chart-column';
@@ -156,12 +158,36 @@
 		return adaUji ? 'pengujian' : 'penemuan';
 	});
 
+	// Recon & Discovery: dari scan ini sendiri, atau dari scan sumber yang hasil penemuannya dipakai
+	// ulang (rujukan `recon_scan_id`) — data recon tidak disalin, cukup dibaca dari scan sumbernya.
+	let reconSumber = $state<{ id: string; mulai: string; log: Scan['log'] } | null>(null);
+	$effect(() => {
+		const rid = scan?.recon_scan_id;
+		const sid = scan?.id;
+		reconSumber = null;
+		if (!rid || rid === sid) return;
+		let batal = false;
+		api
+			.getScan(rid)
+			.then((s) => !batal && (reconSumber = { id: s.id, mulai: s.dimulai_pada, log: s.log }))
+			.catch(() => {});
+		return () => {
+			batal = true;
+		};
+	});
+
 	// Data turunan.
-	const graf = $derived(scan && app ? bangunGraf(scan.log, app.url_dasar) : null);
-	const adaPeta = $derived(!!graf && graf.peristiwa > 0);
 	const uji = $derived(scan ? bangunUji(scan.log) : { daftar: [], per: new Map() });
 	const baris = $derived(scan ? barisMetode(scan) : []);
 	const temuan = $derived(daftarTemuan(baris));
+	const grafDasar = $derived(
+		scan && app ? bangunGraf(reconSumber ? reconSumber.log : scan.log, app.url_dasar) : null
+	);
+	// Topologi terintegrasi hasil uji: endpoint/aset yang menjadi temuan diberi tanda.
+	const graf = $derived(
+		grafDasar ? tandaiGraf(grafDasar, petaTemuanTopologi(grafDasar, uji, temuan)) : null
+	);
+	const adaPeta = $derived(!!graf && graf.peristiwa > 0);
 	const progres = $derived.by(() => {
 		const jalan = baris.filter((b) => b.status !== 'tidak_berlaku' || b.durasi_ms !== undefined);
 		const selesai = jalan.filter((b) => b.status !== 'antre' && b.status !== 'berjalan');
@@ -177,15 +203,19 @@
 	// dihentikan) hanya menampilkan hasil: peta recon, daftar aset, dan tab hasil — tanpa animasi & log.
 	const aktif = $derived(scan?.status === 'berjalan');
 
-	// Tampilan kanvas mengikuti fase: Rekon & Discovery (graf) selama penemuan, Operasi Uji (adegan
-	// umum) setelah pengujian dimulai; riwayat selalu menampilkan hasil recon.
-	type Mode = 'rekon' | 'uji';
-	const mode = $derived<Mode>(
-		!aktif || (adaPeta && (fase === 'penemuan' || !adaUji)) ? 'rekon' : 'uji'
-	);
-
-	type TabUtama = 'topologi' | 'detail' | 'temuan' | 'laporan';
+	// Tab: Topologi (hanya informasi topologi) · Operasi Uji (adegan pengujian, hanya saat berjalan) ·
+	// Detail Analisis · Temuan · Ringkasan Hasil. Saat fase pengujian dimulai, tab berpindah otomatis ke
+	// Operasi Uji sekali (pengguna tetap bebas kembali ke Topologi).
+	type TabUtama = 'topologi' | 'uji' | 'detail' | 'temuan' | 'laporan';
 	let tabUtama = $state<TabUtama>('topologi');
+	let sudahPindahUji = false;
+	$effect(() => {
+		if (aktif && fase === 'pengujian' && !sudahPindahUji) {
+			sudahPindahUji = true;
+			if (tabUtama === 'topologi') tabUtama = 'uji';
+		}
+		if (!aktif && tabUtama === 'uji') tabUtama = 'topologi';
+	});
 	let sorotMetode = $state<string | null>(null);
 	let ujiAktif = $state<string | null>(null);
 	let ujiPilih = $state<string | null>(null);
@@ -248,6 +278,7 @@
 
 	const TAB_UTAMA = $derived([
 		{ k: 'topologi' as const, label: 'Topologi', Ikon: Network },
+		...(aktif ? [{ k: 'uji' as const, label: 'Operasi Uji', Ikon: Play }] : []),
 		{ k: 'detail' as const, label: 'Detail Analisis', Ikon: ClipboardList },
 		{ k: 'temuan' as const, label: 'Temuan', Ikon: ShieldAlert, jumlah: temuan.length },
 		{
@@ -304,6 +335,17 @@
 			<!-- Riwayat pengujian aplikasi + generate laporan untuk riwayat yang dipilih -->
 			<div class="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
 				<PilihRiwayat {scan} {riwayat} />
+				{#if bisaHentikan}
+					<button
+						type="button"
+						onclick={batalkan}
+						disabled={menghentikan}
+						class="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e0a526] px-4 text-[13.5px] font-semibold whitespace-nowrap text-black transition hover:bg-[#f0b53a] disabled:opacity-60"
+					>
+						<Square class="size-4 fill-current" />
+						{menghentikan ? 'Menghentikan…' : 'Hentikan'}
+					</button>
+				{/if}
 				{#if !aktif}
 					<a
 						href="/laporan/{scan.id}"
@@ -358,15 +400,46 @@
 
 		<!-- Area utama -->
 		<div
-			class="grid min-h-0 gap-3 lg:min-h-[22rem] lg:flex-1 {tabUtama === 'topologi'
+			class="grid min-h-0 gap-3 lg:min-h-[22rem] lg:flex-1 {tabUtama === 'topologi' ||
+			tabUtama === 'uji'
 				? 'lg:grid-cols-[minmax(0,1fr)_minmax(320px,26rem)]'
 				: ''}"
 		>
-			{#if tabUtama === 'topologi'}
+			{#if tabUtama === 'uji'}
+				<!-- Adegan pengujian (hanya selama pengujian berjalan) -->
 				<div
 					class="relative h-[60vh] min-h-0 overflow-hidden rounded-xl border border-white/10 bg-[#0c1014] lg:h-auto"
 				>
-					{#if mode === 'rekon' && graf && adaPeta}
+					<VisualisasiUji
+						{uji}
+						judul="Operasi uji"
+						berjalan
+						host={app.url_dasar}
+						bind:dipilih={ujiPilih}
+						bind:aktif={ujiAktif}
+						polos
+					/>
+				</div>
+				<div class="h-[50vh] min-h-0 lg:h-auto">
+					<DaftarUji hasil={scan.hasil} aktif={ujiAktif} onpilih={(id) => (ujiPilih = id)} />
+				</div>
+			{:else if tabUtama === 'topologi'}
+				<div
+					class="relative h-[60vh] min-h-0 overflow-hidden rounded-xl border border-white/10 bg-[#0c1014] lg:h-auto"
+				>
+					{#if graf && adaPeta}
+						{#if reconSumber}
+							<p
+								class="absolute right-3 bottom-3 z-20 rounded-md border border-white/10 bg-black/60 px-2.5 py-1 text-[11px] text-white/70"
+								title="Pengujian ini memakai ulang hasil Recon & Discovery dari pengujian sebelumnya"
+							>
+								Recon dari pengujian
+								<a href="/scan/{reconSumber.id}" class="text-[#4ade80] hover:underline"
+									>#{reconSumber.id}</a
+								>
+								· {new Date(reconSumber.mulai).toLocaleDateString('id-ID', { dateStyle: 'medium' })}
+							</p>
+						{/if}
 						<VisualisasiPenemuan
 							bind:this={visPeta}
 							{graf}
@@ -414,26 +487,20 @@
 								<RotateCcw class="size-3.5" /> Reset View
 							</button>
 						</div>
-					{:else if aktif}
-						<VisualisasiUji
-							{uji}
-							judul="Operasi uji"
-							berjalan
-							host={app.url_dasar}
-							bind:dipilih={ujiPilih}
-							bind:aktif={ujiAktif}
-							polos
-						/>
 					{:else}
-						<!-- Riwayat tanpa fase penemuan (mode terarah): tidak ada peta recon untuk ditampilkan -->
+						<!-- Tanpa data recon (mode terarah, atau penemuan belum menghasilkan peta) -->
 						<div class="grid h-full place-items-center p-6 text-center">
 							<div class="max-w-sm">
 								<Network class="mx-auto size-8 text-white/30" />
 								<p class="mt-3 text-sm font-medium text-white/80">
-									Tidak ada hasil Recon & Discovery
+									{aktif && fase === 'penemuan'
+										? 'Memetakan topologi aplikasi…'
+										: 'Tidak ada hasil Recon & Discovery'}
 								</p>
 								<p class="mt-1 text-xs text-white/50">
-									Pengujian ini dijalankan tanpa fase penemuan. Lihat hasil per metode di
+									{aktif && fase === 'penemuan'
+										? 'Topologi tampil begitu fase penemuan menemukan aset.'
+										: 'Pengujian ini dijalankan tanpa fase penemuan.'} Lihat hasil per metode di
 									<button
 										type="button"
 										class="text-[#4ade80] hover:underline"
@@ -445,7 +512,7 @@
 					{/if}
 				</div>
 				<div class="h-[50vh] min-h-0 lg:h-auto">
-					{#if mode === 'rekon' && graf && adaPeta}
+					{#if graf && adaPeta}
 						<DaftarAset {graf} bind:terpilih={asetTerpilih} />
 					{:else}
 						<DaftarUji hasil={scan.hasil} aktif={ujiAktif} onpilih={(id) => (ujiPilih = id)} />
@@ -532,17 +599,6 @@
 								<p class="mt-0.5 text-white/85">
 									{durasi(scan!.dimulai_pada, scan!.selesai_pada, sekarang)}
 								</p>
-								{#if bisaHentikan}
-									<button
-										type="button"
-										onclick={batalkan}
-										disabled={menghentikan}
-										class="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-[#e5484d]/40 bg-[#e5484d]/10 px-3 text-[13px] text-[#ff7b7b] hover:bg-[#e5484d]/20 disabled:opacity-50"
-									>
-										<Square class="size-3.5 fill-current" />
-										{menghentikan ? 'Menghentikan…' : 'Hentikan pengujian'}
-									</button>
-								{/if}
 							</div>
 						</div>
 					{/snippet}

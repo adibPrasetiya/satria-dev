@@ -25,6 +25,13 @@ describe('verdict: statusKontrol', () => {
     assert.equal(statusKontrol(kontrol, hasil({ A: 'lulus', B: 'lulus' })), 'lulus');
   });
 
+  it('out of scope tidak dinilai: kontrol yang seluruhnya out of scope → luar_cakupan', () => {
+    assert.equal(statusKontrol(k('tinggi', [['A'], ['B']]), hasil({ A: 'lulus', B: 'luar_cakupan' })), 'lulus');
+    assert.equal(statusKontrol(k('tinggi', [['A']]), hasil({ A: 'luar_cakupan' })), 'luar_cakupan');
+    const r = nilaiKelaikan([k('tinggi', [['A']]), k('sedang', [['B']])], hasil({ A: 'lulus', B: 'luar_cakupan' }));
+    assert.deepEqual(r, { putusan: 'laik', skor: 100 }, 'out of scope tidak membuat laik bersyarat');
+  });
+
   it('minimal_satu: satu lulus cukup; metode info & tidak_berlaku diabaikan', () => {
     const kontrol = k('sedang', [['A'], ['B'], ['I', 'info']], 'minimal_satu');
     assert.equal(statusKontrol(kontrol, hasil({ A: 'gagal', B: 'lulus', I: 'gagal' })), 'lulus');

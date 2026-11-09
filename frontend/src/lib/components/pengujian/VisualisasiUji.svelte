@@ -94,8 +94,9 @@
 	});
 
 	const WARNA_VERDICT: Record<string, [string, string]> = {
-		lulus: ['#9fe08a', 'LULUS'],
-		gagal: ['#ff7b6b', 'GAGAL'],
+		lulus: ['#9fe08a', 'PASS'],
+		gagal: ['#ff7b6b', 'FAILED'],
+		luar_cakupan: ['#8c9bab', 'OUT OF SCOPE'],
 		tidak_dapat_diverifikasi: ['#f5c451', 'PERLU TINJAUAN'],
 		tidak_berlaku: ['#8c9bab', 'TIDAK BERLAKU']
 	};

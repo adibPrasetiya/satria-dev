@@ -3,6 +3,7 @@
 	import { labelSumber, tetangga, type Graf, type NodeGraf } from '#lib/penemuan/graf.js';
 	import { warnaMetode } from '#lib/penemuan/kanvas.js';
 	import { svgEntitas, WARNA_RISIKO, type JenisIkon } from '#lib/penemuan/ikon-entitas.js';
+	import { WARNA_SEVERITY } from '#lib/operasi/ringkas.js';
 	import X from '@lucide/svelte/icons/x';
 	import Lock from '@lucide/svelte/icons/lock';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -61,6 +62,19 @@
 	</header>
 
 	<div class="flex-1 space-y-4 overflow-y-auto px-4 py-3 text-xs">
+		{#if node.temuan?.length}
+			<section class="rounded-md border border-[#d93f45]/40 bg-[#d93f45]/[0.07] p-2.5">
+				<p class="label-panel text-[#ff8a8a]">Temuan pengujian ({node.temuan.length})</p>
+				<ul class="space-y-1.5">
+					{#each node.temuan as t (t.id)}
+						<li class="flex items-start gap-2">
+							<span class="mt-0.5 rounded-sm border px-1 text-[9px] font-semibold uppercase" style="color:{WARNA_SEVERITY[t.severity]};border-color:{WARNA_SEVERITY[t.severity]}">{t.severity}</span>
+							<span class="min-w-0 flex-1"><span class="font-mono text-[10.5px] text-[#5bc8af]">{t.id}</span><span class="block text-white/80">{t.nama}</span></span>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
 		{#if ep}
 			<dl class="grid grid-cols-[6.5rem_1fr] gap-x-3 gap-y-1.5">
 				<dt class="text-white/40">URL</dt><dd class="font-mono break-all">{ep.url}</dd>

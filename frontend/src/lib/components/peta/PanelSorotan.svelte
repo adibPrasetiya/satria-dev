@@ -6,7 +6,8 @@
 	import { cubicOut } from 'svelte/easing';
 	import { Tween } from 'svelte/motion';
 	import type { RingkasProvinsi } from '#lib/peta/agregat.js';
-	import type { Tingkat } from '#lib/peta/tipe.js';
+	import { storePeta } from '#lib/peta/store.svelte.js';
+	import BatangSeveritas from './BatangSeveritas.svelte';
 	import { statusIndeks, warnaIndeks as warna } from '#lib/peta/warna.js';
 
 	let {
@@ -61,18 +62,23 @@
 	});
 
 	// Angka indeks berhitung dari nilai sebelumnya ke nilai provinsi baru.
+	// Rincian provinsi aktif diambil sekali per versi data (lihat storePeta).
+	$effect(() => {
+		if (aktif) void storePeta.muatRincian(aktif.kode);
+	});
+	const r = $derived(aktif ? storePeta.rincian(aktif.kode) : undefined);
+	const totalTemuan = $derived(
+		r ? r.sebaran.kritis + r.sebaran.tinggi + r.sebaran.sedang + r.sebaran.rendah : 0
+	);
+
 	const angka = new Tween(0, { duration: 600, easing: cubicOut });
 	$effect(() => {
 		if (aktif) angka.target = aktif.indeks;
 	});
 
-	const TINGKAT: Record<Tingkat, { label: string; warna: string }> = {
-		kritis: { label: 'Kritis', warna: '#f87171' },
-		tinggi: { label: 'Tinggi', warna: '#fb923c' },
-		sedang: { label: 'Sedang', warna: '#facc15' },
-		rendah: { label: 'Rendah', warna: '#a3a3a3' }
-	};
-	const MAKS_TAMPIL = 4;
+	// Donat indeks (r=38 pada viewBox 96).
+	const R = 38;
+	const KELILING = 2 * Math.PI * R;
 </script>
 
 {#if aktif}
@@ -114,46 +120,77 @@
 						</span>
 					</div>
 
-					<p class="mt-4 text-xs text-white/50">Indeks ketahanan</p>
-					<p
-						class="mt-1 text-3xl leading-none font-semibold tracking-tight tabular-nums"
-						style="color: {warna(aktif.indeks)}"
-					>
-						{angka.current.toFixed(1)}<span class="ml-1 text-sm font-normal text-white/35"
-							>/ 100</span
+					<!-- Indeks ketahanan: donat 0–100, warna mengikuti skala indeks -->
+					<div class="mt-4 flex items-center gap-4">
+						<svg
+							viewBox="0 0 96 96"
+							class="size-24 shrink-0 -rotate-90"
+							role="img"
+							aria-label="Indeks ketahanan {aktif.indeks.toFixed(1)} dari 100"
 						>
-					</p>
-					<div class="mt-3 h-1 overflow-hidden rounded-full bg-white/[0.08]" aria-hidden="true">
-						<div
-							class="h-full rounded-full"
-							style="width: {angka.current}%; background: {warna(aktif.indeks)}"
-						></div>
+							<circle
+								cx="48"
+								cy="48"
+								r={R}
+								fill="none"
+								stroke="rgb(255 255 255 / 0.08)"
+								stroke-width="9"
+							/>
+							<circle
+								cx="48"
+								cy="48"
+								r={R}
+								fill="none"
+								stroke={warna(aktif.indeks)}
+								stroke-width="9"
+								stroke-linecap="round"
+								stroke-dasharray="{(angka.current / 100) * KELILING} {KELILING}"
+							/>
+							<g class="[transform-origin:48px_48px] rotate-90">
+								<text
+									x="48"
+									y="46"
+									text-anchor="middle"
+									dominant-baseline="central"
+									fill={warna(aktif.indeks)}
+									font-size="21"
+									font-weight="700">{angka.current.toFixed(1)}</text
+								>
+								<text
+									x="48"
+									y="64"
+									text-anchor="middle"
+									fill="rgb(255 255 255 / 0.4)"
+									font-size="9.5">/ 100</text
+								>
+							</g>
+						</svg>
+						<div class="min-w-0">
+							<p class="text-xs text-white/50">Indeks ketahanan</p>
+							<p class="mt-1 text-sm font-semibold" style="color: {warna(aktif.indeks)}">
+								{statusIndeks(aktif.indeks)}
+							</p>
+							<p class="mt-1 text-[11px] leading-snug text-white/40">
+								Rata-rata tertimbang skor kepatuhan sistem informasi di provinsi ini.
+							</p>
+						</div>
 					</div>
 
-					<div class="mt-5 flex items-baseline justify-between">
-						<p class="text-xs text-white/50">Kerentanan terdeteksi</p>
-						<p class="text-xs text-white/50 tabular-nums">{aktif.kerentanan.length}</p>
+					<!-- Sebaran severity temuan provinsi (rincian diambil per provinsi, tersimpan per versi data) -->
+					<div class="mt-5 mb-2.5 flex items-baseline justify-between">
+						<p class="text-xs text-white/50">Sebaran kerentanan</p>
+						<p class="text-xs text-white/50 tabular-nums">{r ? `${totalTemuan} temuan` : ''}</p>
 					</div>
-					{#if aktif.kerentanan.length}
-						<ul class="mt-1.5 divide-y divide-white/[0.06]">
-							{#each aktif.kerentanan.slice(0, MAKS_TAMPIL) as k (k.kode)}
-								<li class="flex items-center gap-3 py-2 text-[13px]">
-									<span
-										class="w-11 shrink-0 text-[11px] font-medium"
-										style="color: {TINGKAT[k.tingkat].warna}">{TINGKAT[k.tingkat].label}</span
-									>
-									<span class="min-w-0 flex-1 truncate text-white/85" title={k.nama}>{k.nama}</span>
-									<span class="shrink-0 text-xs text-white/40 tabular-nums">{k.aplikasi} SI</span>
-								</li>
+					{#if !r}
+						<div class="space-y-2" aria-label="Memuat rincian provinsi">
+							{#each [0, 1, 2, 3] as i (i)}
+								<div class="h-2 animate-pulse rounded-full bg-white/[0.07]"></div>
 							{/each}
-						</ul>
-						{#if aktif.kerentanan.length > MAKS_TAMPIL}
-							<p class="pt-1 text-xs text-white/35">
-								+{aktif.kerentanan.length - MAKS_TAMPIL} kerentanan lainnya
-							</p>
-						{/if}
+						</div>
+					{:else if totalTemuan}
+						<BatangSeveritas sebaran={r.sebaran} />
 					{:else}
-						<p class="mt-2 text-[13px] text-white/50">Tidak ada kerentanan terdeteksi.</p>
+						<p class="text-[13px] text-white/50">Tidak ada kerentanan terdeteksi.</p>
 					{/if}
 				</div>
 			{/key}

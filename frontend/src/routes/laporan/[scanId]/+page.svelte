@@ -5,7 +5,6 @@
 	// Laporan riwayat TERAKHIR tersimpan di backend; riwayat lain selalu di-generate saat dibuka.
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import { auth } from '#lib/stores/auth.svelte.js';
 	import { katalog, LABEL_PUTUSAN, LABEL_STATUS, nilaiKelaikan } from '#lib/catalog.js';
 	import { durasi } from '#lib/format.js';
 	import type { Aplikasi, Scan } from '#lib/types.js';
@@ -28,7 +27,6 @@
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Database from '@lucide/svelte/icons/database';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
 
 	const scanId = $derived(page.params.scanId!);
 
@@ -137,6 +135,7 @@
 		gagal: '#b91c1c',
 		tidak_dapat_diverifikasi: '#b45309',
 		tidak_berlaku: '#6b7280',
+		luar_cakupan: '#6b7280',
 		antre: '#6b7280',
 		berjalan: '#0369a1'
 	};
@@ -205,11 +204,6 @@
 					<Database class="size-3.5" />
 					{scan.ai.disimpan ? 'Tersimpan (riwayat terakhir)' : 'Tidak disimpan'}
 				</span>
-			{/if}
-			{#if auth.punya('asesor', 'admin') && nilai.hitungan.tidak_dapat_diverifikasi}
-				<Button variant="outline" size="sm" href="/asesor/tinjau/{scan.id}"
-					><ClipboardCheck /> Tinjau Manual</Button
-				>
 			{/if}
 			<Button variant="outline" size="sm" onclick={generate} disabled={menyusun}>
 				{#if menyusun}<LoaderCircle class="animate-spin" />{:else}<RefreshCw />{/if} Generate ulang
@@ -428,15 +422,11 @@
 				</tbody>
 			</table>
 			<p class="catatan">
-				Skor kepatuhan = kontrol lulus ÷ (lulus + gagal). Cakupan = kontrol teruji ÷ kontrol yang
-				berlaku.
+				Skor kepatuhan = kontrol pass ÷ (pass + failed). Cakupan = kontrol teruji ÷ kontrol yang
+				berlaku. Metode yang tidak dapat diotomasi dengan pendekatan grey box / black box (metode
+				manual{blackbox ? ', atau yang memerlukan login pada black box' : ''}) dinyatakan
+				<b>Out of Scope</b> dan tidak ikut dinilai.
 			</p>
-			{#if blackbox}
-				<p class="catatan">
-					Keterbatasan: pada black box, metode yang memerlukan login berstatus belum terverifikasi
-					sehingga putusan tertinggi adalah Laik Bersyarat.
-				</p>
-			{/if}
 		</section>
 
 		<!-- ================= 3. CAKUPAN & RUANG LINGKUP ================= -->
@@ -485,7 +475,7 @@
 			<table class="tabel">
 				<thead
 					><tr
-						><th>Fungsi keamanan</th><th class="angka">Lulus</th><th class="angka">Gagal</th><th
+						><th>Fungsi keamanan</th><th class="angka">Pass</th><th class="angka">Failed</th><th
 							class="angka">Belum terverifikasi</th
 						><th class="angka">Skor</th></tr
 					></thead
@@ -503,9 +493,11 @@
 				</tbody>
 			</table>
 			<p class="catatan">
-				Di luar cakupan: {nilai.hitungan.tidak_berlaku} kontrol tidak berlaku untuk aplikasi ini. {nilai
-					.hitungan.tidak_dapat_diverifikasi}
-				kontrol belum dapat diverifikasi secara otomatis dan memerlukan bukti dokumen atau tinjauan asesor.
+				Di luar cakupan: {nilai.hitungan.luar_cakupan} kontrol out of scope (tidak dapat diotomasi
+				dengan pendekatan {blackbox ? 'black box' : 'grey box'}) dan {nilai.hitungan.tidak_berlaku} kontrol
+				tidak berlaku untuk aplikasi ini.
+				{#if nilai.hitungan.tidak_dapat_diverifikasi}{nilai.hitungan.tidak_dapat_diverifikasi} kontrol
+					belum dapat diverifikasi.{/if}
 			</p>
 		</section>
 
@@ -614,9 +606,9 @@
 		<section class="lembar" id="detail">
 			<h2 class="judul-bab"><span>6</span> Detail Informasi Seluruh Pengujian</h2>
 			<p class="paragraf">
-				Total {baris.length} metode uji. Status: lulus {nilai.hitungan.lulus}, gagal {nilai.hitungan
-					.gagal}, belum terverifikasi {nilai.hitungan.tidak_dapat_diverifikasi}, tidak berlaku {nilai
-					.hitungan.tidak_berlaku} (hitungan per kontrol).
+				Total {baris.length} metode uji. Status kontrol: pass {nilai.hitungan.lulus}, failed {nilai
+					.hitungan.gagal}, out of scope {nilai.hitungan.luar_cakupan}, belum terverifikasi {nilai
+					.hitungan.tidak_dapat_diverifikasi}, tidak berlaku {nilai.hitungan.tidak_berlaku}.
 			</p>
 			{#each perFungsiBaris as g (g.id)}
 				<h3><span class="mono">{g.id}</span> {g.nama}</h3>

@@ -23,13 +23,15 @@
 		gagal: '#ff7b6b',
 		tidak_dapat_diverifikasi: '#f5c451',
 		tidak_berlaku: '#8c9bab',
+		luar_cakupan: '#6b7785',
 		antre: 'rgba(255,255,255,0.3)',
 		berjalan: '#7fe9d8'
 	};
 	const FILTER = [
 		['semua', 'Semua'],
-		['gagal', 'Gagal'],
-		['lulus', 'Lulus'],
+		['gagal', 'Failed'],
+		['lulus', 'Pass'],
+		['luar_cakupan', 'Out of Scope'],
 		['tidak_dapat_diverifikasi', 'Perlu tinjauan'],
 		['berjalan', 'Berjalan / antre']
 	] as const;
@@ -81,9 +83,9 @@
 		<div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-1.5 font-mono text-[10px] whitespace-nowrap text-white/45 tabular-nums">
 			<span>Selesai <span class="text-white/80">{hitung.selesai}/{hitung.total}</span></span>
 			<span class="text-white/15">|</span>
-			<span>Gagal <span class="text-[#ff7b6b]">{hitung.gagal}</span></span>
+			<span>Failed <span class="text-[#ff7b6b]">{hitung.gagal}</span></span>
 			<span class="text-white/15">|</span>
-			<span>Lulus <span class="text-[#9fe08a]">{hitung.lulus}</span></span>
+			<span>Pass <span class="text-[#9fe08a]">{hitung.lulus}</span></span>
 		</div>
 	</div>
 	<div class="relative flex items-center gap-2 px-3 pb-2">

@@ -42,3 +42,15 @@ test('tanpa endpoint API ber-field → form_input tetap tidak berlaku', () => {
   assert.equal(penerapanMetode(target, metodeInpv('api')).jalan, true);
   assert.equal(penerapanMetode(target, metodeInpv('form_input')).status, 'tidak_berlaku');
 });
+
+test('out of scope: metode manual, engine tak didukung, dan (black box) yang butuh login', () => {
+  const target = { testPoints: { login: { tersedia: true } }, accounts: { daftar: [{ username: 'a', password: 'b' }] } };
+  const dasar = { testPoint: 'login', kind: 'otomatis', engine: 'custom', requiresAuth: false, profile: 'aman' };
+  assert.equal(penerapanMetode(target, { ...dasar, kind: 'manual', engine: 'manual' }).status, 'luar_cakupan');
+  assert.equal(penerapanMetode(target, { ...dasar, engine: 'burp' }).status, 'luar_cakupan');
+  const butuhLogin = { ...dasar, requiresAuth: true };
+  assert.deepEqual(penerapanMetode(target, butuhLogin), { jalan: true }, 'grey box dengan akun → dijalankan');
+  assert.equal(penerapanMetode(target, butuhLogin, { pendekatan: 'blackbox' }).status, 'luar_cakupan');
+  // Akun belum diisi (grey box) bukan out of scope — masih bisa diuji bila akun dilengkapi.
+  assert.equal(penerapanMetode({ ...target, accounts: null }, butuhLogin).status, 'tidak_dapat_diverifikasi');
+});
