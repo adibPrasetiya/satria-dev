@@ -57,10 +57,12 @@ export const WARNA_STATUS: Record<string, string> = {
 	berjalan: '#7fe9d8'
 };
 
+// Skala severity (ordinal). Divalidasi di permukaan gelap: pasangan bersebelahan lolos CVD (ΔE ≥ 12)
+// & batas penglihatan normal (ΔE ≥ 16). Info memakai abu-abu netral.
 export const WARNA_SEVERITY: Record<Severity, string> = {
-	kritis: '#ff5c5c',
-	tinggi: '#ff922b',
-	sedang: '#f5c451',
-	rendah: '#62a0ea',
+	kritis: '#d93f45',
+	tinggi: '#f08a24',
+	sedang: '#e9cf53',
+	rendah: '#3f88de',
 	info: '#8c9bab'
 };

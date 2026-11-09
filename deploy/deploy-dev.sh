@@ -21,6 +21,17 @@ echo "==> Backend: install dependensi + migrasi DB + sinkron katalog"
 # kosong; tidak menimpa isian admin dan tidak menghapus satuan.
 ( cd backend && npm ci && npm run db:migrate && npm run catalog:sync && npm run satuan:seed )
 
+# Rekonsiliasi backend/.env: AI penyusun laporan memakai konfigurasi AI yang sama dengan worker.
+# Variabel yang belum ada di backend/.env disalin dari worker/.env (nilai yang sudah diisi tidak ditimpa).
+if [ -f backend/.env ] && [ -f worker/.env ]; then
+  for var in AI_PROVIDER GEMINI_API_KEY ANTHROPIC_API_KEY AI_API_KEY AI_MODEL; do
+    if ! grep -q "^${var}=" backend/.env && grep -q "^${var}=" worker/.env; then
+      grep "^${var}=" worker/.env | tail -1 >> backend/.env
+      echo "==> backend/.env: tambah ${var} dari worker/.env"
+    fi
+  done
+fi
+
 echo "==> Frontend: install + build statis (hasil di frontend/build, disajikan Nginx)"
 ( cd frontend && npm ci && npm run build )
 

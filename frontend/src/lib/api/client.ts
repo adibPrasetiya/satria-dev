@@ -20,6 +20,7 @@ const DI_BACKEND = [
 	'ubahMetode',
 	'listAplikasi',
 	'cariAplikasi',
+	'analisisAi',
 	'getAplikasi',
 	'buatAplikasi',
 	'ubahAplikasi',

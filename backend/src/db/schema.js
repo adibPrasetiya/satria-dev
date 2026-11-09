@@ -305,6 +305,9 @@ export const scans = mysqlTable(
     findingsHigh: smallint('findings_high', { unsigned: true }),
     findingsMedium: smallint('findings_medium', { unsigned: true }),
     findingsLow: smallint('findings_low', { unsigned: true }),
+    // Laporan hasil generate AI (ringkasan eksekutif + rekomendasi). Hanya disimpan untuk scan SELESAI
+    // terakhir sebuah aplikasi; laporan riwayat lama selalu di-generate ulang & tidak disimpan.
+    aiAnalysis: json('ai_analysis').$type(),
   },
   (table) => [
     index('scans_application_id_idx').on(table.applicationId),

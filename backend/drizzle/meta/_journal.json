@@ -99,6 +99,13 @@
       "when": 1793240000000,
       "tag": "0013_scans_pendekatan",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1793300000000,
+      "tag": "0014_scans_laporan_ai",
+      "breakpoints": true
     }
   ]
 }
