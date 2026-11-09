@@ -59,13 +59,16 @@
 	const scanSelesai = $derived(scans.find((s) => s.status === 'selesai'));
 	const scanBerjalan = $derived(scans.find((s) => s.status === 'berjalan'));
 	const penilaian = $derived(scanSelesai ? nilaiKelaikan(scanSelesai.hasil) : null);
-	// Admin, atau pemilik dari satuan yang sama (data mock lama: pendaftarnya sendiri).
+	// Mengubah data aset: admin, atau pemilik dari satuan yang sama (data mock lama: pendaftarnya sendiri).
 	const bisaUbah = $derived(
 		!!app &&
 			(auth.punya('admin') ||
 				(auth.punya('pemilik') &&
 					(app.satuan_id ? app.satuan_id === auth.pengguna?.satuan_id : app.pemilik_id === auth.pengguna?.id)))
 	);
+
+	// Menyiapkan & menjalankan pengujian: asesor/admin (pemilik hanya melihat hasil).
+	const bisaUji = $derived(!!app && auth.bisaMenguji);
 
 	const LABEL_LINGKUNGAN = { produksi: 'Produksi', staging: 'Staging', pengembangan: 'Pengembangan' };
 	const LABEL_KLASIFIKASI = { biasa: 'Biasa', terbatas: 'Terbatas', rahasia: 'Rahasia' };
@@ -128,7 +131,7 @@
 			{/if}
 			{#if scanBerjalan}
 				<Button href="/scan/{scanBerjalan.id}"><LoaderCircle class="animate-spin" /> Pantau Pengujian</Button>
-			{:else if bisaUbah}
+			{:else if bisaUji}
 				<Button onclick={() => (dialogMetode = true)} class="bg-gold text-gold-foreground hover:bg-gold/85">
 					<FlaskConical /> Mulai Pengujian
 				</Button>
@@ -166,7 +169,8 @@
 		</div>
 	</div>
 
-	<!-- Pengujian disiapkan terpisah dari data aset. -->
+	<!-- Pengujian disiapkan terpisah dari data aset (hanya penguji: asesor/admin). -->
+	{#if bisaUji}
 	<div class="sudut-taktis mt-6 flex flex-col gap-3 rounded-lg border border-dashed border-gold/50 bg-gold/5 p-4 sm:flex-row sm:items-center">
 		<FlaskConical class="size-5 shrink-0 text-gold" />
 		<div class="flex-1 text-sm">
@@ -177,9 +181,10 @@
 			</p>
 		</div>
 		<Button href="/aplikasi/{app.id}/persiapan" class="bg-gold text-gold-foreground hover:bg-gold/85">
-			{bisaUbah ? 'Isi data pengujian' : 'Lihat data pengujian'}
+			Isi data pengujian
 		</Button>
 	</div>
+	{/if}
 
 	<Tabs.Root value="aset" class="mt-6">
 		<Tabs.List class="w-full justify-start overflow-x-auto sm:w-auto">

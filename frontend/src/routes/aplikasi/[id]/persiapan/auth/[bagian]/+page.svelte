@@ -50,7 +50,8 @@
 			.catch((e) => (galat = (e as Error).message));
 	});
 
-	const bisaUbah = $derived(auth.punya('pemilik', 'admin'));
+	// Persiapan uji diisi oleh penguji (asesor/admin).
+	const bisaUbah = $derived(auth.bisaMenguji);
 	const fungsiAuth = $derived(katalog?.fungsi_keamanan.find((f) => f.id === 'AUTH') ?? null);
 
 	// Kode metode ringkas + nama dari katalog, untuk lencana "n metode uji".

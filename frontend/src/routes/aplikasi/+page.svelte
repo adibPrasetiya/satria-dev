@@ -63,9 +63,11 @@
 	let dipilih = $state<string | null>(null);
 	let dlgTindakan = $state(false);
 	let dlgMetode = $state(false);
+	// Pemilik tidak melakukan pengujian → langsung ke riwayat/hasil tanpa modal tindakan.
 	function bukaAset(id: string) {
 		dipilih = id;
-		dlgTindakan = true;
+		if (auth.bisaMenguji) dlgTindakan = true;
+		else bukaRiwayat(id);
 	}
 
 	// Riwayat pengujian → halaman operasi pengujian terakhir (riwayat lain dipilih di sana);
@@ -246,7 +248,7 @@
 	deskripsi="Daftar aplikasi web yang diregistrasikan untuk asesmen kelaikan keamanan."
 >
 	{#snippet aksi()}
-		{#if auth.punya('pemilik', 'admin')}
+		{#if auth.bisaMendaftarkan}
 			<Button href="/aplikasi/baru"><CirclePlus /> Registrasi Aplikasi</Button>
 		{/if}
 	{/snippet}
@@ -258,7 +260,7 @@
 	<Memuat />
 {:else if data.ringkasan?.semua === 0 && !adaFilter}
 	<Kosong judul="Belum ada aplikasi" pesan="Registrasikan aplikasi untuk memulai asesmen.">
-		{#if auth.punya('pemilik', 'admin')}
+		{#if auth.bisaMendaftarkan}
 			<Button href="/aplikasi/baru"><CirclePlus /> Registrasi Aplikasi</Button>
 		{/if}
 	</Kosong>

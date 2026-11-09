@@ -5,7 +5,7 @@
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import AppShell from '#lib/components/AppShell.svelte';
 	import PanggungAuth from '#lib/components/PanggungAuth.svelte';
-	import { auth } from '#lib/stores/auth.svelte.js';
+	import { auth, PERAN_PENDAFTAR, PERAN_PENGUJI } from '#lib/stores/auth.svelte.js';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import type { Peran } from '#lib/types.js';
@@ -13,17 +13,21 @@
 
 	let { children }: LayoutProps = $props();
 
-	// Batas akses per awalan route.
-	const AKSES: [string, Peran[]][] = [
-		['/admin', ['admin']],
-		['/aplikasi/baru', ['pemilik', 'admin']]
+	// Batas akses per pola route (backend tetap menegakkan hal yang sama lewat requireRole).
+	const AKSES: [RegExp, Peran[]][] = [
+		[/^\/admin(\/|$)/, ['admin']],
+		// Mendaftarkan & mengubah aplikasi: pemilik/admin.
+		[/^\/aplikasi\/baru(\/|$)/, PERAN_PENDAFTAR],
+		[/^\/aplikasi\/[^/]+\/ubah(\/|$)/, PERAN_PENDAFTAR],
+		// Menyiapkan & menjalankan pengujian: asesor/admin.
+		[/^\/aplikasi\/[^/]+\/(pengujian|persiapan)(\/|$)/, PERAN_PENGUJI]
 	];
 
 	// Halaman publik (tanpa sesi): login, pendaftaran akun, dan lupa kata sandi.
 	const PUBLIK = ['/login', '/daftar', '/lupa-sandi', '/reset-sandi'];
 	const diLogin = $derived(PUBLIK.some((p) => page.url.pathname.startsWith(p)));
 	const diizinkan = $derived(
-		AKSES.every(([awalan, peran]) => !page.url.pathname.startsWith(awalan) || auth.punya(...peran))
+		AKSES.every(([pola, peran]) => !pola.test(page.url.pathname) || auth.punya(...peran))
 	);
 
 	$effect(() => {

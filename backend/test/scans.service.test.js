@@ -13,6 +13,7 @@ after(() => pool.end());
 const pemilikA = { id: '10', peran: 'pemilik', satuan_id: '1' };
 const pemilikB = { id: '11', peran: 'pemilik', satuan_id: '2' };
 const admin = { id: '1', peran: 'admin', satuan_id: '9' };
+const asesor = { id: '20', peran: 'asesor', satuan_id: '5' };
 
 // Metode AUTH-1.3 seperti di katalog (subset relevan).
 const METODE = [
@@ -138,11 +139,11 @@ describe('scans.service', () => {
   it('menolak mulai scan bila persiapan uji belum diisi', async () => {
     const repo2 = fakeRepo(); // tanpa target
     const svc = createScansService({ repository: repo2, applications: fakeApps(), events: { siarkan() {} }, auditor() {} });
-    await assert.rejects(() => svc.mulai(pemilikA, '1'), /Persiapan pengujian belum diisi/);
+    await assert.rejects(() => svc.mulai(asesor, '1'), /Persiapan pengujian belum diisi/);
   });
 
   it('seed task AUTH-1.3: T01/T02/T03 antre, T04 & T05 selesai dengan status khusus', async () => {
-    const scan = await service.mulai(pemilikA, '1');
+    const scan = await service.mulai(asesor, '1');
     const h = scan.hasil;
     assert.equal(h['AUTH-1.3-T01'].status, 'antre');
     assert.equal(h['AUTH-1.3-T02'].status, 'antre');
@@ -160,30 +161,40 @@ describe('scans.service', () => {
     // target hanya punya registrasi; ubah_password tidak tersedia -> T04 tetap tidak_dapat_diverifikasi (butuh auth lebih dulu dicek),
     // tetapi metode yang titik ujinya tak ada akan tidak_berlaku. Uji dengan target kosong untuk registrasi.
     repo._state.targets.set(1, { applicationId: 1, testPoints: { registrasi: { tersedia: false } }, forms: {} });
-    const scan = await service.mulai(pemilikA, '1');
+    const scan = await service.mulai(asesor, '1');
     assert.equal(scan.hasil['AUTH-1.3-T01'].status, 'tidak_berlaku');
   });
 
   it('scan tanpa task antre langsung selesai', async () => {
     repo._state.targets.set(1, { applicationId: 1, testPoints: { registrasi: { tersedia: false } }, forms: {} });
-    const scan = await service.mulai(pemilikA, '1');
+    const scan = await service.mulai(asesor, '1');
     assert.equal(scan.status, 'selesai');
   });
 
   it('pemilik lain tidak bisa melihat scan (404)', async () => {
-    const scan = await service.mulai(pemilikA, '1');
+    const scan = await service.mulai(asesor, '1');
     await assert.rejects(() => service.get(pemilikB, scan.id), /tidak ditemukan/);
   });
 
+  it('pemilik hanya melihat hasil: tidak bisa memulai, menyiapkan, atau menghentikan pengujian (403)', async () => {
+    const scan = await service.mulai(asesor, '1');
+    const dto = await service.get(pemilikA, scan.id);
+    assert.equal(dto.id, scan.id);
+    await assert.rejects(() => service.mulai(pemilikA, '1'), { statusCode: 403 });
+    await assert.rejects(() => service.batalkan(pemilikA, scan.id), { statusCode: 403 });
+    await assert.rejects(() => service.getTarget(pemilikA, '1'), { statusCode: 403 });
+    await assert.rejects(() => service.simpanTarget(pemilikA, '1', { test_points: {}, forms: {} }), { statusCode: 403 });
+  });
+
   it('admin bisa melihat & membatalkan scan', async () => {
-    const scan = await service.mulai(pemilikA, '1');
+    const scan = await service.mulai(asesor, '1');
     const dibatalkan = await service.batalkan(admin, scan.id);
     assert.equal(dibatalkan.status, 'dibatalkan');
     assert.ok(events.some(([, e]) => e.tipe === 'status' && e.status === 'dibatalkan'));
   });
 
   it('simpanTarget menyimpan pemetaan titik uji', async () => {
-    const r = await service.simpanTarget(pemilikA, '1', {
+    const r = await service.simpanTarget(asesor, '1', {
       test_points: { registrasi: { tersedia: true, url: 'http://a.test/x', metode_http: 'POST' } },
       forms: {},
     });
@@ -193,7 +204,7 @@ describe('scans.service', () => {
   it('mode eksploratif: hanya menyemai task penemuan (belum ada task pengujian)', async () => {
     const repo2 = fakeRepo(); // tanpa target — tak perlu persiapan untuk eksploratif
     const svc = createScansService({ repository: repo2, applications: fakeApps(), events: { siarkan() {} }, auditor() {} });
-    const scan = await svc.mulai(pemilikA, '1', { mode: 'eksploratif' });
+    const scan = await svc.mulai(asesor, '1', { mode: 'eksploratif' });
     assert.equal(scan.mode, 'eksploratif');
     assert.equal(scan.status, 'berjalan');
     assert.equal(repo2._state.tasks.length, 1);
@@ -205,7 +216,7 @@ describe('scans.service', () => {
     let disimpan = null;
     repo2.mergeAccounts = async (_id, data) => (disimpan = data);
     const svc = createScansService({ repository: repo2, applications: fakeApps(), events: { siarkan() {} }, auditor() {} });
-    const scan = await svc.mulai(pemilikA, '1', {
+    const scan = await svc.mulai(asesor, '1', {
       mode: 'eksploratif',
       pendekatan: 'blackbox',
       accounts: { daftar: [{ username: 'a', password: 'b' }] },
@@ -215,16 +226,16 @@ describe('scans.service', () => {
     assert.equal(repo2._state.scans.at(-1).approach, 'blackbox');
     assert.equal(disimpan.accounts, null, 'akun dari klien diabaikan');
     assert.ok(repo2._state.logs.some((l) => /black box/.test(l.message)));
-    await assert.rejects(svc.mulai(pemilikA, '1', { mode: 'terarah', pendekatan: 'blackbox' }), { statusCode: 400 });
+    await assert.rejects(svc.mulai(asesor, '1', { mode: 'terarah', pendekatan: 'blackbox' }), { statusCode: 400 });
   });
 
   it('black box memakai ulang penemuan hanya bila penemuan itu tanpa login; tak butuh akun tersimpan', async () => {
     const opsi = { mode: 'eksploratif', pendekatan: 'blackbox', pakaiDiscovery: true };
     repo._state.targets.set(1, { ...targetRegistrasi[0][1], accounts: null, discovery: { terautentikasi: true } });
-    await assert.rejects(service.mulai(pemilikA, '1', opsi), { statusCode: 400 });
+    await assert.rejects(service.mulai(asesor, '1', opsi), { statusCode: 400 });
 
     repo._state.targets.set(1, { ...targetRegistrasi[0][1], accounts: null, discovery: { terautentikasi: false } });
-    const scan = await service.mulai(pemilikA, '1', opsi);
+    const scan = await service.mulai(asesor, '1', opsi);
     assert.equal(scan.pendekatan, 'blackbox');
     const tasks = repo._state.tasks.filter((t) => t.scanId === Number(scan.id));
     assert.equal(tasks.some((t) => t.engine === 'discovery'), false);
@@ -234,7 +245,7 @@ describe('scans.service', () => {
   it('seedPhase2 menyemai task pengujian setelah penemuan & idempoten', async () => {
     const repo2 = fakeRepo();
     const svc = createScansService({ repository: repo2, applications: fakeApps(), events: { siarkan() {} }, auditor() {} });
-    const scan = await svc.mulai(pemilikA, '1', { mode: 'eksploratif' });
+    const scan = await svc.mulai(asesor, '1', { mode: 'eksploratif' });
     // simulasikan penemuan mengisi target
     await repo2.mergeDiscovery(1, {
       testPoints: { registrasi: { tersedia: true, url: 'http://a.test/r', metode_http: 'POST', sumber: 'otomatis' } },
@@ -255,7 +266,7 @@ describe('scans.service', () => {
       accounts: { daftar: [{ username: 'u1', password: 'rahasia', totp_secret: 'JBSWY3DPEHPK3PXP' }, { username: 'u2', password: 'x' }] },
       discovery: { waktu: '2026-10-26T01:00:00.000Z', jumlah_endpoint_unik: 2, endpoints_lengkap: [{ metode_http: 'GET', path_template: '/a' }] },
     });
-    const t = await service.getTarget(pemilikA, '1');
+    const t = await service.getTarget(asesor, '1');
     assert.deepEqual(t.akun, [
       { username: 'u1', ada_sandi: true, ada_totp: true },
       { username: 'u2', ada_sandi: true, ada_totp: false },
@@ -270,7 +281,7 @@ describe('scans.service', () => {
   it('getTarget: aplikasi tanpa persiapan → akun kosong, discovery null', async () => {
     const repo2 = fakeRepo();
     const svc = createScansService({ repository: repo2, applications: fakeApps(), events: { siarkan() {} }, auditor() {} });
-    const t = await svc.getTarget(pemilikA, '1');
+    const t = await svc.getTarget(asesor, '1');
     assert.deepEqual(t.akun, []);
     assert.equal(t.discovery, null);
   });
@@ -281,7 +292,7 @@ describe('scans.service', () => {
       accounts: { daftar: [{ username: 'u1', password: 'p' }, { username: 'u2', password: 'p' }] },
       discovery: { waktu: '2026-10-26T01:00:00.000Z', jumlah_endpoint_unik: 5 },
     });
-    const scan = await service.mulai(pemilikA, '1', { mode: 'eksploratif', pakaiDiscovery: true });
+    const scan = await service.mulai(asesor, '1', { mode: 'eksploratif', pakaiDiscovery: true });
     const tasks = repo._state.tasks.filter((t) => t.scanId === Number(scan.id));
     assert.equal(tasks.some((t) => t.engine === 'discovery'), false);
     assert.ok(tasks.length > 0);
@@ -294,15 +305,15 @@ describe('scans.service', () => {
       accounts: { daftar: [{ username: 'u1', password: 'p' }, { username: 'u2', password: 'p' }] },
       discovery: { waktu: '2026-10-26T01:00:00.000Z', scan_id: '41' },
     });
-    const ulang = await service.mulai(pemilikA, '1', { mode: 'eksploratif', pakaiDiscovery: true });
+    const ulang = await service.mulai(asesor, '1', { mode: 'eksploratif', pakaiDiscovery: true });
     assert.equal(ulang.recon_scan_id, '41');
     assert.equal(repo._state.scans.at(-1).reconScanId, 41);
-    const baru = await service.mulai(pemilikA, '1', { mode: 'eksploratif' });
+    const baru = await service.mulai(asesor, '1', { mode: 'eksploratif' });
     assert.equal(baru.recon_scan_id, baru.id);
   });
 
   it('log ber-data (peristiwa penemuan) ikut di DTO; log biasa tanpa data', async () => {
-    const scan = await service.mulai(pemilikA, '1', { mode: 'eksploratif' });
+    const scan = await service.mulai(asesor, '1', { mode: 'eksploratif' });
     await repo.insertLog(Number(scan.id), 'info', 'Spec ditemukan', { v: 1, jenis: 'docs', url: 'http://a.test/openapi.json' });
     const dto = await service.get(pemilikA, scan.id);
     const ber = dto.log.find((l) => l.pesan === 'Spec ditemukan');
@@ -312,7 +323,7 @@ describe('scans.service', () => {
 
   it('eksploratif + pakaiDiscovery ditolak bila belum ada penemuan', async () => {
     await assert.rejects(
-      () => service.mulai(pemilikA, '1', { mode: 'eksploratif', pakaiDiscovery: true }),
+      () => service.mulai(asesor, '1', { mode: 'eksploratif', pakaiDiscovery: true }),
       /Belum ada hasil penemuan/,
     );
   });
