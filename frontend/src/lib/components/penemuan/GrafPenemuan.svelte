@@ -28,7 +28,8 @@
 		berjalan,
 		terpilih = null,
 		onpilih,
-		tepi = { atas: 0, kanan: 0 }
+		tepi = { atas: 0, kanan: 0 },
+		kontrol = true
 	}: {
 		graf: Graf;
 		berjalan: boolean;
@@ -36,6 +37,8 @@
 		onpilih: (id: string | null) => void;
 		/** Area kanvas yang tertutup toolbar (atas) & panel mengambang (kanan), px. */
 		tepi?: { atas: number; kanan: number; bawah?: number };
+		/** Tampilkan tombol zoom bawaan (matikan bila induk menyediakan toolbar sendiri). */
+		kontrol?: boolean;
 	} = $props();
 
 	type SimNode = SimulationNodeDatum & { id: string; jenis: JenisNode; r: number; lahir: number; ref: NodeGraf; tx?: number; ty?: number };
@@ -260,6 +263,11 @@
 		interaksi = false;
 		tujuan = null;
 		paskan(1);
+	}
+	/** Pusatkan ke node terpilih; tanpa pilihan → paskan seluruh graf. */
+	export function pusatkan() {
+		if (terpilih && simNodes.has(terpilih)) fokusKe(terpilih);
+		else pas();
 	}
 	function fokusKe(id: string) {
 		const n = simNodes.get(id);
@@ -585,9 +593,11 @@
 		</div>
 	{/if}
 
-	<div style:right="{tepi.kanan + 12}px" style:bottom="{(tepi.bawah ?? 0) + 12}px" class="absolute z-10 flex flex-col overflow-hidden rounded border border-white/10 bg-[#0c1014]/90 text-white/70">
-		<button type="button" class="p-1.5 hover:bg-white/10 hover:text-white" onclick={() => zoom(1.25)} aria-label="Perbesar"><Plus class="size-3.5" /></button>
-		<button type="button" class="p-1.5 hover:bg-white/10 hover:text-white" onclick={() => zoom(0.8)} aria-label="Perkecil"><Minus class="size-3.5" /></button>
-		<button type="button" class="p-1.5 hover:bg-white/10 hover:text-white" onclick={pas} aria-label="Paskan ke layar"><Maximize class="size-3.5" /></button>
-	</div>
+	{#if kontrol}
+		<div style:right="{tepi.kanan + 12}px" style:bottom="{(tepi.bawah ?? 0) + 12}px" class="absolute z-10 flex flex-col overflow-hidden rounded border border-white/10 bg-[#0c1014]/90 text-white/70">
+			<button type="button" class="p-1.5 hover:bg-white/10 hover:text-white" onclick={() => zoom(1.25)} aria-label="Perbesar"><Plus class="size-3.5" /></button>
+			<button type="button" class="p-1.5 hover:bg-white/10 hover:text-white" onclick={() => zoom(0.8)} aria-label="Perkecil"><Minus class="size-3.5" /></button>
+			<button type="button" class="p-1.5 hover:bg-white/10 hover:text-white" onclick={pas} aria-label="Paskan ke layar"><Maximize class="size-3.5" /></button>
+		</div>
+	{/if}
 </div>

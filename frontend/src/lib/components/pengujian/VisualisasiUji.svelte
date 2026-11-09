@@ -1,32 +1,30 @@
 <script lang="ts">
-	// Panggung fase pengujian: satu adegan UMUM per fungsi keamanan (autentikasi / validasi input),
-	// diputar berulang (loop) dengan tempo tetap, bukan satu adegan per metode. Data uji nyata dari
+	// Panggung fase pengujian: satu adegan UMUM untuk semua metode uji (siapkan → kirim → respons →
+	// evaluasi), diputar berulang (loop) dengan tempo tetap. Data uji nyata dari
 	// worker ditumpangkan sebagai HUD tipis: metode yang sedang dijalankan, progres, dan kartu
 	// verdict saat sebuah metode selesai. Klik baris di Daftar Uji → sorot & tampilkan ringkasannya.
 	import { onMount, untrack } from 'svelte';
 	import type { MetodeUji, Uji } from '#lib/pengujian/uji.js';
 	import { posisi, totalDurasi, type Babak } from '#lib/pengujian/timeline.js';
-	import AdeganAuth, { babak as babakAuth } from './AdeganAuth.svelte';
-	import AdeganInpv, { babak as babakInpv } from './AdeganInpv.svelte';
-	import AdeganSess, { babak as babakSess } from './AdeganSess.svelte';
-	import AdeganAccs, { babak as babakAccs } from './AdeganAccs.svelte';
+	import AdeganUmum, { babak } from './AdeganUmum.svelte';
+	import type { RequestUji } from '#lib/pengujian/peristiwa.js';
 	import { cn } from '#lib/utils.js';
 
 	let {
 		uji,
 		berjalan,
 		host,
-		fungsi = 'AUTH',
+		polos = false,
 		dipilih = $bindable(null),
 		aktif = $bindable(null),
 		tepi = { atas: 0, kanan: 0 },
-		judul = 'Uji autentikasi'
+		judul = 'Operasi uji'
 	}: {
 		uji: Uji;
 		berjalan: boolean;
 		host: string;
-		/** Fungsi keamanan yang divisualisasikan — memilih adegan. */
-		fungsi?: 'AUTH' | 'INPV' | 'SESS' | 'ACCS';
+		/** Tanpa bingkai sendiri (dipasang di dalam kartu induk). */
+		polos?: boolean;
 		/** Metode yang dipilih di Daftar Uji (disorot & ringkasannya ditampilkan). */
 		dipilih?: string | null;
 		/** Metode yang sedang disorot (untuk auto-scroll Daftar Uji). */
@@ -34,10 +32,6 @@
 		tepi?: { atas: number; kanan: number; bawah?: number };
 		judul?: string;
 	} = $props();
-
-	const babak = $derived<Babak[]>(
-		{ AUTH: babakAuth, INPV: babakInpv, SESS: babakSess, ACCS: babakAccs }[fungsi] ?? babakAuth
-	);
 
 	// --- timeline berulang ---
 	let jam = $state(0); // ms sejak mulai
@@ -47,7 +41,7 @@
 
 	// Bingkai statis untuk prefers-reduced-motion: babak "langsung ke API" (inti cerita), tengah.
 	function bingkaiKunci(b: Babak[]) {
-		const i = Math.max(0, b.findIndex((x) => x.id === 'langsung'));
+		const i = Math.max(0, b.findIndex((x) => x.id === 'kirim'));
 		return { i, p: 0.6 };
 	}
 
@@ -73,6 +67,11 @@
 	const fokus = $derived(metodeDipilih ?? metodeJalan);
 	const totalN = $derived(daftar.length);
 	const selesaiN = $derived(daftar.filter((m) => m.status !== null).length);
+	// Request nyata terakhir metode yang difokuskan → ditampilkan pada paket adegan.
+	const reqFokus = $derived.by<RequestUji | null>(() => {
+		const k = fokus?.ketukan.findLast((x) => x.tipe === 'request');
+		return k && k.tipe === 'request' ? k.req : null;
+	});
 
 	$effect(() => {
 		aktif = (metodeDipilih ?? metodeJalan)?.id ?? null;
@@ -102,7 +101,7 @@
 	};
 </script>
 
-<div class={cn('panggung-uji relative h-full w-full overflow-hidden bg-[#0c1014]', !(tepi.atas > 0) && 'sudut-taktis rounded-lg border border-[#9fe08a]/20')}>
+<div class={cn('panggung-uji kisi relative h-full w-full overflow-hidden bg-[#0c1014]', !(tepi.atas > 0) && !polos && 'sudut-taktis rounded-lg border border-[#9fe08a]/20')}>
 	<!-- HUD atas -->
 	<div class="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-4" style:top="{tepi.atas}px" style:right="{tepi.kanan}px">
 		<div class="min-w-0">
@@ -131,7 +130,7 @@
 	</div>
 
 	<svg
-		viewBox="0 0 1000 520"
+		viewBox="90 120 820 270"
 		style:top="{tepi.atas + 64}px"
 		style:width="calc(100% - {tepi.kanan}px)"
 		style:height="calc(100% - {tepi.atas + 64 + (tepi.bawah ?? 0)}px - 48px)"
@@ -140,22 +139,8 @@
 		role="img"
 		aria-label="Adegan {judul}: {babakKini.teks}"
 	>
-		<defs>
-			<pattern id="kisi-uji" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="rgba(255,255,255,0.035)" /></pattern>
-			<pattern id="kisi-uji-b" width="120" height="120" patternUnits="userSpaceOnUse"><path d="M120 0H0V120" fill="none" stroke="rgba(255,255,255,0.07)" /></pattern>
-		</defs>
-		<rect width="1000" height="520" fill="url(#kisi-uji)" />
-		<rect width="1000" height="520" fill="url(#kisi-uji-b)" />
 
-		{#if fungsi === 'INPV'}
-			<AdeganInpv i={pos.i} p={pos.p} />
-		{:else if fungsi === 'SESS'}
-			<AdeganSess i={pos.i} p={pos.p} />
-		{:else if fungsi === 'ACCS'}
-			<AdeganAccs i={pos.i} p={pos.p} />
-		{:else}
-			<AdeganAuth i={pos.i} p={pos.p} />
-		{/if}
+		<AdeganUmum i={pos.i} p={pos.p} req={reqFokus} {host} />
 	</svg>
 
 	<!-- bilah bawah: verdict (prioritas) / ringkasan metode dipilih / keterangan babak -->
@@ -180,7 +165,13 @@
 </div>
 
 <style>
-	/* Gaya teks SVG dipakai oleh adegan anak (AdeganAuth/AdeganInpv) via :global. */
+	/* Kisi latar memenuhi seluruh kanvas (bukan hanya area viewBox adegan). */
+	.kisi {
+		background-image: linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px),
+			linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+		background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+	}
+	/* Gaya teks SVG dipakai oleh adegan anak (AdeganUmum, NodeSatya, NodeBackend) via :global. */
 	.panggung-uji :global(.lbl-simpul) { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: rgba(236, 240, 245, 0.95); text-anchor: middle; }
 	.panggung-uji :global(.lbl-sub) { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: rgba(160, 174, 192, 0.85); text-anchor: middle; }
 	.panggung-uji :global(.lbl-kanal) { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; paint-order: stroke; stroke: #0c1014; stroke-width: 4px; }

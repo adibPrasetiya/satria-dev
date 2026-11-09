@@ -1,35 +1,54 @@
 <script lang="ts">
+	// Halaman operasi pengujian (juga tujuan "Riwayat Pengujian"): header berjudul + tombol mode visual
+	// (Rekon & Discovery / Operasi Uji), tab utama (Topologi · Detail Analisis · Temuan · Laporan
+	// Sementara), kartu kanvas + panel kanan (daftar aset / daftar uji), panel log bawah, dan bilah status.
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import { api } from '#lib/api/client.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
-	import { indeksMetode } from '#lib/catalog.js';
-	import { durasi } from '#lib/format.js';
-	import type { Aplikasi, HasilMetode, Scan } from '#lib/types.js';
+	import { durasi, tanggal } from '#lib/format.js';
+	import type { Aplikasi, Scan } from '#lib/types.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import VisualisasiOperasi from '#lib/components/VisualisasiOperasi.svelte';
 	import VisualisasiPenemuan from '#lib/components/penemuan/VisualisasiPenemuan.svelte';
 	import DaftarAset from '#lib/components/penemuan/DaftarAset.svelte';
-	import KonsolLog from '#lib/components/penemuan/KonsolLog.svelte';
 	import VisualisasiUji from '#lib/components/pengujian/VisualisasiUji.svelte';
 	import DaftarUji from '#lib/components/pengujian/DaftarUji.svelte';
-	import { bangunUji, type Uji } from '#lib/pengujian/uji.js';
+	import PanelLog from '#lib/components/operasi/PanelLog.svelte';
+	import TabDetailAnalisis from '#lib/components/operasi/TabDetailAnalisis.svelte';
+	import TabTemuan from '#lib/components/operasi/TabTemuan.svelte';
+	import TabLaporanSementara from '#lib/components/operasi/TabLaporanSementara.svelte';
+	import { bangunUji } from '#lib/pengujian/uji.js';
 	import { bangunGraf } from '#lib/penemuan/graf.js';
+	import { barisMetode, daftarTemuan } from '#lib/operasi/ringkas.js';
+	import { indeksMetode } from '#lib/catalog.js';
 	import Memuat from '#lib/components/Memuat.svelte';
 	import { cn } from '#lib/utils.js';
 	import { toast } from 'svelte-sonner';
-	import Square from '@lucide/svelte/icons/square';
-	import Server from '@lucide/svelte/icons/server';
 	import { storeWorker, teksPerkiraan } from '#lib/stores/worker.svelte.js';
-	import FileBarChart from '@lucide/svelte/icons/file-chart-column';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
-	import PanelRightClose from '@lucide/svelte/icons/panel-right-close';
-	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
-	import { onMount } from 'svelte';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import Box from '@lucide/svelte/icons/box';
+	import FileText from '@lucide/svelte/icons/file-text';
+	import Play from '@lucide/svelte/icons/play';
+	import Square from '@lucide/svelte/icons/square';
+	import FileBarChart from '@lucide/svelte/icons/file-chart-column';
+	import Network from '@lucide/svelte/icons/network';
+	import ClipboardList from '@lucide/svelte/icons/clipboard-list';
+	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
+	import ChartColumn from '@lucide/svelte/icons/chart-column';
+	import ZoomIn from '@lucide/svelte/icons/zoom-in';
+	import ZoomOut from '@lucide/svelte/icons/zoom-out';
+	import Paskan from '@lucide/svelte/icons/scan';
+	import Crosshair from '@lucide/svelte/icons/crosshair';
+	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+	import Server from '@lucide/svelte/icons/server';
+	import History from '@lucide/svelte/icons/history';
 
 	const scanId = $derived(page.params.scanId!);
 
 	let scan = $state<Scan | null>(null);
 	let app = $state<Aplikasi | null>(null);
+	let riwayat = $state<Scan[]>([]);
 	let terkini = $state<string | null>(null);
 	// Entitas terpilih — dibagi antara graf penemuan & daftar aset.
 	let asetTerpilih = $state<string | null>(null);
@@ -37,9 +56,18 @@
 	$effect(() => {
 		const sid = scanId;
 		let berhenti = () => {};
+		let batal = false;
+		scan = null;
+		modePilihan = null;
+		tabUtama = 'topologi';
 		api.getScan(sid).then(async (s) => {
+			if (batal) return;
 			scan = s;
 			app = await api.getAplikasi(s.aplikasi_id);
+			api
+				.listScan(s.aplikasi_id)
+				.then((xs) => (riwayat = xs))
+				.catch(() => {});
 			berhenti = api.pantauScan(sid, (e) => {
 				if (!scan) return;
 				if (e.tipe === 'metode') {
@@ -59,7 +87,10 @@
 				}
 			});
 		});
-		return () => berhenti();
+		return () => {
+			batal = true;
+			berhenti();
+		};
 	});
 
 	// Posisi antrean & worker yang mengerjakan scan ini; disegarkan berkala selama berjalan.
@@ -79,58 +110,93 @@
 	});
 	$effect(() => storeWorker.pakai());
 
-	// Jam untuk durasi berjalan (Date.now() tidak reaktif).
+	// Jam (durasi berjalan & bilah status).
 	let sekarang = $state(Date.now());
 	$effect(() => {
-		if (scan?.status !== 'berjalan') return;
 		const t = setInterval(() => (sekarang = Date.now()), 1000);
 		return () => clearInterval(t);
 	});
+	const jamWib = $derived(
+		new Date(sekarang)
+			.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour12: false })
+			.replace(/:/g, '.')
+	);
 
-	const banner = $derived.by<{ nada: 'antre' | 'jalan' | 'putus' | 'mati'; teks: string } | null>(() => {
-		if (!scan || scan.status !== 'berjalan') return null;
-		const a = scan.antrean;
-		if (storeWorker.status && storeWorker.status.aktif === 0) return { nada: 'mati', teks: 'Tidak ada worker aktif — pengujian tertahan sampai worker dinyalakan' };
-		if (!a) return null;
-		if (a.worker) return { nada: 'jalan', teks: `Dikerjakan ${a.worker.id}${a.worker.tahap ? ` · ${a.worker.tahap}` : ''}` };
-		if (a.sedang_dikerjakan) return { nada: 'putus', teks: 'Worker terputus — menunggu worker lain mengambil alih' };
-		return { nada: 'antre', teks: `Menunggu worker — antrean ke-${a.posisi} (${teksPerkiraan(a.perkiraan_tunggu_detik)})` };
-	});
-	const WARNA_BANNER = { antre: 'border-[#f5c451]/40 text-[#f5c451]', jalan: 'border-[#9fe08a]/40 text-[#9fe08a]', putus: 'border-[#ff7b6b]/40 text-[#ff7b6b]', mati: 'border-[#ff7b6b]/40 text-[#ff7b6b]' };
-
-	const dijalankan = (h: HasilMetode) =>
-		h.status === 'antre' || h.status === 'berjalan' || h.durasi_ms !== undefined || !!h.menunggu_tinjauan;
-
-	const stat = $derived.by(() => {
-		if (!scan) return null;
-		const semua = Object.values(scan.hasil);
-		const jalan = semua.filter(dijalankan);
-		const selesai = jalan.filter((h) => h.status !== 'antre' && h.status !== 'berjalan');
-		const hitung = (s: string) => semua.filter((h) => h.status === s).length;
-		return {
-			total: jalan.length,
-			selesai: selesai.length,
-			persen: jalan.length ? Math.round((selesai.length / jalan.length) * 100) : 100,
-			lulus: hitung('lulus'),
-			gagal: hitung('gagal'),
-			tdv: hitung('tidak_dapat_diverifikasi'),
-			tb: hitung('tidak_berlaku')
-		};
-	});
+	const banner = $derived.by<{ nada: 'antre' | 'jalan' | 'putus' | 'mati'; teks: string } | null>(
+		() => {
+			if (!scan || scan.status !== 'berjalan') return null;
+			const a = scan.antrean;
+			if (storeWorker.status && storeWorker.status.aktif === 0)
+				return {
+					nada: 'mati',
+					teks: 'Tidak ada worker aktif — pengujian tertahan sampai worker dinyalakan'
+				};
+			if (!a) return null;
+			if (a.worker)
+				return {
+					nada: 'jalan',
+					teks: `Dikerjakan ${a.worker.id}${a.worker.tahap ? ` · ${a.worker.tahap}` : ''}`
+				};
+			if (a.sedang_dikerjakan)
+				return { nada: 'putus', teks: 'Worker terputus — menunggu worker lain mengambil alih' };
+			return {
+				nada: 'antre',
+				teks: `Menunggu worker — antrean ke-${a.posisi} (${teksPerkiraan(a.perkiraan_tunggu_detik)})`
+			};
+		}
+	);
+	const WARNA_BANNER = {
+		antre: 'border-[#f5c451]/40 text-[#f5c451]',
+		jalan: 'border-[#9fe08a]/40 text-[#9fe08a]',
+		putus: 'border-[#ff7b6b]/40 text-[#ff7b6b]',
+		mati: 'border-[#ff7b6b]/40 text-[#ff7b6b]'
+	};
 
 	// Fase operasi: penemuan (discovery) → pengujian → selesai. Diturunkan dari status + hasil.
+	const adaUji = $derived(!!scan && Object.keys(scan.hasil).some((k) => !k.startsWith('_')));
 	const fase = $derived.by<'penemuan' | 'pengujian' | 'selesai' | 'dihentikan'>(() => {
 		if (!scan) return 'penemuan';
 		if (scan.status === 'selesai') return 'selesai';
 		if (scan.status === 'dibatalkan') return 'dihentikan';
-		const adaUji = Object.keys(scan.hasil).some((k) => k !== '_discovery');
 		return adaUji ? 'pengujian' : 'penemuan';
 	});
 
+	// Data turunan.
+	const graf = $derived(scan && app ? bangunGraf(scan.log, app.url_dasar) : null);
+	const adaPeta = $derived(!!graf && graf.peristiwa > 0);
+	const uji = $derived(scan ? bangunUji(scan.log) : { daftar: [], per: new Map() });
+	const baris = $derived(scan ? barisMetode(scan) : []);
+	const temuan = $derived(daftarTemuan(baris));
+	const progres = $derived.by(() => {
+		const jalan = baris.filter((b) => b.status !== 'tidak_berlaku' || b.durasi_ms !== undefined);
+		const selesai = jalan.filter((b) => b.status !== 'antre' && b.status !== 'berjalan');
+		return {
+			total: jalan.length,
+			selesai: selesai.length,
+			persen: jalan.length ? Math.round((selesai.length / jalan.length) * 100) : 0
+		};
+	});
 	const metodeTerkini = $derived(terkini ? indeksMetode.get(terkini) : null);
-	const sasaran = $derived(
-		metodeTerkini ? `${metodeTerkini.metode.id} — ${metodeTerkini.metode.nama}` : fase === 'penemuan' && scan?.status === 'berjalan' ? 'Memetakan permukaan serangan…' : null
+
+	// Mode visual (tombol header): Rekon & Discovery (graf penemuan) atau Operasi Uji (adegan umum).
+	type Mode = 'rekon' | 'uji';
+	let modePilihan = $state<Mode | null>(null);
+	const mode = $derived<Mode>(
+		modePilihan ?? (adaPeta && (fase === 'penemuan' || !adaUji) ? 'rekon' : 'uji')
 	);
+
+	type TabUtama = 'topologi' | 'detail' | 'temuan' | 'laporan';
+	let tabUtama = $state<TabUtama>('topologi');
+	let sorotMetode = $state<string | null>(null);
+	let ujiAktif = $state<string | null>(null);
+	let ujiPilih = $state<string | null>(null);
+	function rinciMetode(id: string) {
+		sorotMetode = id;
+		tabUtama = 'detail';
+	}
+
+	// Kendali kanvas graf penemuan (toolbar kartu).
+	let visPeta = $state<ReturnType<typeof VisualisasiPenemuan>>();
 
 	// Status DB langsung "dibatalkan"; worker berhenti di batas tahap berikutnya (sinyal via heartbeat).
 	let menghentikan = $state(false);
@@ -146,304 +212,350 @@
 			menghentikan = false;
 		}
 	}
-
-	// Graf temuan penemuan, direkonstruksi dari peristiwa terstruktur pada log (live & setelah refresh).
-	const graf = $derived(scan && app ? bangunGraf(scan.log, app.url_dasar) : null);
-	const adaPeta = $derived(!!graf && graf.peristiwa > 0);
-	// Adegan uji per fungsi (Autentikasi, Validasi Input), direkonstruksi dari peristiwa uji pada log.
-	const ujiSemua = $derived(scan ? bangunUji(scan.log) : { daftar: [], per: new Map() });
-	const ujiFungsi = (fungsi: string): Uji => {
-		const daftar = ujiSemua.daftar.filter((m) => m.fungsi === fungsi);
-		return { daftar, per: new Map(daftar.map((m) => [m.id, m])) };
-	};
-	const ujiAuth = $derived(ujiFungsi('AUTH'));
-	const ujiInpv = $derived(ujiFungsi('INPV'));
-	const ujiSess = $derived(ujiFungsi('SESS'));
-	const ujiAccs = $derived(ujiFungsi('ACCS'));
-	const adaAuth = $derived(!!scan && Object.keys(scan.hasil).some((k) => k.startsWith('AUTH-')));
-	const adaInpv = $derived(!!scan && Object.keys(scan.hasil).some((k) => k.startsWith('INPV-')));
-	const adaSess = $derived(!!scan && Object.keys(scan.hasil).some((k) => k.startsWith('SESS-')));
-	const adaAccs = $derived(!!scan && Object.keys(scan.hasil).some((k) => k.startsWith('ACCS-')));
-	let ujiAktif = $state<string | null>(null);
-	let ujiPilih = $state<string | null>(null);
-
-	// Tab visual: peta penemuan selama penemuan; adegan uji per fungsi saat pengujian (bila ada
-	// metodenya); operasi uji (radar) untuk ringkasan. Peta tetap bisa dibuka.
-	type Tab = 'peta' | 'uji' | 'inpv' | 'sess' | 'accs' | 'operasi';
-	let tabPilihan = $state<Tab | null>(null);
-	// Tab default mengikuti fungsi metode yang sedang berjalan, lalu fungsi mana pun yang punya hasil.
-	const tabBerjalan = $derived<Tab | null>(
-		terkini?.startsWith('INPV-') && adaInpv
-			? 'inpv'
-			: terkini?.startsWith('SESS-') && adaSess
-				? 'sess'
-				: terkini?.startsWith('ACCS-') && adaAccs
-					? 'accs'
-					: terkini?.startsWith('AUTH-') && adaAuth
-						? 'uji'
-						: null
-	);
-	const tabTersedia = $derived<Tab>(
-		adaAuth ? 'uji' : adaInpv ? 'inpv' : adaSess ? 'sess' : adaAccs ? 'accs' : 'operasi'
-	);
-	const tab = $derived<Tab>(
-		tabPilihan ??
-			(fase === 'penemuan' && scan?.mode === 'eksploratif' ? 'peta' : (tabBerjalan ?? tabTersedia))
-	);
-	const DAFTAR_TAB = $derived(
-		(
-			[
-				['peta', 'Recon & Discovery', adaPeta],
-				['uji', 'Uji Autentikasi', adaAuth],
-				['inpv', 'Uji Validasi Input', adaInpv],
-				['sess', 'Uji Manajemen Sesi', adaSess],
-				['accs', 'Uji Kontrol Akses', adaAccs],
-				['operasi', 'Operasi Uji', true]
-			] as const
-		).filter(([, , ada]) => ada)
-	);
-	const tabUji = $derived(tab === 'uji' || tab === 'inpv' || tab === 'sess' || tab === 'accs');
-	// Pemetaan tab uji → fungsi, data uji, dan judul adegan.
-	const fungsiTab = $derived<'AUTH' | 'INPV' | 'SESS' | 'ACCS'>(
-		tab === 'inpv' ? 'INPV' : tab === 'sess' ? 'SESS' : tab === 'accs' ? 'ACCS' : 'AUTH'
-	);
-	const ujiTab = $derived(tab === 'inpv' ? ujiInpv : tab === 'sess' ? ujiSess : tab === 'accs' ? ujiAccs : ujiAuth);
-	const judulTab = $derived(
-		{ uji: 'Uji autentikasi', inpv: 'Uji validasi input', sess: 'Uji manajemen sesi', accs: 'Uji kontrol akses' }[
-			tab as 'uji' | 'inpv' | 'sess' | 'accs'
-		] ?? 'Uji'
+	const bisaHentikan = $derived(
+		!!scan &&
+			!!app &&
+			scan.status === 'berjalan' &&
+			(auth.pengguna?.id === app.pemilik_id || auth.punya('admin'))
 	);
 
-	// Tata letak kanvas penuh (lg+): toolbar atas & panel kanan mengambang menutupi sebagian
-	// kanvas; visualisasi diberi tahu `tepi` agar konten (fit graf, HUD) memakai area bebas.
-	const ada = $derived(tabUji || (adaPeta && !!graf));
-	const TOOLBAR = 48;
-	const PANEL = 380;
-	const KUNCI_PANEL = 'satya.panelScanCiut';
-	let desktop = $state(false);
-	let panelCiut = $state(false);
-	onMount(() => {
-		const mq = window.matchMedia('(min-width: 1024px)');
-		desktop = mq.matches;
-		const ubah = (e: MediaQueryListEvent) => (desktop = e.matches);
-		mq.addEventListener('change', ubah);
-		try {
-			panelCiut = localStorage.getItem(KUNCI_PANEL) === '1';
-		} catch {
-			/* penyimpanan tak tersedia */
-		}
-		return () => mq.removeEventListener('change', ubah);
-	});
-	function alihPanel() {
-		panelCiut = !panelCiut;
-		try {
-			localStorage.setItem(KUNCI_PANEL, panelCiut ? '1' : '0');
-		} catch {
-			/* penyimpanan tak tersedia */
-		}
-	}
-	// Dock terminal bawah: tinggi bisa diseret (diingat per browser), diciutkan ke bilah judul,
-	// atau diperbesar sampai ±70% tinggi area.
-	const KUNCI_DOCK = 'satya.tinggiDockLog';
-	const JUDUL_DOCK = 36;
-	let tinggiSimpan = $state(240);
-	let dockCiut = $state(false);
-	let dockMaks = $state(false);
-	let tinggiArea = $state(800);
-	const tinggiDock = $derived(dockCiut ? JUDUL_DOCK : dockMaks ? Math.round(tinggiArea * 0.7) : tinggiSimpan);
-	onMount(() => {
-		const ukur = () => (tinggiArea = window.innerHeight - 120);
-		ukur();
-		// Bawaan: ±30% tinggi area (120–260px) agar kanvas tetap lega di layar pendek.
-		tinggiSimpan = Math.round(Math.min(260, Math.max(120, tinggiArea * 0.3)));
-		try {
-			const t = Number(localStorage.getItem(KUNCI_DOCK));
-			if (t >= 120 && t <= 900) tinggiSimpan = t;
-		} catch {
-			/* penyimpanan tak tersedia */
-		}
-		window.addEventListener('resize', ukur);
-		return () => window.removeEventListener('resize', ukur);
-	});
-	function alihMaksDock() {
-		dockCiut = false;
-		dockMaks = !dockMaks;
-	}
-	function mulaiSeret(e: PointerEvent) {
-		const y0 = e.clientY;
-		const t0 = tinggiDock;
-		dockMaks = false;
-		const gerak = (ev: PointerEvent) => {
-			tinggiSimpan = Math.round(Math.min(tinggiArea * 0.8, Math.max(120, t0 + (y0 - ev.clientY))));
-		};
-		const lepas = () => {
-			window.removeEventListener('pointermove', gerak);
-			window.removeEventListener('pointerup', lepas);
-			try {
-				localStorage.setItem(KUNCI_DOCK, String(tinggiSimpan));
-			} catch {
-				/* penyimpanan tak tersedia */
-			}
-		};
-		window.addEventListener('pointermove', gerak);
-		window.addEventListener('pointerup', lepas);
-	}
-	const tepi = $derived(
-		desktop ? { atas: TOOLBAR, kanan: ada && !panelCiut ? PANEL + 24 : 0, bawah: tinggiDock + 12 } : { atas: 0, kanan: 0, bawah: 0 }
+	const LABEL_STATUS_SCAN = {
+		antre: 'antre',
+		berjalan: 'berjalan',
+		selesai: 'selesai',
+		dibatalkan: 'dihentikan'
+	} as const;
+	const sistem = $derived(
+		!storeWorker.status
+			? { warna: 'bg-white/40', teks: 'Memeriksa sistem…' }
+			: storeWorker.status.aktif > 0
+				? { warna: 'bg-[#4ade80]', teks: 'Sistem Berjalan Normal' }
+				: { warna: 'bg-[#ff7b6b]', teks: 'Worker pengujian tidak aktif' }
 	);
 
-	const jumlahEndpoint = $derived.by(() => {
-		if (!scan) return 0;
-		if (graf?.hitung.endpoint) return graf.hitung.endpoint;
-		let n = 0;
-		for (const l of scan.log) {
-			const m = l.pesan.match(/(\d+)\s+endpoint unik/i);
-			if (m) n = Number(m[1]);
-		}
-		return n;
-	});
+	const TAB_UTAMA = $derived([
+		{ k: 'topologi' as const, label: 'Topologi', Ikon: Network },
+		{ k: 'detail' as const, label: 'Detail Analisis', Ikon: ClipboardList },
+		{ k: 'temuan' as const, label: 'Temuan', Ikon: ShieldAlert, jumlah: temuan.length },
+		{ k: 'laporan' as const, label: 'Laporan Sementara', Ikon: ChartColumn }
+	]);
+	const alatKanvas =
+		'grid size-8 place-items-center rounded-md border border-white/10 bg-black/40 text-white/75 transition hover:bg-white/10 hover:text-white';
 </script>
 
-{#if !scan || !app || !stat}
+{#if !scan || !app}
 	<Memuat />
 {:else}
-	<!-- Ruang kerja operasi: kanvas penuh (lg+) dengan toolbar & panel kanan mengambang;
-	     layar kecil → bertumpuk (toolbar, kanvas, panel). -->
-	<div class="flex flex-col gap-4 lg:relative lg:block lg:h-full lg:w-full lg:overflow-hidden">
-		<!-- Kanvas -->
-		<div class="relative h-[62vh] overflow-hidden rounded-lg lg:absolute lg:inset-0 lg:h-auto lg:rounded-none">
-			{#if tab === 'peta' && graf}
-				<VisualisasiPenemuan {graf} berjalan={scan.status === 'berjalan'} host={app.url_dasar} bind:terpilih={asetTerpilih} {tepi} />
-			{:else if tabUji}
-				{#key tab}
-					<VisualisasiUji
-						uji={ujiTab}
-						fungsi={fungsiTab}
-						judul={judulTab}
-						berjalan={scan.status === 'berjalan'}
-						host={app.url_dasar}
-						bind:dipilih={ujiPilih}
-						bind:aktif={ujiAktif}
-						{tepi}
-					/>
-				{/key}
-			{:else}
-				<VisualisasiOperasi
-					{fase}
-					berjalan={scan.status === 'berjalan'}
-					persen={stat.persen}
-					lulus={stat.lulus}
-					gagal={stat.gagal}
-					tdv={stat.tdv}
-					total={stat.total}
-					selesai={stat.selesai}
-					endpoint={jumlahEndpoint}
-					host={app.url_dasar}
-					{sasaran}
-					{tepi}
-				/>
+	<div class="dark flex flex-col gap-3 bg-[#0a0f0d] text-white lg:h-full lg:min-h-0 lg:p-4">
+		<!-- Breadcrumb + judul + aksi -->
+		<div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+			<div class="min-w-0">
+				<nav class="flex items-center gap-1.5 text-xs text-white/55" aria-label="Breadcrumb">
+					<a
+						href="/aplikasi/{app.id}"
+						class="grid size-5 place-items-center rounded hover:bg-white/10 hover:text-white"
+						aria-label="Kembali ke berkas aplikasi"><ChevronLeft class="size-4" /></a
+					>
+					<a href="/dashboard" class="hover:text-white">Beranda</a>
+					<ChevronRight class="size-3" />
+					<a href="/aplikasi/{app.id}" class="hover:text-white">Pengujian</a>
+					<ChevronRight class="size-3" />
+					<span class="truncate text-white/85">Operasi {app.nama}</span>
+				</nav>
+				<div class="mt-2 flex items-center gap-3">
+					<span
+						class="grid size-11 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5"
+						><Box class="size-6 text-white/90" /></span
+					>
+					<div class="min-w-0">
+						<h1 class="truncate text-xl font-semibold sm:text-[1.65rem]">Operasi {app.nama}</h1>
+						<p class="truncate text-xs text-white/55">
+							Analisis keamanan aplikasi dengan pendekatan {scan.pendekatan === 'blackbox'
+								? 'Black Box'
+								: 'Grey Box'} otomatis dan terintegrasi · {app.url_dasar} · {durasi(
+								scan.dimulai_pada,
+								scan.selesai_pada,
+								sekarang
+							)}
+						</p>
+					</div>
+				</div>
+			</div>
+
+			<div class="flex flex-wrap items-center gap-2">
+				{#if riwayat.length > 1}
+					<label
+						class="flex h-10 items-center gap-1.5 rounded-lg border border-white/10 bg-black/30 px-2.5 text-xs text-white/70"
+					>
+						<History class="size-4 shrink-0" />
+						<select
+							value={scan.id}
+							onchange={(e) => goto(`/scan/${e.currentTarget.value}`)}
+							class="max-w-56 bg-transparent text-[13px] text-white/90 outline-none"
+							aria-label="Riwayat pengujian"
+						>
+							{#each riwayat as r (r.id)}
+								<option value={r.id} class="bg-[#141a17]"
+									>#{r.id} · {tanggal(r.dimulai_pada)} · {LABEL_STATUS_SCAN[r.status]}</option
+								>
+							{/each}
+						</select>
+					</label>
+				{/if}
+				<button
+					type="button"
+					onclick={() => ((modePilihan = 'rekon'), (tabUtama = 'topologi'))}
+					disabled={!adaPeta}
+					title={adaPeta
+						? 'Peta permukaan serangan hasil penemuan'
+						: 'Tidak ada fase penemuan pada pengujian ini'}
+					class={cn(
+						'inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40',
+						mode === 'rekon'
+							? 'border-[#4ade80]/60 bg-[#4ade80]/10 text-[#4ade80]'
+							: 'border-white/15 bg-black/30 text-white/80 hover:text-white'
+					)}
+				>
+					<FileText class="size-4" /> Rekon & Discovery
+				</button>
+				<button
+					type="button"
+					onclick={() => ((modePilihan = 'uji'), (tabUtama = 'topologi'))}
+					class={cn(
+						'inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-sm font-medium transition',
+						mode === 'uji'
+							? 'border-[#4ade80]/60 bg-[#4ade80]/10 text-[#4ade80]'
+							: 'border-white/15 bg-black/30 text-white/80 hover:text-white'
+					)}
+				>
+					<Play class="size-4" /> Operasi Uji
+				</button>
+				{#if bisaHentikan}
+					<Button
+						onclick={batalkan}
+						disabled={menghentikan}
+						class="h-10 rounded-lg bg-[#e0a526] px-5 text-sm font-semibold text-black hover:bg-[#f0b53a]"
+					>
+						<Square class="fill-current" />
+						{menghentikan ? 'Menghentikan…' : 'Hentikan'}
+					</Button>
+				{:else if scan.status === 'selesai'}
+					<Button
+						href="/laporan/{scan.id}"
+						class="h-10 rounded-lg bg-[#e0a526] px-5 text-sm font-semibold text-black hover:bg-[#f0b53a]"
+					>
+						<FileBarChart /> Buka Laporan
+					</Button>
+				{/if}
+			</div>
+		</div>
+
+		<!-- Tab utama -->
+		<div class="flex flex-wrap items-center gap-1 border-b border-white/10">
+			{#each TAB_UTAMA as t (t.k)}
+				<button
+					type="button"
+					onclick={() => (tabUtama = t.k)}
+					aria-pressed={tabUtama === t.k}
+					class={cn(
+						'-mb-px inline-flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-2.5 text-[13.5px] transition',
+						tabUtama === t.k
+							? 'border-[#4ade80] bg-[#4ade80]/[0.07] text-white'
+							: 'border-transparent text-white/60 hover:text-white'
+					)}
+				>
+					<t.Ikon class={cn('size-4', tabUtama === t.k && 'text-[#4ade80]')} />
+					{t.label}
+					{#if t.jumlah}
+						<span
+							class="grid h-4 min-w-4 place-items-center rounded-full bg-[#e5484d] px-1 text-[10px] font-semibold text-white"
+							>{t.jumlah}</span
+						>
+					{/if}
+				</button>
+			{/each}
+			{#if banner}
+				<span
+					class={cn(
+						'ml-auto hidden max-w-96 items-center gap-1.5 truncate rounded-md border bg-black/40 px-2 py-1 font-mono text-[11px] md:inline-flex',
+						WARNA_BANNER[banner.nada]
+					)}
+					title={banner.teks}
+				>
+					<Server class="size-3.5 shrink-0" />{banner.teks}
+				</span>
 			{/if}
 		</div>
 
-		<!-- Toolbar -->
-		<div class="order-first flex flex-wrap items-center gap-x-3 gap-y-2 lg:absolute lg:inset-x-0 lg:top-0 lg:z-30 lg:h-12 lg:flex-nowrap lg:border-b lg:border-gold/40 lg:bg-[#0c1014]/85 lg:px-3 lg:backdrop-blur-md">
-			<a href="/aplikasi/{app.id}" class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground" title="Berkas aplikasi">
-				<ChevronLeft class="size-4" /><span class="lg:hidden xl:inline">Berkas</span>
-			</a>
-			<div class="min-w-0">
-				<p class="flex items-baseline gap-2">
-					<span class="label-stensil hidden shrink-0 sm:inline">Operasi</span>
-					<span class="truncate font-heading text-sm tracking-[0.08em] text-foreground uppercase">{app.nama}</span>
-				</p>
-				<p class="truncate font-mono text-[10px] text-muted-foreground">
-					{app.url_dasar} · profil {scan.profil} · {scan.mode === 'eksploratif' ? 'eksploratif' : 'terarah'} · {durasi(scan.dimulai_pada, scan.selesai_pada, sekarang)}
-				</p>
-			</div>
-			{#if DAFTAR_TAB.length > 1}
-				<div class="flex shrink-0 gap-1">
-					{#each DAFTAR_TAB as [k, l] (k)}
-						<button
-							type="button"
-							onclick={() => (tabPilihan = k)}
-							class={cn('rounded-sm border px-2.5 py-1 font-heading text-[10px] tracking-[0.2em] uppercase transition', tab === k ? 'border-[#9fe08a]/50 bg-[#9fe08a]/10 text-[#9fe08a]' : 'border-white/10 text-muted-foreground hover:text-foreground')}
-						>{l}</button>
-					{/each}
+		<!-- Area utama -->
+		<div
+			class="grid min-h-0 gap-3 lg:flex-1 {tabUtama === 'topologi'
+				? 'lg:grid-cols-[minmax(0,1fr)_minmax(320px,26rem)]'
+				: ''}"
+		>
+			{#if tabUtama === 'topologi'}
+				<div
+					class="relative h-[60vh] min-h-0 overflow-hidden rounded-xl border border-white/10 bg-[#0c1014] lg:h-auto"
+				>
+					{#if mode === 'rekon' && graf && adaPeta}
+						<VisualisasiPenemuan
+							bind:this={visPeta}
+							{graf}
+							berjalan={scan.status === 'berjalan'}
+							host={app.url_dasar}
+							bind:terpilih={asetTerpilih}
+							polos
+						/>
+						<!-- toolbar kanvas -->
+						<div class="absolute top-3 left-3 z-20 flex items-center gap-1.5">
+							<button
+								type="button"
+								class={alatKanvas}
+								onclick={() => visPeta?.perbesar()}
+								aria-label="Perbesar"
+								title="Perbesar"><ZoomIn class="size-4" /></button
+							>
+							<button
+								type="button"
+								class={alatKanvas}
+								onclick={() => visPeta?.perkecil()}
+								aria-label="Perkecil"
+								title="Perkecil"><ZoomOut class="size-4" /></button
+							>
+							<button
+								type="button"
+								class={alatKanvas}
+								onclick={() => visPeta?.paskan()}
+								aria-label="Paskan ke layar"
+								title="Paskan ke layar"><Paskan class="size-4" /></button
+							>
+							<button
+								type="button"
+								class={alatKanvas}
+								onclick={() => visPeta?.pusatkan()}
+								aria-label="Pusatkan"
+								title="Pusatkan ke aset terpilih"><Crosshair class="size-4" /></button
+							>
+							<span class="mx-1 h-5 w-px bg-white/15"></span>
+							<button
+								type="button"
+								onclick={() => visPeta?.aturUlang()}
+								class="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-black/40 px-3 text-[13px] text-white/80 hover:bg-white/10 hover:text-white"
+							>
+								<RotateCcw class="size-3.5" /> Reset View
+							</button>
+						</div>
+					{:else}
+						<VisualisasiUji
+							{uji}
+							judul="Operasi uji"
+							berjalan={scan.status === 'berjalan'}
+							host={app.url_dasar}
+							bind:dipilih={ujiPilih}
+							bind:aktif={ujiAktif}
+							polos
+						/>
+					{/if}
+				</div>
+				<div class="h-[50vh] min-h-0 lg:h-auto">
+					{#if mode === 'rekon' && graf && adaPeta}
+						<DaftarAset {graf} bind:terpilih={asetTerpilih} />
+					{:else}
+						<DaftarUji hasil={scan.hasil} aktif={ujiAktif} onpilih={(id) => (ujiPilih = id)} />
+					{/if}
+				</div>
+			{:else}
+				<div
+					class="h-[70vh] min-h-0 overflow-hidden rounded-xl border border-white/10 bg-[#0f1412] lg:h-auto"
+				>
+					{#if tabUtama === 'detail'}
+						<TabDetailAnalisis {baris} bind:sorot={sorotMetode} />
+					{:else if tabUtama === 'temuan'}
+						<TabTemuan {temuan} berjalan={scan.status === 'berjalan'} onrinci={rinciMetode} />
+					{:else}
+						<TabLaporanSementara {scan} {temuan} />
+					{/if}
 				</div>
 			{/if}
-			<div class="ml-auto flex shrink-0 items-center gap-2">
-				{#if banner}
-					<span class={cn('hidden max-w-80 items-center gap-1.5 truncate rounded-sm border bg-black/40 px-2 py-1 font-mono text-[10px] md:inline-flex', WARNA_BANNER[banner.nada])} title={banner.teks}>
-						<Server class="size-3 shrink-0" />{banner.teks}
-					</span>
-				{/if}
-				{#if scan.status === 'berjalan' && auth.pengguna?.id === app.pemilik_id}
-					<Button size="sm" variant="destructive" onclick={batalkan} disabled={menghentikan}><Square /> {menghentikan ? 'Menghentikan…' : 'Hentikan'}</Button>
-				{/if}
-				{#if scan.status === 'selesai'}
-					<Button size="sm" href="/laporan/{scan.id}" class="bg-gold text-gold-foreground hover:bg-gold/85"><FileBarChart /> Buka Laporan</Button>
-				{/if}
-				<Button
-					size="icon-sm"
-					variant="ghost"
-					class="hidden text-muted-foreground hover:text-foreground lg:inline-flex"
-					onclick={alihPanel}
-					aria-label={panelCiut ? 'Tampilkan panel' : 'Sembunyikan panel'}
-					title={panelCiut ? 'Tampilkan panel daftar & log' : 'Sembunyikan panel daftar & log'}
-				>
-					{#if panelCiut}<PanelRightOpen />{:else}<PanelRightClose />{/if}
-				</Button>
-			</div>
 		</div>
 
-		<!-- Panel kanan mengambang: daftar uji / daftar aset (setinggi area) -->
-		{#if ada}
-			<div
-				class={cn('h-[45vh] min-h-0 min-w-0 lg:absolute lg:right-3 lg:z-20 lg:h-auto', panelCiut && 'lg:hidden')}
-				style:top={desktop ? `${TOOLBAR + 12}px` : undefined}
-				style:bottom={desktop ? '12px' : undefined}
-				style:width={desktop ? `${PANEL}px` : undefined}
-			>
-				{#if tabUji}
-					<DaftarUji
-						fungsi={fungsiTab}
-						hasil={scan.hasil}
-						aktif={ujiAktif}
-						onpilih={(id) => (ujiPilih = id)}
-						mengambang={desktop}
-					/>
-				{:else if graf}
-					<DaftarAset {graf} bind:terpilih={asetTerpilih} mengambang={desktop} />
-				{/if}
-			</div>
-		{/if}
-
-		<!-- Terminal log: dock bawah memanjang (lg+), bisa diubah tinggi, diciutkan & diperbesar -->
-		<div
-			class="h-[45vh] min-h-0 min-w-0 lg:absolute lg:left-3 lg:z-20 lg:h-auto"
-			style:bottom={desktop ? '12px' : undefined}
-			style:right={desktop ? `${ada && !panelCiut ? PANEL + 24 : 12}px` : undefined}
-			style:height={desktop ? `${tinggiDock}px` : undefined}
-		>
-			{#if desktop && !dockCiut}
-				<!-- pegangan ubah tinggi -->
-				<div
-					class="absolute inset-x-6 -top-1.5 z-10 h-3 cursor-ns-resize"
-					role="separator"
-					aria-orientation="horizontal"
-					aria-label="Ubah tinggi terminal"
-					onpointerdown={mulaiSeret}
-				></div>
-			{/if}
-			<KonsolLog
+		<!-- Panel log bawah -->
+		<div class="h-[45vh] min-h-0 lg:h-[30%] lg:min-h-48 lg:shrink-0">
+			<PanelLog
 				log={scan.log}
 				berjalan={scan.status === 'berjalan'}
-				durasi={durasi(scan.dimulai_pada, scan.selesai_pada, sekarang)}
-				jalur="~/scan/{scan.id}"
-				mengambang={desktop}
-				ciut={desktop && dockCiut}
-				onminimize={desktop ? () => (dockCiut = !dockCiut) : undefined}
-				onmaximize={desktop ? alihMaksDock : undefined}
-			/>
+				{temuan}
+				namaBerkas="satria-scan-{scan.id}.log"
+				onpilihTemuan={rinciMetode}
+			>
+				{#snippet info()}
+					<dl class="grid gap-x-8 gap-y-2 text-[13px] sm:grid-cols-2 xl:grid-cols-3">
+						{#each [['ID pengujian', `#${scan!.id}`], ['Aplikasi', app!.nama], ['Target', app!.url_dasar], ['Pendekatan', scan!.pendekatan === 'blackbox' ? 'Black Box (tanpa akun uji)' : 'Grey Box (dengan akun uji)'], ['Mode', scan!.mode === 'eksploratif' ? 'Eksploratif (penemuan otomatis)' : 'Terarah'], ['Profil', scan!.profil], ['Status', LABEL_STATUS_SCAN[scan!.status]], ['Dimulai', new Date(scan!.dimulai_pada).toLocaleString('id-ID')], ['Selesai', scan!.selesai_pada ? new Date(scan!.selesai_pada).toLocaleString('id-ID') : '—']] as [k, v] (k)}
+							<div class="min-w-0">
+								<dt class="text-[11px] tracking-wider text-white/45 uppercase">{k}</dt>
+								<dd class="truncate text-white/85">{v}</dd>
+							</div>
+						{/each}
+					</dl>
+				{/snippet}
+				{#snippet eksekusi()}
+					<div class="grid gap-4 text-[13px] lg:grid-cols-[1.4fr_1fr]">
+						<div>
+							<p class="text-[11px] tracking-wider text-white/45 uppercase">Progres metode uji</p>
+							<p class="mt-1 text-white/85">
+								<span class="text-xl font-semibold tabular-nums">{progres.selesai}</span> / {progres.total}
+								selesai ({progres.persen}%)
+							</p>
+							<div class="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+								<div
+									class="h-full rounded-full bg-[#4ade80] transition-all"
+									style:width="{progres.persen}%"
+								></div>
+							</div>
+							<p class="mt-3 text-[11px] tracking-wider text-white/45 uppercase">
+								Sedang dijalankan
+							</p>
+							<p class="mt-0.5 truncate text-white/85">
+								{#if metodeTerkini}<span class="font-mono text-[#5bc8af]"
+										>{metodeTerkini.metode.id}</span
+									>
+									— {metodeTerkini.metode.nama}
+								{:else if scan!.status === 'berjalan'}{fase === 'penemuan'
+										? 'Memetakan permukaan serangan (recon & discovery)…'
+										: 'Menunggu metode berikutnya…'}
+								{:else}—{/if}
+							</p>
+						</div>
+						<div>
+							<p class="text-[11px] tracking-wider text-white/45 uppercase">Worker & antrean</p>
+							<p class="mt-1 text-white/85">
+								{banner?.teks ??
+									(scan!.status === 'berjalan'
+										? 'Memeriksa worker…'
+										: `Pengujian ${LABEL_STATUS_SCAN[scan!.status]}.`)}
+							</p>
+							<p class="mt-3 text-[11px] tracking-wider text-white/45 uppercase">Durasi</p>
+							<p class="mt-0.5 text-white/85">
+								{durasi(scan!.dimulai_pada, scan!.selesai_pada, sekarang)}
+							</p>
+						</div>
+					</div>
+				{/snippet}
+			</PanelLog>
+		</div>
+
+		<!-- Bilah status -->
+		<div
+			class="flex items-center justify-between gap-3 border-t border-white/10 pt-2 text-xs text-white/55"
+		>
+			<span>TNI Angkatan Darat</span>
+			<span class="flex items-center gap-2">
+				<span class="flex items-center gap-1.5"
+					><span class="size-2 rounded-full {sistem.warna}"></span>{sistem.teks}</span
+				>
+				<span class="text-white/20">|</span>
+				<span class="font-mono tabular-nums">{jamWib} WIB</span>
+			</span>
 		</div>
 	</div>
 {/if}

@@ -11,8 +11,10 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Lock from '@lucide/svelte/icons/lock';
 	import Crosshair from '@lucide/svelte/icons/crosshair';
+	import Layers from '@lucide/svelte/icons/layers';
+	import Funnel from '@lucide/svelte/icons/funnel';
 
-	let { graf, terpilih = $bindable(null), mengambang = false }: { graf: Graf; terpilih?: string | null; mengambang?: boolean } = $props();
+	let { graf, terpilih = $bindable(null) }: { graf: Graf; terpilih?: string | null } = $props();
 
 	type Baris = { id: string; ikon: JenisIkon; metode?: string; nama: string; ket?: string; sumber: string[]; risiko?: string; auth?: boolean; titik?: boolean };
 	type Grup = { id: string; judul: string; ikon: JenisIkon; hub?: string; jumlah: number; baris: Baris[] };
@@ -93,8 +95,23 @@
 
 	let cari = $state('');
 	const q = $derived(cari.trim().toLowerCase());
+	// Filter: semua aset, hanya titik uji, yang berisiko (alert ZAP), atau yang butuh autentikasi.
+	const FILTER = [
+		['semua', 'Semua aset'],
+		['titik', 'Titik uji'],
+		['risiko', 'Berisiko (alert)'],
+		['auth', 'Butuh autentikasi']
+	] as const;
+	let filter = $state<(typeof FILTER)[number][0]>('semua');
+	let bukaFilter = $state(false);
+	const lolos = (b: Baris) =>
+		filter === 'semua' || (filter === 'titik' ? !!b.titik : filter === 'risiko' ? !!b.risiko : !!b.auth);
+	const cocokCari = (b: Baris) =>
+		!q || `${b.metode ?? ''} ${b.nama} ${b.ket ?? ''} ${b.sumber.join(' ')}`.toLowerCase().includes(q);
 	const tersaring = $derived(
-		q ? grup.map((g) => ({ ...g, baris: g.baris.filter((b) => `${b.metode ?? ''} ${b.nama} ${b.ket ?? ''} ${b.sumber.join(' ')}`.toLowerCase().includes(q)) })).filter((g) => g.baris.length) : grup
+		q || filter !== 'semua'
+			? grup.map((g) => ({ ...g, baris: g.baris.filter((b) => lolos(b) && cocokCari(b)) })).filter((g) => g.baris.length)
+			: grup
 	);
 
 	// Grup terlipat (default terbuka); grup berisi baris terpilih otomatis dibuka.
@@ -120,27 +137,51 @@
 	] as const);
 </script>
 
-<div class={cn('flex h-full min-h-0 flex-col overflow-hidden', mengambang ? 'rounded-md border border-white/10 bg-[#0c1014]/85 shadow-2xl backdrop-blur-md' : 'sudut-taktis rounded-lg border border-[#9fe08a]/20 bg-[#0c1014]')}>
-	<div class="flex items-center gap-2 border-b border-white/10 bg-black/40 px-3 py-1.5">
-		<span class="font-heading text-[10px] tracking-[0.2em] text-white/70 uppercase">Daftar aset</span>
-		<div class="ml-auto flex items-center gap-2 font-mono text-[10px] tabular-nums">
-			{#each RINGKAS as [l, n, c] (l)}<span class="text-white/40">{l} <span style="color:{c}">{n}</span></span>{/each}
+<div class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0f1412]">
+	<div class="flex items-center gap-2 px-4 pt-3.5 pb-2">
+		<Layers class="size-5 text-white/80" />
+		<span class="shrink-0 text-[15px] font-semibold whitespace-nowrap text-white/90">Daftar Aset</span>
+		<div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-1.5 font-mono text-[10px] whitespace-nowrap tabular-nums">
+			{#each RINGKAS as [l, n, c], i (l)}
+				{#if i}<span class="text-white/15">|</span>{/if}
+				<span class="text-white/45">{l} <span style="color:{c}">{n}</span></span>
+			{/each}
 		</div>
 	</div>
-	<div class="border-b border-white/5 px-2 py-1.5">
-		<label class="flex items-center gap-1.5 rounded border border-white/10 bg-black/40 px-2 py-1 focus-within:border-[#7fe9d8]/50">
-			<Search class="size-3 text-white/40" />
-			<input bind:value={cari} placeholder="Cari URL, endpoint, sumber…" class="w-full bg-transparent font-mono text-[11px] text-white/85 outline-none placeholder:text-white/30" />
+	<div class="relative flex items-center gap-2 px-3 pb-2">
+		<label class="flex h-9 flex-1 items-center gap-2 rounded-md border border-white/10 bg-black/30 px-2.5 focus-within:border-[#9fe08a]/50">
+			<Search class="size-4 text-white/40" />
+			<input bind:value={cari} placeholder="Cari URL, endpoint, sumber…" class="w-full bg-transparent text-[13px] text-white/85 outline-none placeholder:text-white/35" />
 		</label>
+		<button
+			type="button"
+			onclick={() => (bukaFilter = !bukaFilter)}
+			aria-label="Filter aset"
+			aria-expanded={bukaFilter}
+			class={cn('grid size-9 place-items-center rounded-md border border-white/10 bg-black/30 text-white/70 hover:text-white', filter !== 'semua' && 'border-[#9fe08a]/50 text-[#9fe08a]')}
+		>
+			<Funnel class="size-4" />
+		</button>
+		{#if bukaFilter}
+			<div class="absolute top-11 right-3 z-20 w-48 rounded-md border border-white/10 bg-[#141a17] p-1 shadow-xl">
+				{#each FILTER as [k, l] (k)}
+					<button
+						type="button"
+						onclick={() => ((filter = k), (bukaFilter = false))}
+						class={cn('block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-white/5', filter === k ? 'text-[#9fe08a]' : 'text-white/75')}
+					>{l}</button>
+				{/each}
+			</div>
+		{/if}
 	</div>
 
-	<div bind:this={wadah} class="min-h-0 flex-1 overflow-y-auto font-mono text-[11px]">
+	<div bind:this={wadah} class="min-h-0 flex-1 overflow-y-auto border-t border-white/5 font-mono text-[12px]">
 		{#if !tersaring.length}
-			<p class="px-3 py-4 text-center text-white/35">{q ? 'Tidak ada aset yang cocok.' : 'Belum ada aset ditemukan.'}</p>
+			<p class="px-3 py-6 text-center text-white/35">{q || filter !== 'semua' ? 'Tidak ada aset yang cocok.' : 'Belum ada aset ditemukan.'}</p>
 		{/if}
 		{#each tersaring as g (g.id)}
-			{@const buka = q ? true : !tertutup[g.id]}
-			<div class="sticky top-0 z-[1] flex items-center gap-1.5 border-b border-white/5 bg-[#11161c] px-2 py-1">
+			{@const buka = q || filter !== 'semua' ? true : !tertutup[g.id]}
+			<div class="sticky top-0 z-[1] flex items-center gap-1.5 border-b border-white/5 bg-[#131916] px-3 py-1.5">
 				<button type="button" class="flex min-w-0 flex-1 items-center gap-1.5 text-left" onclick={() => (tertutup[g.id] = buka)} aria-expanded={buka}>
 					<ChevronRight class="size-3 shrink-0 text-white/40 transition-transform {buka ? 'rotate-90' : ''}" />
 					<span class="inline-block size-4 shrink-0">{@html svgEntitas(g.ikon, { ukuran: 16 })}</span>
@@ -158,7 +199,7 @@
 						type="button"
 						data-id={b.id}
 						onclick={() => (terpilih = b.id)}
-						class="flex w-full items-center gap-1.5 py-[3px] pr-2 pl-6 text-left transition hover:bg-white/5 {terpilih === b.id ? 'bg-[#4dabf7]/15 outline outline-1 -outline-offset-1 outline-[#4dabf7]/50' : ''}"
+						class="flex w-full items-center gap-1.5 py-1 pr-3 pl-7 text-left transition hover:bg-white/5 {terpilih === b.id ? 'bg-[#9fe08a]/10 outline outline-1 -outline-offset-1 outline-[#9fe08a]/40' : ''}"
 					>
 						<span class="inline-block size-3.5 shrink-0">{@html svgEntitas(b.ikon, { metode: b.metode, ukuran: 14 })}</span>
 						{#if b.metode}<span class="w-11 shrink-0 text-[10px] font-semibold" style="color:{warnaMetode(b.metode)}">{b.metode}</span>{/if}

@@ -1,4 +1,4 @@
-// Palet & ikon bersama adegan uji berulang (AdeganAuth, AdeganInpv). Warna mengikuti bahasa
+// Palet & ikon bersama adegan uji (AdeganUmum). Warna mengikuti bahasa
 // desain web; ikon memakai glyph generik dari penemuan (bukan logo merek pihak mana pun).
 import { uriIkon } from '#lib/penemuan/ikon-entitas.js';
 
