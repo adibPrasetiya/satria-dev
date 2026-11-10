@@ -88,6 +88,23 @@ if [ -x "$FFUF_DST" ] && [ -f .env ] && ! grep -q '^FFUF_BIN=' .env; then
   echo "==> worker/.env: set FFUF_BIN=$FFUF_DST"
 fi
 
+# Wordlist ffuf (SecLists): nama parameter & path. Disimpan DI LUAR repo (git reset tak menyentuhnya).
+# Idempoten: unduh hanya bila belum ada. Tanpa wordlist param → pakai daftar internal; tanpa wordlist
+# path → penemuan path dilewati.
+WLDIR="$HOME/.local/share/satya/wordlists"
+SL="https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content"
+mkdir -p "$WLDIR"
+[ -s "$WLDIR/parameter-names.txt" ] || curl -fsSL "$SL/burp-parameter-names.txt" -o "$WLDIR/parameter-names.txt" || true
+[ -s "$WLDIR/paths-common.txt" ] || curl -fsSL "$SL/common.txt" -o "$WLDIR/paths-common.txt" || true
+if [ -s "$WLDIR/parameter-names.txt" ] && [ -f .env ] && ! grep -q '^FFUF_WORDLIST_PARAM=' .env; then
+  echo "FFUF_WORDLIST_PARAM=$WLDIR/parameter-names.txt" >> .env
+  echo "==> worker/.env: set FFUF_WORDLIST_PARAM"
+fi
+if [ -s "$WLDIR/paths-common.txt" ] && [ -f .env ] && ! grep -q '^FFUF_WORDLIST_PATH=' .env; then
+  echo "FFUF_WORDLIST_PATH=$WLDIR/paths-common.txt" >> .env
+  echo "==> worker/.env: set FFUF_WORDLIST_PATH"
+fi
+
 if [ ! -x .venv/bin/python ]; then
   # Worker butuh Python 3.13 (greenlet/playwright). Pakai python3.13 bila ada.
   { command -v python3.13 >/dev/null && python3.13 -m venv .venv; } || python3 -m venv .venv
