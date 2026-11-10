@@ -56,7 +56,8 @@ def _jalankan_inpv(base: str, kode_unit_field: dict) -> object:
         "request_fields": [{"nama": "alasan", "lokasi": "body", "tipe": "string", "contoh": "cuti tahunan"}, {"nama": "kode_unit", "lokasi": "body", **kode_unit_field}],
     }
     # Konteks lama: hanya kandidat INPV (tanpa inventaris lengkap) — sapuan memakai kandidat sebagai cadangan.
-    ctx = ScanContext.from_dict({"scan_id": "s", "aplikasi_id": "a", "base_url": base, "kandidat_uji": {"per_endpoint": [ep]}})
+    ctx = ScanContext.from_dict({"scan_id": "s", "aplikasi_id": "a", "base_url": base, "kandidat_uji": {"per_endpoint": [ep]},
+                                 "intrusif": {"izinkan_penguncian": True}})
     m = MetodeSpec.from_dict({"id": "INPV-4.1-T01", "check_id": "input.server_side_validation", "titik_uji": "api", "profil": "intrusif"})
     return jalankan_metode(ctx, m)
 
