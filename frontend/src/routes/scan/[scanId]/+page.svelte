@@ -16,6 +16,8 @@
 	import TabDetailAnalisis from '#lib/components/operasi/TabDetailAnalisis.svelte';
 	import TabTemuan from '#lib/components/operasi/TabTemuan.svelte';
 	import TabLaporanSementara from '#lib/components/operasi/TabLaporanSementara.svelte';
+	import KeteranganBlokir from '#lib/components/operasi/KeteranganBlokir.svelte';
+	import { cariTerblokir } from '#lib/penemuan/terblokir.js';
 	import { bangunUji } from '#lib/pengujian/uji.js';
 	import { bangunGraf } from '#lib/penemuan/graf.js';
 	import { barisMetode, daftarTemuan } from '#lib/operasi/ringkas.js';
@@ -196,6 +198,9 @@
 		grafDasar ? tandaiGraf(grafDasar, petaTemuanTopologi(grafDasar, uji, temuan)) : null
 	);
 	const adaPeta = $derived(!!graf && graf.peristiwa > 0);
+	// Keterangan blokir (worker diblokir / target tak terjangkau) dari log scan ini sendiri — juga
+	// saat recon dipakai ulang dari pengujian lain, karena blokir bisa terjadi di fase pengujian.
+	const blokir = $derived(scan ? cariTerblokir(scan.log) : null);
 	const progres = $derived.by(() => {
 		const jalan = baris.filter((b) => b.status !== 'tidak_berlaku' || b.durasi_ms !== undefined);
 		const selesai = jalan.filter((b) => b.status !== 'antre' && b.status !== 'berjalan');
@@ -332,13 +337,13 @@
 			<div class="min-w-0 flex-1">
 				<nav class="flex items-center gap-1.5 text-xs text-white/55" aria-label="Breadcrumb">
 					<a
-						href="/aplikasi/{app.id}"
+						href="/aplikasi"
 						class="grid size-5 place-items-center rounded hover:bg-white/10 hover:text-white"
-						aria-label="Kembali ke berkas aplikasi"><ChevronLeft class="size-4" /></a
+						aria-label="Kembali ke daftar aplikasi"><ChevronLeft class="size-4" /></a
 					>
 					<a href="/dashboard" class="hover:text-white">Beranda</a>
 					<ChevronRight class="size-3" />
-					<a href="/aplikasi/{app.id}" class="hover:text-white">Pengujian</a>
+					<a href="/aplikasi" class="hover:text-white">Aplikasi</a>
 					<ChevronRight class="size-3" />
 					<span class="truncate text-white/85">Operasi {app.nama}</span>
 				</nav>
@@ -449,6 +454,10 @@
 				</span>
 			{/if}
 		</div>
+
+		{#if blokir}
+			<KeteranganBlokir info={blokir} />
+		{/if}
 
 		<!-- Area utama -->
 		<div

@@ -244,6 +244,8 @@ export const httpApi: Api = {
 		keAplikasi(await req<AsetDto>('/applications', { method: 'POST', json: kirimAset(data) })),
 	ubahAplikasi: async (id, data) =>
 		keAplikasi(await req<AsetDto>(`/applications/${id}`, { method: 'PATCH', json: kirimAset(data) })),
+	arsipkanAplikasi: async (id) => keAplikasi(await req<AsetDto>(`/applications/${id}/arsip`, { method: 'POST' })),
+	pulihkanAplikasi: async (id) => keAplikasi(await req<AsetDto>(`/applications/${id}/pulihkan`, { method: 'POST' })),
 	verifikasiKepemilikan: (id) => req(`/apps/${id}/verify-ownership`, { method: 'POST' }),
 	ajukanIzinIntrusif: (id, izin) => req(`/apps/${id}/intrusive-permit`, { method: 'POST', json: izin }),
 	putuskanIzinIntrusif: (id, disetujui, catatan) =>

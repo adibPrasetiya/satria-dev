@@ -24,7 +24,8 @@ export const dashboardRepository = {
          SELECT s.id FROM scans s
          WHERE s.application_id = a.id AND s.status = 'selesai'
          ORDER BY s.finished_at DESC, s.id DESC LIMIT 1
-       )`,
+       )
+       WHERE a.archived_at IS NULL`,
     );
     return rows;
   },

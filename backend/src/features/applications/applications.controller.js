@@ -17,6 +17,16 @@ export const applicationsController = {
     return success(res, { statusCode: 201, message: `Aplikasi "${data.nama}" terdaftar`, data });
   },
 
+  async arsipkan(req, res) {
+    const data = await applicationsService.arsipkan(req.user, req.params.id);
+    return success(res, { message: `Aplikasi "${data.nama}" diarsipkan`, data });
+  },
+
+  async pulihkan(req, res) {
+    const data = await applicationsService.pulihkan(req.user, req.params.id);
+    return success(res, { message: `Aplikasi "${data.nama}" dipulihkan dari arsip`, data });
+  },
+
   async update(req, res) {
     const data = await applicationsService.update(req.user, req.params.id, req.body);
     return success(res, { message: 'Data aplikasi diperbarui', data });

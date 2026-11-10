@@ -11,6 +11,10 @@ Field berlapis (opsional, log lama tetap terbaca): endpoint `lapisan` (frontend|
 `halaman.items[].sumber` (html|browser); `katana`/`zap` membawa `ringkas` {frontend,api,aset}
 dan `items` [{url, metode_http, lapisan, status?}]; `zap.alert_url` [{url, nama, risk}].
 Tahap tambahan: "intersep" (aksi form tanpa kirim) dan "bundle" (analisis bundle JS).
+
+Peristiwa "terblokir" (dari `keterjangkauan.peristiwa_terblokir`, dipancarkan worker `main`):
+{fase: recon|pengujian, lapisan: dns|tcp|http, alasan, saran, fatal, awal, host?, status?,
+ip_worker?} — keterangan bahwa worker diblokir/tak bisa menjangkau target (fatal = task dihentikan).
 """
 
 from __future__ import annotations

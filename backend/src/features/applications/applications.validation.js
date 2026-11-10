@@ -79,6 +79,8 @@ export const listApplicationsSchema = Joi.object({
   satuan_id: kosongJadiUndefined(Joi.number().integer().positive()).messages({ 'number.base': 'Satuan tidak valid' }),
   // Putusan scan selesai terakhir; 'belum' = belum pernah selesai diuji.
   putusan: kosongJadiUndefined(Joi.string().valid(...VERDICTS, 'belum')).messages({ 'any.only': 'Putusan tidak valid' }),
+  // Status arsip: 'aktif' (bawaan, sembunyikan terarsip) | 'arsip' (hanya terarsip) | 'semua'.
+  arsip: Joi.string().valid('aktif', 'arsip', 'semua').default('aktif').messages({ 'any.only': 'Filter arsip tidak valid' }),
   sort: Joi.string()
     .valid(...SORT_FIELDS)
     .default('dibuat'),

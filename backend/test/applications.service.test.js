@@ -35,10 +35,12 @@ describe('applications.service', () => {
   let rows;
   let events;
   let service;
+  let berjalan;
 
   beforeEach(() => {
     rows = [];
     events = [];
+    berjalan = new Set();
     // Repository palsu: URL unik, join nama satuan.
     const withUnit = (r) => ({ ...r, unit: UNITS[r.unitId], createdAt: NOW, updatedAt: NOW });
     service = createApplicationsService({
@@ -63,6 +65,12 @@ describe('applications.service', () => {
           if (data.baseUrl && rows.some((a) => a.id !== id && a.baseUrl === data.baseUrl)) throw dup();
           return withUnit(Object.assign(rows.find((a) => a.id === id), data));
         },
+        findByBaseUrl: async (url) => {
+          const r = rows.find((a) => a.baseUrl === url);
+          return r ? withUnit(r) : null;
+        },
+        adaScanBerjalan: async (id) => berjalan.has(id),
+        setArsip: async (id, waktu) => withUnit(Object.assign(rows.find((a) => a.id === id), { archivedAt: waktu })),
       },
     });
   });
@@ -140,7 +148,7 @@ describe('applications.service', () => {
     assert.equal(diterima.dilengkapi, true);
     assert.deepEqual(diterima.args, {
       unitId: 1, search: 'x', lingkungan: undefined, klasifikasi: undefined, satuanId: 1, putusan: 'tidak_laik',
-      offset: 10, limit: 10, sort: 'temuan', order: 'desc',
+      arsip: 'aktif', offset: 10, limit: 10, sort: 'temuan', order: 'desc',
     });
     assert.deepEqual(hasil.items[0].pengujian.temuan, { kritis: 1, tinggi: 2, sedang: 0, rendah: 3 });
     assert.equal(hasil.items[0].pengujian.putusan, 'tidak_laik');
@@ -150,6 +158,46 @@ describe('applications.service', () => {
     assert.deepEqual(hasil.meta.ringkasan, { semua: 5, laik: 0, laik_bersyarat: 0, tidak_laik: 1, belum: 4 });
     assert.deepEqual(hasil.meta.opsi_satuan, [{ id: '1', nama: 'Satuan A', jumlah: 5 }]);
     assert.equal(hasil.meta.totalPages, 1);
+  });
+
+  it('arsipkan: tersimpan & tercatat audit, idempoten; aset terarsip tak bisa diubah; pulihkan mengembalikan', async () => {
+    const app = await service.create(pemilikA, DATA);
+    assert.equal(app.diarsipkan_pada, null);
+
+    const arsip = await service.arsipkan(pemilikA, app.id);
+    assert.ok(arsip.diarsipkan_pada instanceof Date);
+    assert.deepEqual(events.at(-1), ['aplikasi.arsip', { aplikasiId: 1, nama: DATA.nama, oleh: '10' }]);
+    const n = events.length;
+    await service.arsipkan(pemilikA, app.id); // idempoten: tak ada audit ganda
+    assert.equal(events.length, n);
+
+    await assert.rejects(service.update(pemilikA, app.id, { nama: 'Nama Baru' }), { statusCode: 409 });
+
+    const pulih = await service.pulihkan(pemilikA, app.id);
+    assert.equal(pulih.diarsipkan_pada, null);
+    assert.equal(events.at(-1)[0], 'aplikasi.pulihkan');
+    assert.equal((await service.update(pemilikA, app.id, { nama: 'Nama Baru' })).nama, 'Nama Baru');
+  });
+
+  it('arsipkan ditolak bila masih ada pengujian berjalan; lintas satuan = 404', async () => {
+    const app = await service.create(pemilikA, DATA);
+    berjalan.add(1);
+    await assert.rejects(service.arsipkan(pemilikA, app.id), { statusCode: 409 });
+    berjalan.clear();
+    await assert.rejects(service.arsipkan(pemilikB, app.id), { statusCode: 404 });
+    assert.ok((await service.arsipkan(admin, app.id)).diarsipkan_pada);
+  });
+
+  it('mendaftar ulang URL milik aset terarsip → 409 yang menyarankan pulihkan', async () => {
+    const app = await service.create(pemilikA, DATA);
+    await service.arsipkan(pemilikA, app.id);
+    await assert.rejects(service.create(pemilikA, DATA), (e) => e.statusCode === 409 && /terarsip/.test(e.message) && /pulihkan/.test(e.message));
+  });
+
+  it('skema daftar: filter arsip bawaan "aktif" dan di-whitelist', () => {
+    assert.equal(listApplicationsSchema.validate({}).value.arsip, 'aktif');
+    assert.equal(listApplicationsSchema.validate({ arsip: 'arsip' }).value.arsip, 'arsip');
+    assert.ok(listApplicationsSchema.validate({ arsip: 'dihapus' }).error);
   });
 
   it('skema daftar: kolom urut & putusan di-whitelist; nilai kosong diabaikan', () => {

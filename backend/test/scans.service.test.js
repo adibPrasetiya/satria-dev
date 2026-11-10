@@ -142,6 +142,15 @@ describe('scans.service', () => {
     await assert.rejects(() => svc.mulai(asesor, '1'), /Persiapan pengujian belum diisi/);
   });
 
+  it('aplikasi terarsip tidak bisa diuji atau dipersiapkan (409)', async () => {
+    const apps = fakeApps();
+    const asli = apps.findById;
+    apps.findById = async (id) => ({ ...(await asli(id)), archivedAt: new Date() });
+    const svc = createScansService({ repository: repo, applications: apps, events: { siarkan() {} }, auditor() {} });
+    await assert.rejects(() => svc.mulai(asesor, '1'), (e) => e.statusCode === 409 && /diarsipkan/.test(e.message));
+    await assert.rejects(() => svc.simpanTarget(asesor, '1', { test_points: {}, forms: {} }), { statusCode: 409 });
+  });
+
   it('seed task AUTH-1.3: T01/T02/T03 antre, T04 & T05 selesai dengan status khusus', async () => {
     const scan = await service.mulai(asesor, '1');
     const h = scan.hasil;

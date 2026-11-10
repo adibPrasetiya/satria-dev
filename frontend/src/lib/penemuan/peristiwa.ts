@@ -59,6 +59,23 @@ export interface AlertUrl {
 
 export type RingkasLapisan = Record<Lapisan, number>;
 
+/**
+ * Keterangan worker diblokir / tak bisa menjangkau target (worker `keterjangkauan.peristiwa_terblokir`).
+ * `fatal` = task dihentikan; selain itu peringatan (hasil mungkin tak lengkap). `awal` = terdeteksi saat
+ * preflight sebelum task berjalan.
+ */
+export interface Terblokir {
+	fase: 'recon' | 'pengujian';
+	lapisan: 'dns' | 'tcp' | 'http';
+	alasan: string;
+	saran: string;
+	fatal: boolean;
+	awal?: boolean;
+	host?: string;
+	status?: number;
+	ip_worker?: string;
+}
+
 export type DataPenemuan = { v: 1 } & (
 	| { jenis: 'tahap'; tahap: KodeTahap; url?: string; jalur?: string[]; login?: boolean; akun?: string; jumlah?: number; terautentikasi?: boolean }
 	| { jenis: 'docs'; url: string; judul: string; versi: string; jumlah_endpoint: number; base_api: string }
@@ -70,4 +87,5 @@ export type DataPenemuan = { v: 1 } & (
 	| { jenis: 'kandidat'; ringkas: Record<string, number>; per_endpoint: Record<string, string[]> }
 	| { jenis: 'zap'; jumlah_url: number; temuan: { nama: string; n: number }[]; ringkas?: RingkasLapisan; items?: ItemCrawl[]; alert_url?: AlertUrl[] }
 	| { jenis: 'katana'; jumlah: number; ringkas?: RingkasLapisan; items?: ItemCrawl[] }
+	| ({ jenis: 'terblokir' } & Terblokir)
 );

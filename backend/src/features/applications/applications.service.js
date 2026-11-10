@@ -24,6 +24,7 @@ const toApplicationDto = (a) => ({
     server: a.techServer ?? '',
   },
   pemilik_id: a.ownerId ? String(a.ownerId) : null,
+  diarsipkan_pada: a.archivedAt ?? null,
   dibuat_pada: a.createdAt,
   diubah_pada: a.updatedAt,
 });
@@ -70,10 +71,15 @@ function toColumns(data) {
   return columns;
 }
 
-const duplicateUrl = () =>
-  AppError.conflict('URL dasar ini sudah terdaftar sebagai aset lain', [
-    { field: 'url_dasar', message: 'URL dasar ini sudah terdaftar sebagai aset lain' },
-  ]);
+const duplicateUrl = (terarsip = null) => {
+  const pesan = terarsip
+    ? `URL dasar ini milik aset terarsip "${terarsip.name}" — pulihkan dari daftar arsip alih-alih mendaftar ulang`
+    : 'URL dasar ini sudah terdaftar sebagai aset lain';
+  return AppError.conflict(pesan, [{ field: 'url_dasar', message: pesan }]);
+};
+
+const sudahDiarsipkan = () =>
+  AppError.conflict('Aplikasi ini diarsipkan. Pulihkan dari daftar arsip lebih dulu untuk mengubah atau mengujinya.');
 
 // Asesor & admin melihat semua aset; pemilik hanya aset satuannya.
 const seesAll = (actor) => actor.peran === 'asesor' || actor.peran === 'admin';
@@ -102,11 +108,14 @@ export function createApplicationsService({
     }
   }
 
-  async function save(write) {
+  async function save(write, baseUrl) {
     try {
       return await write();
     } catch (error) {
-      if (isDuplicateEntry(error)) throw duplicateUrl();
+      if (isDuplicateEntry(error)) {
+        const lain = baseUrl && repository.findByBaseUrl ? await repository.findByBaseUrl(baseUrl).catch(() => null) : null;
+        throw duplicateUrl(lain?.archivedAt ? lain : null);
+      }
       throw error;
     }
   }
@@ -116,16 +125,16 @@ export function createApplicationsService({
      * Daftar aplikasi berhalaman (filter, urut, paginasi di DB) beserta ringkasan pengujian terakhir.
      * `ringkasan: true` menambahkan jumlah per putusan & opsi satuan ke `meta`.
      */
-    async list(actor, { page, limit, search, lingkungan, klasifikasi, satuan_id, putusan, sort, order, ringkasan }) {
+    async list(actor, { page, limit, search, lingkungan, klasifikasi, satuan_id, putusan, arsip = 'aktif', sort, order, ringkasan }) {
       const unitId = seesAll(actor) ? undefined : Number(actor.satuan_id);
       // Scan lama (sebelum ringkasan disimpan) dilengkapi dulu agar filter putusan/urut skor akurat.
       await penilai.lengkapiYangKosong();
 
-      const filters = { unitId, search, lingkungan, klasifikasi, satuanId: satuan_id, putusan };
+      const filters = { unitId, search, lingkungan, klasifikasi, satuanId: satuan_id, putusan, arsip };
       const [{ rows, total }, perPutusan, satuan] = await Promise.all([
         repository.list({ ...filters, offset: (page - 1) * limit, limit, sort, order }),
         ringkasan ? repository.countByVerdict(filters) : null,
-        ringkasan ? repository.unitsWithApplications({ unitId }) : null,
+        ringkasan ? repository.unitsWithApplications({ unitId, arsip }) : null,
       ]);
 
       const meta = { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)), sort, order };
@@ -150,7 +159,7 @@ export function createApplicationsService({
     async create(actor, data) {
       const unitId = actor.peran === 'admin' && data.satuan_id ? data.satuan_id : Number(actor.satuan_id);
       if (unitId !== Number(actor.satuan_id)) await assertUnit(unitId);
-      const app = await save(() => repository.create({ ...toColumns(data), unitId, ownerId: Number(actor.id) }));
+      const app = await save(() => repository.create({ ...toColumns(data), unitId, ownerId: Number(actor.id) }), data.url_dasar);
       auditor('aplikasi.daftar', { aplikasiId: app.id, nama: app.name, url: app.baseUrl, unitId });
       return toApplicationDto(app);
     },
@@ -158,6 +167,7 @@ export function createApplicationsService({
     /** Pemilik hanya mengubah aset satuannya dan tidak bisa memindahkan satuan; admin bebas. */
     async update(actor, id, data) {
       const before = await findVisible(actor, id);
+      if (before.archivedAt) throw sudahDiarsipkan();
       const changes = toColumns(data);
       if (actor.peran === 'admin' && data.satuan_id && data.satuan_id !== before.unitId) {
         await assertUnit(data.satuan_id);
@@ -166,9 +176,36 @@ export function createApplicationsService({
       const changed = Object.keys(changes).filter((key) => (changes[key] ?? null) !== (before[key] ?? null));
       if (!changed.length) return toApplicationDto(before);
 
-      const app = await save(() => repository.update(before.id, Object.fromEntries(changed.map((key) => [key, changes[key]]))));
+      const app = await save(
+        () => repository.update(before.id, Object.fromEntries(changed.map((key) => [key, changes[key]]))),
+        changes.baseUrl,
+      );
       auditor('aplikasi.ubah', { aplikasiId: app.id, nama: app.name, kolom: changed });
       return toApplicationDto(app);
+    },
+
+    /**
+     * Arsipkan aset (pengganti hapus): disembunyikan dari daftar & tak bisa diuji/diubah, riwayat scan
+     * dan laporannya tetap tersimpan. Ditolak bila masih ada pengujian berjalan. Idempoten.
+     */
+    async arsipkan(actor, id) {
+      const app = await findVisible(actor, id);
+      if (app.archivedAt) return toApplicationDto(app);
+      if (await repository.adaScanBerjalan(app.id)) {
+        throw AppError.conflict('Masih ada pengujian yang berjalan pada aplikasi ini. Hentikan pengujian lebih dulu, lalu arsipkan.');
+      }
+      const hasil = await repository.setArsip(app.id, new Date());
+      auditor('aplikasi.arsip', { aplikasiId: app.id, nama: app.name, oleh: actor.id });
+      return toApplicationDto(hasil);
+    },
+
+    /** Kembalikan aset dari arsip. Idempoten. */
+    async pulihkan(actor, id) {
+      const app = await findVisible(actor, id);
+      if (!app.archivedAt) return toApplicationDto(app);
+      const hasil = await repository.setArsip(app.id, null);
+      auditor('aplikasi.pulihkan', { aplikasiId: app.id, nama: app.name, oleh: actor.id });
+      return toApplicationDto(hasil);
     },
   };
 }

@@ -525,14 +525,16 @@ export const mockApi: Api = {
 		klasifikasi = '',
 		satuan_id = '',
 		putusan = '',
+		arsip = 'aktif',
 		sort = 'dibuat',
 		order = 'desc',
 		ringkasan = false
 	}) {
 		await jeda();
 		const u = state.pengguna.find((x) => x.id === sesiId);
-		const cakupan =
-			u?.peran === 'pemilik' ? state.aplikasi.filter((a) => a.satuan === u.satuan) : state.aplikasi;
+		const cakupan = (
+			u?.peran === 'pemilik' ? state.aplikasi.filter((a) => a.satuan === u.satuan) : state.aplikasi
+		).filter((a) => arsip === 'semua' || (arsip === 'arsip') === !!a.diarsipkan_pada);
 		const idSatuan = (a: Aplikasi) => a.satuan_id ?? a.satuan;
 
 		// Ringkasan pengujian seperti yang dihitung backend saat scan selesai.
@@ -664,9 +666,30 @@ export const mockApi: Api = {
 	async ubahAplikasi(id, data) {
 		await jeda();
 		const app = cariApp(id);
+		if (app.diarsipkan_pada) throw new Error('Aplikasi ini diarsipkan. Pulihkan dari daftar arsip lebih dulu untuk mengubah atau mengujinya.');
 		const { satuan_id, ...dasar } = salin(data);
 		if (satuan_id) app.satuan = satuanMock.find((x) => x.id === satuan_id)?.nama ?? app.satuan;
 		Object.assign(app, dasar, { diubah_pada: sekarang() });
+		simpan();
+		return salin(app);
+	},
+
+	async arsipkanAplikasi(id) {
+		await jeda();
+		const app = cariApp(id);
+		if (!app.diarsipkan_pada) {
+			if (state.scan.some((s) => s.aplikasi_id === id && s.status === 'berjalan'))
+				throw new Error('Masih ada pengujian yang berjalan pada aplikasi ini. Hentikan pengujian lebih dulu, lalu arsipkan.');
+			app.diarsipkan_pada = sekarang();
+			simpan();
+		}
+		return salin(app);
+	},
+
+	async pulihkanAplikasi(id) {
+		await jeda();
+		const app = cariApp(id);
+		app.diarsipkan_pada = null;
 		simpan();
 		return salin(app);
 	},
@@ -741,6 +764,7 @@ export const mockApi: Api = {
 	async mulaiScan(aplikasiId, opsi) {
 		await jeda();
 		const app = cariApp(aplikasiId);
+		if (app.diarsipkan_pada) throw new Error('Aplikasi ini diarsipkan. Pulihkan dari daftar arsip lebih dulu untuk mengujinya.');
 		const mode = opsi?.mode ?? 'terarah';
 		if (mode === 'eksploratif' && !opsi?.persetujuan)
 			throw new Error('Persetujuan pemindaian aktif wajib untuk mode eksploratif.');

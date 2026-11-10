@@ -166,6 +166,8 @@ export const applications = mysqlTable(
     techBackend: varchar('tech_backend', { length: 100 }),
     techDatabase: varchar('tech_database', { length: 100 }),
     techServer: varchar('tech_server', { length: 100 }),
+    // Diarsipkan (pengganti hapus): disembunyikan dari daftar & tak bisa diuji, riwayat scan tetap utuh.
+    archivedAt: datetime('archived_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

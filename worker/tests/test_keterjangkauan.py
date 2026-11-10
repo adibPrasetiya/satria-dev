@@ -103,15 +103,63 @@ def test_tunggu_disela_pembatalan():
         koordinasi.tunggu(10)
 
 
-def test_loop_task_target_tak_terjangkau_selesai_cepat_dengan_alasan():
+def test_loop_task_target_tak_terjangkau_selesai_cepat_dengan_alasan(monkeypatch):
+    monkeypatch.setenv("WORKER_IP_PUBLIK", "203.0.113.7")
     url = f"http://127.0.0.1:{_port_tertutup()}"
+    log: list[tuple] = []
     with BackendPalsu(url) as backend:
         from satya_worker.backend_client import BackendClient
 
         with BackendClient(backend.base_url, TOKEN, worker_id="worker-uji") as klien:
+            monkeypatch.setattr(klien, "kirim_log", lambda tid, lvl, pesan, data=None: log.append((lvl, pesan, data)))
             t0 = time.monotonic()
             assert proses_satu(klien, ["custom"]) is True
             assert time.monotonic() - t0 < 30
         hasil = list(backend.hasil)
     assert hasil and hasil[0]["status"] == "tidak_dapat_diverifikasi"
-    assert "tidak terjangkau" in hasil[0]["ringkasan"]
+    assert "tidak terjangkau" in hasil[0]["ringkasan"] and "203.0.113.7" in hasil[0]["ringkasan"]
+    # Keterangan terstruktur untuk banner UI.
+    ev = [d for _, _, d in log if d and d.get("jenis") == "terblokir"]
+    assert len(ev) == 1
+    e = ev[0]
+    assert e["fatal"] is True and e["awal"] is True and e["fase"] == "pengujian"
+    assert e["lapisan"] == "tcp" and e["host"] == "127.0.0.1" and e["ip_worker"] == "203.0.113.7"
+    assert "whitelist" in e["saran"]
+
+
+# --------------------------------------------------------------------------- blokir tingkat HTTP (WAF)
+
+
+def test_tanda_blokir_http():
+    assert kt.tanda_blokir_http(403, {"cf-mitigated": "challenge"}, "") == "HTTP 403 — halaman blokir Cloudflare"
+    assert "F5" in kt.tanda_blokir_http(403, {}, "<html>The requested URL was rejected. Please consult</html>")
+    assert "rate-limit" in kt.tanda_blokir_http(429, {}, "")
+    assert kt.tanda_blokir_http(403, {}, "<h1>Forbidden</h1>") is None   # 403 biasa aplikasi, bukan WAF
+    assert kt.tanda_blokir_http(200, {}, "access denied") is None          # status bukan penolakan
+
+
+def test_pengawas_melapor_blokir_waf_yang_muncul_di_tengah_task(monkeypatch):
+    koordinasi.STATUS.mulai_task("1", "uji")
+    lapor: list[tuple] = []
+    with TargetPalsu("aman") as t:
+        p = kt.Pengawas(t.base_url, fase="recon", status_dasar=200, timeout=2,
+                        lapor=lambda lvl, pesan, data: lapor.append((lvl, pesan, data)))
+        monkeypatch.setattr(kt, "_probe_http", lambda url, to: (403, "HTTP 403 — halaman blokir Cloudflare"))
+        assert p.cek_sekali() is False and not lapor          # satu probe belum cukup
+        assert p.cek_sekali() is False and len(lapor) == 1    # dua beruntun → lapor sekali
+        p.cek_sekali()
+        assert len(lapor) == 1                                # tidak berulang
+    lvl, pesan, data = lapor[0]
+    assert lvl == "peringatan" and "Cloudflare" in pesan and "awalnya HTTP 200" in pesan
+    assert data["jenis"] == "terblokir" and data["fatal"] is False and data["lapisan"] == "http"
+    koordinasi.periksa_batal()  # peringatan WAF tidak menghentikan task
+
+
+def test_pengawas_abaikan_status_blokir_yang_sudah_ada_sejak_awal(monkeypatch):
+    koordinasi.STATUS.mulai_task("1", "uji")
+    lapor: list[tuple] = []
+    with TargetPalsu("aman") as t:
+        p = kt.Pengawas(t.base_url, status_dasar=403, timeout=2, lapor=lambda *a: lapor.append(a))
+        monkeypatch.setattr(kt, "_probe_http", lambda url, to: (403, "HTTP 403 — halaman blokir WAF"))
+        p.cek_sekali(); p.cek_sekali()
+    assert not lapor

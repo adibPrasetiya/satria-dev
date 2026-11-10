@@ -50,7 +50,7 @@
 	<Memuat />
 {:else}
 	<div class="mb-6">
-		<a href="/aplikasi/{app.id}" class="mb-1.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+		<a href="/aplikasi" class="mb-1.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
 			<ChevronLeft class="size-3.5" /> {app.nama}
 		</a>
 		<p class="label-stensil text-[10px]">Isi data pengujian</p>

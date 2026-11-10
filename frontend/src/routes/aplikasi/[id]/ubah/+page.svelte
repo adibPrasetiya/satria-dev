@@ -28,7 +28,7 @@
 	async function simpan(data: Parameters<typeof api.ubahAplikasi>[1]) {
 		await api.ubahAplikasi(id, data);
 		toast.success('Data aplikasi diperbarui');
-		goto(`/aplikasi/${id}`);
+		goto('/aplikasi');
 	}
 </script>
 
@@ -41,12 +41,12 @@
 {:else}
 	<PageHeader label="Aset Aplikasi" judul="Ubah {app.nama}">
 		{#snippet atas()}
-			<a href="/aplikasi/{app!.id}" class="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-				<ChevronLeft class="size-3.5" /> Kembali ke berkas aplikasi
+			<a href="/aplikasi" class="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+				<ChevronLeft class="size-3.5" /> Daftar aplikasi
 			</a>
 		{/snippet}
 	</PageHeader>
 	{#key app.id}
-		<FormAset awal={app} batalHref="/aplikasi/{app.id}" onsimpan={simpan} />
+		<FormAset awal={app} batalHref="/aplikasi" onsimpan={simpan} />
 	{/key}
 {/if}

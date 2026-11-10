@@ -232,6 +232,8 @@ export interface Aplikasi {
 	profil_pengujian: Profil;
 	izin_intrusif: IzinIntrusif;
 	pemilik_id: string;
+	/** Waktu diarsipkan (pengganti hapus); null/undefined = aktif. Aset terarsip tak bisa diuji/diubah. */
+	diarsipkan_pada?: string | null;
 	dibuat_pada: string;
 	diubah_pada?: string;
 }
@@ -271,6 +273,8 @@ export type BarisAplikasi = Aplikasi & { pengujian: RingkasanPengujian };
 export type UrutAplikasi = 'nama' | 'satuan' | 'lingkungan' | 'klasifikasi' | 'skor' | 'temuan' | 'uji' | 'dibuat';
 export type FilterPutusan = Putusan | 'belum';
 
+export type FilterArsip = 'aktif' | 'arsip' | 'semua';
+
 export interface FilterAplikasi {
 	page?: number;
 	limit?: 10 | 25 | 50 | 100;
@@ -279,6 +283,8 @@ export interface FilterAplikasi {
 	klasifikasi?: KlasifikasiData | '';
 	satuan_id?: string;
 	putusan?: FilterPutusan | '';
+	/** 'aktif' (bawaan server) | 'arsip' | 'semua'. */
+	arsip?: FilterArsip;
 	sort?: UrutAplikasi;
 	order?: 'asc' | 'desc';
 	/** Sertakan jumlah per putusan & opsi satuan. */
