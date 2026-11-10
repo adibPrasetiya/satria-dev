@@ -13,6 +13,8 @@ const schema = Joi.object({
   // Alamat frontend; dipakai untuk menyusun tautan reset kata sandi.
   APP_URL: Joi.string().uri({ scheme: ['http', 'https'] }).default('http://localhost:5173'),
   PASSWORD_RESET_TTL_MINUTES: Joi.number().integer().min(5).max(24 * 60).default(30),
+  // Masa berlaku tautan verifikasi email pendaftaran (jam).
+  EMAIL_VERIFICATION_TTL_HOURS: Joi.number().integer().min(1).max(7 * 24).default(24),
   // Penguncian akun setelah login gagal berturut-turut (kontrol BSSN 1.4).
   LOGIN_MAX_ATTEMPTS: Joi.number().integer().min(3).max(20).default(5),
   LOGIN_LOCK_MINUTES: Joi.number().integer().min(1).max(24 * 60).default(15),
@@ -73,6 +75,7 @@ export const env = Object.freeze({
   corsOrigin: value.CORS_ORIGIN.split(',').map((origin) => origin.trim()),
   appUrl: value.APP_URL.replace(/\/+$/, ''),
   passwordResetTtlMinutes: value.PASSWORD_RESET_TTL_MINUTES,
+  emailVerificationTtlHours: value.EMAIL_VERIFICATION_TTL_HOURS,
   login: {
     maxAttempts: value.LOGIN_MAX_ATTEMPTS,
     lockMinutes: value.LOGIN_LOCK_MINUTES,

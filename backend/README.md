@@ -3,7 +3,7 @@
 API Express 5 + MySQL (Drizzle ORM) untuk SATRIA. Struktur mengikuti kappee-lite:
 `src/features/<fitur>/<fitur>.{route,controller,service,repository,validation}.js`.
 
-Tahap ini: **autentikasi** (daftar, masuk, lupa & atur ulang kata sandi) dan **verifikasi akun oleh admin**.
+Tahap ini: **autentikasi** (daftar, masuk, lupa & atur ulang kata sandi) dan **verifikasi akun lewat email**.
 
 ## Menjalankan
 
@@ -22,10 +22,15 @@ Frontend: set `VITE_USE_MOCK=false` di `frontend/.env`; Vite meneruskan `/api` k
 
 ## Alur akun
 1. Pengguna **mendaftar** (`POST /api/v1/auth/register`) dengan memilih satuan dari daftar (`GET /api/v1/units`)
-   → akun `pemilik`, `is_verified = false`.
-2. **Admin memverifikasi** (`PATCH /api/v1/users/:id/verify`, bisa sekaligus memilih peran) atau **menolak**
-   (`DELETE /api/v1/users/:id`, data pendaftaran dihapus).
+   → akun `pemilik`, `is_verified = false`, dan tautan `APP_URL/verifikasi-email?token=…` dikirim ke emailnya
+   (berlaku `EMAIL_VERIFICATION_TTL_HOURS`, sekali pakai, hanya hash sha256 yang disimpan).
+2. Pendaftar **membuka tautan** (`POST /api/v1/auth/verify-email`) → akun langsung aktif, tanpa persetujuan admin.
+   Tautan baru bisa diminta lewat `POST /api/v1/auth/resend-verification` (tautan lama dibatalkan).
 3. Sebelum diverifikasi, login dengan kata sandi benar ditolak `403 ACCOUNT_PENDING`.
+4. Cadangan bila email tidak sampai: admin dapat **memverifikasi manual** (`PATCH /api/v1/users/:id/verify`) atau
+   **menolak** (`DELETE /api/v1/users/:id`, data pendaftaran dihapus).
+5. Admin dapat **mengubah peran** akun terverifikasi (`PATCH /api/v1/users/:id/role`); sesi pengguna itu dicabut agar
+   ia masuk ulang dengan peran baru. Admin aktif terakhir tidak bisa diturunkan, dan admin tidak bisa mengubah dirinya.
 
 ## Keamanan (selaras kontrol yang dinilai SATRIA sendiri)
 | Kontrol BSSN | Penerapan |
@@ -106,20 +111,21 @@ harian ke `LOG_DIR` (disimpan 14 hari). Development: baris berwarna + metadata r
 | `auth.refresh.reuse` | refresh token lama dipakai ulang (indikasi pencurian), semua sesi dicabut |
 | `auth.logout` | logout |
 | `auth.lupa_sandi`, `auth.reset_sandi.berhasil`, `auth.reset_sandi.gagal` | alur atur ulang kata sandi |
+| `auth.verifikasi_email.berhasil`, `.gagal`, `.kirim_ulang` | alur verifikasi email pendaftaran |
 | `auth.ganti_sandi.berhasil`, `auth.ganti_sandi.gagal` | ganti kata sandi dari menu akun (sesi lain dicabut) |
-| `pengguna.verifikasi`, `pengguna.tolak`, `pengguna.status` | tindakan admin (pelaku = `userId`, sasaran = `targetUserId`) |
+| `pengguna.verifikasi`, `pengguna.tolak`, `pengguna.status`, `pengguna.peran` (`dari` → `ke`) | tindakan admin (pelaku = `userId`, sasaran = `targetUserId`) |
 | `katalog.kontrol.tambah/ubah`, `katalog.metode.tambah/ubah` | admin mengubah katalog (`kode`, `kolom` yang berubah) |
 | `aplikasi.daftar`, `aplikasi.ubah` | registrasi / perubahan data aset aplikasi (`kolom` yang berubah) |
 | `satuan.tambah`, `satuan.ubah` | admin menambah satuan / mengganti nama (`namaLama` → `namaBaru`) / mengubah status |
 | `akses.ditolak` | peran tidak cukup (403) |
-| `rate_limit.terlampaui` | rate limit tercapai (`limiter`: login, daftar, cek_ketersediaan, reset_sandi) |
+| `rate_limit.terlampaui` | rate limit tercapai (`limiter`: login, daftar, cek_ketersediaan, reset_sandi, verifikasi_email) |
 
 Kata sandi, token, header Authorization, dan API key selalu diganti `[disamarkan]` sebelum ditulis.
 
 ## Email (Resend)
-Email atur ulang kata sandi dikirim lewat [Resend](https://resend.com) (`RESEND_API_KEY`, `MAIL_FROM`).
+Email verifikasi pendaftaran dan atur ulang kata sandi dikirim lewat [Resend](https://resend.com) (`RESEND_API_KEY`, `MAIL_FROM`).
 `MAIL_FROM` harus memakai domain yang sudah diverifikasi di Resend; `onboarding@resend.dev` hanya untuk uji.
-Tanpa `RESEND_API_KEY` di development, isi email (termasuk tautan reset) dicatat di log server.
+Tanpa `RESEND_API_KEY` di development, isi email (termasuk tautan verifikasi/reset) dicatat di log server.
 
 ## Endpoint
 Semua respons: `{ success, message, data }`; galat: `{ success: false, message, code?, errors? }`.
@@ -133,11 +139,14 @@ Semua respons: `{ success, message, data }`; galat: `{ success: false, message, 
 | POST | `/api/v1/auth/refresh` | publik |
 | POST | `/api/v1/auth/forgot-password` | publik |
 | POST | `/api/v1/auth/reset-password` | publik |
+| POST | `/api/v1/auth/verify-email` `{ token }` | publik (10/15 menit per IP) |
+| POST | `/api/v1/auth/resend-verification` `{ email }` (respons selalu sama) | publik (10/15 menit per IP) |
 | GET | `/api/v1/auth/me` | login |
 | POST | `/api/v1/auth/change-password` `{ passwordLama, passwordBaru }` → token baru | login (5 gagal / 15 menit per pengguna) |
 | POST | `/api/v1/auth/logout` | login |
 | GET | `/api/v1/users?status=pending\|verified\|inactive&search=` | admin |
-| PATCH | `/api/v1/users/:id/verify` `{ peran }` | admin |
+| PATCH | `/api/v1/users/:id/verify` `{ peran }` (verifikasi manual) | admin |
+| PATCH | `/api/v1/users/:id/role` `{ peran }` (sesi pengguna dicabut) | admin |
 | PATCH | `/api/v1/users/:id/status` `{ aktif }` | admin |
 | DELETE | `/api/v1/users/:id` (tolak pendaftaran) | admin |
 | GET | `/api/v1/applications?search=&page=&limit=` (pemilik: satuannya; asesor/admin: semua) | login |

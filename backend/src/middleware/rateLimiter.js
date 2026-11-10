@@ -53,6 +53,13 @@ export const passwordResetLimiter = limiter('reset_sandi', {
   message: 'Terlalu banyak permintaan, coba lagi dalam 15 menit',
 });
 
+// Verifikasi email & kirim ulang tautan: cegah tebak token dan banjir email ke pendaftar.
+export const emailVerificationLimiter = limiter('verifikasi_email', {
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  message: 'Terlalu banyak permintaan, coba lagi dalam 15 menit',
+});
+
 // Generate laporan AI: tiap panggilan memakan kuota/biaya provider AI. Per pengguna.
 export const laporanAiLimiter = limiter('laporan_ai', {
   windowMs: 60 * 60 * 1000,

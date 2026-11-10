@@ -102,6 +102,10 @@ export const logoutSchema = Joi.object({ refreshToken });
 
 export const forgotPasswordSchema = Joi.object({ email });
 
+export const verifyEmailSchema = Joi.object({ token: Joi.string().trim().max(128).required() });
+
+export const resendVerificationSchema = Joi.object({ email });
+
 export const resetPasswordSchema = Joi.object({
   token: Joi.string().trim().max(128).required(),
   password: newPassword,

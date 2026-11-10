@@ -17,13 +17,14 @@ const SANDI = 'Rahasia!123';
 const CONFIG = {
   refreshTokenTtlDays: 7,
   passwordResetTtlMinutes: 30,
+  emailVerificationTtlHours: 24,
   login: { maxAttempts: 5, lockMinutes: 15 },
   appUrl: 'http://satya.test',
 };
 
 /** Repository palsu di memori dengan perilaku sama seperti versi MySQL. */
 function createFakeRepository() {
-  const state = { users: [], units: [{ id: 1, name: 'Satuan Uji', isActive: true }, { id: 2, name: 'Satuan Lama', isActive: false }], refreshTokens: [], resetTokens: [], seq: 1 };
+  const state = { users: [], units: [{ id: 1, name: 'Satuan Uji', isActive: true }, { id: 2, name: 'Satuan Lama', isActive: false }], refreshTokens: [], resetTokens: [], verifyTokens: [], seq: 1 };
   return {
     state,
     findUserByEmail: async (email) => state.users.find((u) => u.email === email) ?? null,
@@ -53,6 +54,19 @@ function createFakeRepository() {
       state.resetTokens.push({ id: state.seq++, userId, tokenHash, expiresAt, usedAt: null });
     },
     findPasswordResetTokenByHash: async (hash) => state.resetTokens.find((t) => t.tokenHash === hash) ?? null,
+    createEmailVerificationToken: async ({ userId, tokenHash, expiresAt, now }) => {
+      for (const t of state.verifyTokens) if (t.userId === userId && !t.usedAt) t.usedAt = now;
+      state.verifyTokens.push({ id: state.seq++, userId, tokenHash, expiresAt, usedAt: null });
+    },
+    findEmailVerificationTokenByHash: async (hash) => state.verifyTokens.find((t) => t.tokenHash === hash) ?? null,
+    verifyEmail: async ({ userId, tokenId, verifiedAt }) => {
+      const token = state.verifyTokens.find((t) => t.id === tokenId);
+      if (token.usedAt) return false;
+      token.usedAt = verifiedAt;
+      const user = state.users.find((u) => u.id === userId);
+      if (!user.isVerified) Object.assign(user, { isVerified: true, verifiedAt });
+      return true;
+    },
     changePassword: async ({ userId, passwordHash, passwordChangedAt }) => {
       Object.assign(state.users.find((u) => u.id === userId), { passwordHash, passwordChangedAt });
       for (const t of state.refreshTokens) if (t.userId === userId && !t.revokedAt) Object.assign(t, { revokedAt: passwordChangedAt, revokedReason: 'password_change' });
@@ -301,17 +315,88 @@ describe('authentication.service', () => {
     });
   });
 
+  describe('verifikasi email', () => {
+    it('pendaftaran mengirim tautan APP_URL/verifikasi-email; hanya hash token yang disimpan', async () => {
+      await daftar();
+      assert.equal(mails.length, 1);
+      assert.equal(mails[0].to, 'uji@satuan.mil.id');
+      assert.match(mails[0].text, /http:\/\/satya\.test\/verifikasi-email\?token=/);
+      const token = tokenDariEmail();
+      assert.equal(repo.state.verifyTokens[0].tokenHash, hashToken(token));
+      assert.ok(!JSON.stringify(repo.state.verifyTokens).includes(token));
+    });
+
+    it('pendaftaran duplikat tidak mengirim email', async () => {
+      await daftar();
+      await daftar({ nrp: '99999999' });
+      assert.equal(mails.length, 1);
+    });
+
+    it('membuka tautan memverifikasi akun (tanpa admin) sehingga bisa masuk; token sekali pakai', async () => {
+      await daftar();
+      const token = tokenDariEmail();
+      await assert.rejects(service.login({ email: 'uji@satuan.mil.id', password: SANDI }), { code: 'ACCOUNT_PENDING' });
+      await service.verifyEmail({ token });
+      const [user] = repo.state.users;
+      assert.equal(user.isVerified, true);
+      assert.equal(user.verifiedBy, undefined, 'bukan diverifikasi admin');
+      assert.equal(user.verifiedAt.getMilliseconds(), 0, 'presisi detik');
+      assert.ok(await service.login({ email: 'uji@satuan.mil.id', password: SANDI }));
+      await assert.rejects(service.verifyEmail({ token }), { statusCode: 400 });
+      assert.equal(events.at(-1)[1].alasan, 'sudah_dipakai');
+    });
+
+    it('token kedaluwarsa & tak dikenal ditolak', async () => {
+      await daftar();
+      const token = tokenDariEmail();
+      await assert.rejects(service.verifyEmail({ token: 'ngawur' }), { statusCode: 400 });
+      clock = new Date(clock.getTime() + 25 * 60 * 60 * 1000);
+      await assert.rejects(service.verifyEmail({ token }), { statusCode: 400 });
+      assert.equal(repo.state.users[0].isVerified, false);
+    });
+
+    it('kirim ulang membatalkan tautan lama; akun terverifikasi / tak terdaftar tidak dikirimi', async () => {
+      await daftar();
+      const lama = tokenDariEmail();
+      await service.resendVerification({ email: 'uji@satuan.mil.id' });
+      assert.equal(mails.length, 2);
+      const baru = tokenDariEmail();
+      await assert.rejects(service.verifyEmail({ token: lama }), { statusCode: 400 });
+      await service.verifyEmail({ token: baru });
+
+      await service.resendVerification({ email: 'uji@satuan.mil.id' });
+      await service.resendVerification({ email: 'tidakada@x.mil.id' });
+      assert.equal(mails.length, 2);
+      assert.deepEqual(events.slice(-2).map(([, d]) => d.tautanDikirim), [false, false]);
+    });
+
+    it('gagal kirim email tidak menggagalkan pendaftaran', async () => {
+      service = createAuthenticationService({
+        repository: repo,
+        now: () => clock,
+        config: CONFIG,
+        mailer: async () => {
+          throw new Error('SMTP mati');
+        },
+        auditor: () => {},
+      });
+      await assert.doesNotReject(daftar());
+      assert.equal(repo.state.users.length, 1);
+    });
+  });
+
   describe('forgot & reset password', () => {
     beforeEach(async () => {
       await daftar();
       verifikasi();
+      mails.length = 0;
     });
 
     it('email tidak terdaftar / belum terverifikasi tidak mengirim apa pun dan tidak melempar galat', async () => {
       await service.forgotPassword({ email: 'tidakada@x.mil.id' });
       await daftar({ email: 'pending@satuan.mil.id', nrp: '22222222' });
       await service.forgotPassword({ email: 'pending@satuan.mil.id' });
-      assert.equal(mails.length, 0);
+      assert.ok(!mails.some((m) => m.text.includes('/reset-sandi')));
       assert.equal(repo.state.resetTokens.length, 0);
     });
 

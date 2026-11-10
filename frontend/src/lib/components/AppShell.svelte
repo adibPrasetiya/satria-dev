@@ -27,7 +27,7 @@
 	// Dasbor diawali peta selebar area konten (tanpa padding/batas lebar); halaman mengatur wadahnya sendiri.
 	const tanpaBingkai = $derived(page.route.id === '/dashboard');
 	// Halaman daftar bertabel memakai seluruh lebar area konten (tanpa batas max-w).
-	const lebarPenuh = $derived(page.route.id === '/aplikasi');
+	const lebarPenuh = $derived(page.route.id === '/aplikasi' || page.route.id === '/admin/pengguna');
 
 	interface ItemNav {
 		href: Parameters<typeof preloadCode>[0];

@@ -23,8 +23,8 @@
 		[/^\/aplikasi\/[^/]+\/(pengujian|persiapan)(\/|$)/, PERAN_PENGUJI]
 	];
 
-	// Halaman publik (tanpa sesi): login, pendaftaran akun, dan lupa kata sandi.
-	const PUBLIK = ['/login', '/daftar', '/lupa-sandi', '/reset-sandi'];
+	// Halaman publik (tanpa sesi): login, pendaftaran akun, verifikasi email, dan lupa kata sandi.
+	const PUBLIK = ['/login', '/daftar', '/verifikasi-email', '/lupa-sandi', '/reset-sandi'];
 	const diLogin = $derived(PUBLIK.some((p) => page.url.pathname.startsWith(p)));
 	const diizinkan = $derived(
 		AKSES.every(([pola, peran]) => !pola.test(page.url.pathname) || auth.punya(...peran))

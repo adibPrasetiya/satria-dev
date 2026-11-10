@@ -1,6 +1,6 @@
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { db } from '../../db/index.js';
-import { passwordResetTokens, refreshTokens, units, users } from '../../db/schema.js';
+import { emailVerificationTokens, passwordResetTokens, refreshTokens, units, users } from '../../db/schema.js';
 import { revokeUserSessions } from '../../db/sessions.js';
 import { unitsRepository } from '../units/units.repository.js';
 
@@ -83,6 +83,39 @@ export const authenticationRepository = {
   async findPasswordResetTokenByHash(tokenHash) {
     const [token] = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, tokenHash)).limit(1);
     return token ?? null;
+  },
+
+  /** Token verifikasi baru membatalkan token lama yang belum dipakai: hanya tautan terakhir yang berlaku. */
+  async createEmailVerificationToken({ userId, tokenHash, expiresAt, now }) {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(emailVerificationTokens)
+        .set({ usedAt: now })
+        .where(and(eq(emailVerificationTokens.userId, userId), isNull(emailVerificationTokens.usedAt)));
+      await tx.insert(emailVerificationTokens).values({ userId, tokenHash, expiresAt });
+    });
+  },
+
+  async findEmailVerificationTokenByHash(tokenHash) {
+    const [token] = await db.select().from(emailVerificationTokens).where(eq(emailVerificationTokens.tokenHash, tokenHash)).limit(1);
+    return token ?? null;
+  },
+
+  /**
+   * Tandai token terpakai (hanya bila belum, agar dua klik bersamaan tidak sama-sama berhasil) dan
+   * verifikasi akun dalam satu transaksi. `verifiedBy` dibiarkan null = terverifikasi lewat email.
+   * @returns {Promise<boolean>} false jika token ternyata sudah dipakai.
+   */
+  async verifyEmail({ userId, tokenId, verifiedAt }) {
+    return db.transaction(async (tx) => {
+      const used = await tx
+        .update(emailVerificationTokens)
+        .set({ usedAt: verifiedAt })
+        .where(and(eq(emailVerificationTokens.id, tokenId), isNull(emailVerificationTokens.usedAt)));
+      if (affectedRows(used) === 0) return false;
+      await tx.update(users).set({ isVerified: true, verifiedAt }).where(and(eq(users.id, userId), eq(users.isVerified, false)));
+      return true;
+    });
   },
 
   /** Ganti kata sandi (pengguna yang sedang masuk): hash baru + cabut semua sesi dalam satu transaksi. */

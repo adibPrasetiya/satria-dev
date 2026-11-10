@@ -78,7 +78,8 @@ export const users = mysqlTable(
     email: varchar('email', { length: 160 }).notNull().unique(),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     role: mysqlEnum('role', ROLES).notNull().default('pemilik'),
-    // Akun hasil pendaftaran mandiri baru bisa dipakai setelah diverifikasi admin.
+    // Akun hasil pendaftaran mandiri baru bisa dipakai setelah email diverifikasi lewat tautan, atau
+    // diverifikasi manual oleh admin (`verifiedBy` null = terverifikasi lewat email).
     isVerified: boolean('is_verified').notNull().default(false),
     verifiedAt: datetime('verified_at'),
     verifiedBy: bigint('verified_by', { mode: 'number', unsigned: true }).references(() => users.id, { onDelete: 'set null' }),
@@ -103,7 +104,7 @@ export const refreshTokens = mysqlTable(
     expiresAt: datetime('expires_at').notNull(),
     revokedAt: datetime('revoked_at'),
     // Hanya token berstatus 'rotated' yang dipakai ulang dianggap pencurian.
-    revokedReason: mysqlEnum('revoked_reason', ['rotated', 'logout', 'password_change', 'deactivated', 'reuse']),
+    revokedReason: mysqlEnum('revoked_reason', ['rotated', 'logout', 'password_change', 'deactivated', 'reuse', 'role_change']),
     userAgent: varchar('user_agent', { length: 255 }),
     ip: varchar('ip', { length: 45 }),
     createdAt: createdAt(),
@@ -123,6 +124,20 @@ export const passwordResetTokens = mysqlTable(
     createdAt: createdAt(),
   },
   (table) => [index('password_reset_tokens_user_id_idx').on(table.userId)],
+);
+
+// Token tautan verifikasi email pendaftaran: hanya hash yang disimpan, sekali pakai, dan berbatas waktu.
+export const emailVerificationTokens = mysqlTable(
+  'email_verification_tokens',
+  {
+    id: id(),
+    userId: userId(),
+    tokenHash: char('token_hash', { length: 64 }).notNull().unique(),
+    expiresAt: datetime('expires_at').notNull(),
+    usedAt: datetime('used_at'),
+    createdAt: createdAt(),
+  },
+  (table) => [index('email_verification_tokens_user_id_idx').on(table.userId)],
 );
 
 export const ENVIRONMENTS = ['produksi', 'staging', 'pengembangan'];

@@ -126,3 +126,43 @@ export function emailResetSandi({ nama, tautan, menit, appUrl }) {
     html: bingkaiEmail({ judul: subject, pratinjau: `Tautan atur ulang kata sandi berlaku ${menit} menit.`, isiHtml, appUrl }),
   };
 }
+
+/**
+ * Email verifikasi alamat email setelah pendaftaran.
+ * @param {{ nama: string, tautan: string, jam: number, appUrl: string }} p
+ * @returns {{ subject: string, text: string, html: string }}
+ */
+export function emailVerifikasi({ nama, tautan, jam, appUrl }) {
+  const subject = `Verifikasi email akun ${APP_NAME}`;
+  const text = [
+    `Halo ${nama},`,
+    '',
+    `Terima kasih telah mendaftar di ${APP_NAME}. Untuk mengaktifkan akun Anda, buka tautan berikut dalam ${jam} jam:`,
+    tautan,
+    '',
+    'Bila Anda tidak merasa mendaftar, abaikan email ini — akun tidak akan aktif tanpa verifikasi.',
+    '',
+    `— ${APP_NAME} · Asesmen Kelaikan Keamanan Aplikasi`,
+  ].join('\n');
+
+  const isiHtml = `
+        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:${WARNA.teks};">Verifikasi email Anda</h1>
+        <p style="margin:0 0 14px;">Halo <strong>${escapeHtml(nama)}</strong>,</p>
+        <p style="margin:0 0 22px;">Terima kasih telah mendaftar di ${APP_NAME}. Klik tombol di bawah untuk memverifikasi alamat email dan mengaktifkan akun Anda.</p>
+        ${tombol('Verifikasi email', tautan)}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0;">
+          <tr><td style="background:${WARNA.aksenTipis};border-left:3px solid ${WARNA.aksen};padding:12px 16px;font-size:13px;line-height:1.55;color:${WARNA.teks};">
+            Tautan berlaku <strong>${escapeHtml(jam)} jam</strong> dan hanya dapat dipakai <strong>satu kali</strong>. Bila kedaluwarsa, minta tautan baru dari halaman masuk.
+          </td></tr>
+        </table>
+        <p style="margin:0 0 6px;font-size:13px;color:${WARNA.redup};">Tombol tidak berfungsi? Salin tautan berikut ke peramban Anda:</p>
+        <p style="margin:0 0 24px;font-size:13px;line-height:1.5;word-break:break-all;"><a href="${escapeHtml(tautan)}" target="_blank" rel="noopener" style="color:${WARNA.aksen};">${escapeHtml(tautan)}</a></p>
+        <hr style="border:0;border-top:1px solid ${WARNA.garis};margin:0 0 18px;">
+        <p style="margin:0;font-size:13px;line-height:1.55;color:${WARNA.redup};">Bila Anda tidak merasa mendaftar di ${APP_NAME}, abaikan email ini — akun tidak akan aktif tanpa verifikasi.</p>`;
+
+  return {
+    subject,
+    text,
+    html: bingkaiEmail({ judul: subject, pratinjau: `Tautan verifikasi email berlaku ${jam} jam.`, isiHtml, appUrl }),
+  };
+}

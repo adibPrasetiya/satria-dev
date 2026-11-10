@@ -306,7 +306,12 @@ export const mockApi: Api = {
 		if (!p) throw new Error('Email atau kata sandi salah');
 		// Data lama di localStorage belum punya field ini; anggap terverifikasi.
 		if (p.terverifikasi === false)
-			throw new Error('Akun Anda belum diverifikasi administrator. Silakan tunggu persetujuan.');
+			throw Object.assign(
+				new Error(
+					'Email akun Anda belum diverifikasi. Buka tautan verifikasi yang dikirim ke email Anda, atau minta tautan baru.'
+				),
+				{ code: 'ACCOUNT_PENDING' }
+			);
 		if (!p.aktif) throw new Error('Akun Anda dinonaktifkan. Hubungi administrator.');
 		return salin(p);
 	},
@@ -372,6 +377,22 @@ export const mockApi: Api = {
 		await jeda(600);
 		if (!token || token === 'kedaluwarsa')
 			throw new Error('Tautan atur ulang kata sandi tidak valid atau sudah kedaluwarsa');
+	},
+
+	// Mode demo tidak mengirim email: token apa pun memverifikasi akun pending terbaru, kecuali "kedaluwarsa".
+	async verifikasiEmail(token) {
+		await jeda(600);
+		if (!token || token === 'kedaluwarsa')
+			throw new Error('Tautan verifikasi email tidak valid atau sudah kedaluwarsa');
+		const u = state.pengguna.findLast((x) => x.terverifikasi === false);
+		if (u) {
+			u.terverifikasi = true;
+			simpan();
+		}
+	},
+
+	async kirimUlangVerifikasi() {
+		await jeda(700);
 	},
 
 	async getKatalog() {
@@ -988,6 +1009,19 @@ export const mockApi: Api = {
 		const u = cariPengguna(id);
 		if (u.terverifikasi === false) throw new Error('Verifikasi akun terlebih dahulu');
 		u.aktif = aktif;
+		simpan();
+		return salin({ ...u, status: statusAkun(u) });
+	},
+
+	async ubahPeranPengguna(id, peran) {
+		await jeda();
+		if (id === sesiId) throw new Error('Anda tidak dapat mengubah akun Anda sendiri');
+		const u = cariPengguna(id);
+		if (u.terverifikasi === false) throw new Error('Verifikasi akun terlebih dahulu');
+		const adminAktif = state.pengguna.filter((x) => x.peran === 'admin' && x.aktif && x.terverifikasi !== false);
+		if (u.peran === 'admin' && peran !== 'admin' && u.aktif && adminAktif.length <= 1)
+			throw new Error('Harus ada minimal satu administrator yang aktif');
+		u.peran = peran;
 		simpan();
 		return salin({ ...u, status: statusAkun(u) });
 	},
