@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from . import koordinasi
 from .models import Bukti
 
 USER_AGENT = "SATYA-Worker/0.1 (+asesmen-kelaikan-keamanan)"
@@ -124,6 +125,8 @@ class KlienScan:
         nilai berkunci sensitif otomatis disamarkan pada bukti.
         """
         self._jaga_ruang_lingkup(url)
+        # Titik sela: berhenti cepat bila scan dibatalkan / pemutus sirkuit target terpicu.
+        koordinasi.periksa_batal()
         # Badan untuk bukti selalu dict agar perekam & animasi aman (content mentah diringkas).
         body_rekam: dict[str, Any] = (
             json if isinstance(json, dict)

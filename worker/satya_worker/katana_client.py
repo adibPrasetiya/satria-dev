@@ -27,6 +27,8 @@ import subprocess
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
+from . import koordinasi
+
 
 def _bin() -> str:
     return os.environ.get("KATANA_BIN", "katana").strip() or "katana"
@@ -114,16 +116,15 @@ def jalankan(
         perintah += ["-H", f"Cookie: {cookie}"]
 
     try:
-        proc = subprocess.run(
+        # Bisa disela: proses dimatikan bila scan dibatalkan / target dinyatakan tak terjangkau.
+        proc = koordinasi.jalankan_proses(
             perintah,
-            capture_output=True,
             text=True,
             # Keluaran katana UTF-8; tanpa ini Windows memakai cp1252 → thread pembaca crash pada
             # karakter non-Latin dan seluruh hasil hilang. Byte rusak diganti, bukan menggagalkan.
             encoding="utf-8",
             errors="replace",
             timeout=timeout if timeout is not None else _timeout(),
-            check=False,
         )
     except (subprocess.TimeoutExpired, OSError):
         return []

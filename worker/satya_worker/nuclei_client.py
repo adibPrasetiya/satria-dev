@@ -29,6 +29,8 @@ import subprocess
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
+from . import koordinasi
+
 # Kata kunci template yang relevan dengan "dokumentasi API / endpoint debug terbuka".
 _RELEVAN = (
     "swagger", "openapi", "api-doc", "api_doc", "apidoc", "graphql", "redoc",
@@ -122,14 +124,13 @@ def jalankan(
         perintah += ["-H", f"{k}: {v}"]
 
     try:
-        proc = subprocess.run(
+        # Bisa disela: proses dimatikan bila scan dibatalkan / target dinyatakan tak terjangkau.
+        proc = koordinasi.jalankan_proses(
             perintah,
-            capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
             timeout=timeout if timeout is not None else _timeout(),
-            check=False,
         )
     except (subprocess.TimeoutExpired, OSError):
         return []

@@ -28,6 +28,8 @@ import tempfile
 from typing import Any, Optional
 from urllib.parse import urlsplit, urlunsplit
 
+from . import koordinasi
+
 # Nama parameter umum pada API pemerintahan/berbahasa Indonesia + konvensi REST (untuk FUZZ ?param).
 _PARAM_BAWAAN = [
     "id", "page", "halaman", "limit", "offset", "per_page", "size", "q", "query", "cari", "keyword", "kata",
@@ -113,8 +115,8 @@ def _jalankan_ffuf(url: str, wordlist: str, *, cookie: Optional[str] = None) -> 
     if cookie:
         perintah += ["-b", cookie]
     try:
-        proc = subprocess.run(perintah, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              timeout=_env_num("FFUF_TIMEOUT", 60), check=False)
+        proc = koordinasi.jalankan_proses(perintah, text=True, encoding="utf-8", errors="replace",
+                                          timeout=_env_num("FFUF_TIMEOUT", 60))
     except (subprocess.TimeoutExpired, OSError):
         return []
     out = proc.stdout or ""
