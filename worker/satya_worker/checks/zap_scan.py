@@ -182,9 +182,28 @@ def _jalankan(ctx: ScanContext, metode: MetodeSpec) -> HasilMetode:
     return gabung_sapuan(ctx, metode, evaluasi(metode, alerts, scan_ok=scan_ok, aktif_ok=aktif_ok))
 
 
+# Check yang juga diperkaya uji XSS TERSIMPAN (menulis penanda → baca ulang). Mutatif → hanya intrusif+izin.
+_STORED_CHECKS = {"zap.active.xss_policy", "zap.active.injection_policy"}
+
+
+def _uji_tersimpan(ctx: ScanContext, metode: MetodeSpec) -> Any:
+    """Jalankan prober XSS tersimpan bila check relevan DAN diizinkan (profil intrusif + izin intrusif).
+    Return HasilStored | None."""
+    if metode.check_id not in _STORED_CHECKS:
+        return None
+    if metode.profil != "intrusif" or not getattr(ctx.intrusif, "izinkan_penguncian", False):
+        return None
+    from ..inpv import stored
+    try:
+        return stored.probe(ctx)
+    except Exception:
+        return None
+
+
 def gabung_sapuan(ctx: ScanContext, metode: MetodeSpec, h: HasilMetode) -> HasilMetode:
-    """Gabungkan indikasi injeksi dari sapuan INPV (sisi worker) dengan vonis ZAP: GAGAL bila salah satu
-    menemukan indikasi. Bila ZAP tak tersedia dan sapuan bersih, tetap tidak_dapat_diverifikasi."""
+    """Gabungkan indikasi injeksi dari sapuan INPV (sisi worker) + uji XSS tersimpan dengan vonis ZAP:
+    GAGAL bila salah satu menemukan indikasi. Bila ZAP tak tersedia dan semuanya bersih, tetap
+    tidak_dapat_diverifikasi."""
     from . import input_validation as iv
 
     if metode.check_id not in iv.INDIKASI_ZAP:
@@ -192,16 +211,28 @@ def gabung_sapuan(ctx: ScanContext, metode: MetodeSpec, h: HasilMetode) -> Hasil
     temuan, s = iv.indikasi_injeksi(ctx, metode.check_id)
     if s is None:
         return h
-    if temuan:
-        teks = "; ".join(f"{o.ringkas} ({o.kategori}: {o.catatan})" for o in temuan[:8])
+
+    st = _uji_tersimpan(ctx, metode)
+    stored_rentan = st.rentan if st is not None else []
+    pesan_stored = (f"\nUji XSS tersimpan: {st.teks()}" + ("".join(f"\n  • {t.ringkas}" for t in st.temuan[:8]))) if st is not None and st.dijalankan else ""
+    bukti_stored = list(st.bukti) if st is not None else []
+
+    if temuan or stored_rentan:
+        bagian = []
+        if stored_rentan:
+            bagian.append(f"{len(stored_rentan)} XSS TERSIMPAN (data tak difilter, muncul mentah saat dibaca ulang): "
+                          + "; ".join(t.ringkas for t in stored_rentan[:5]))
+        if temuan:
+            bagian.append(f"{len(temuan)} indikasi injeksi: " + "; ".join(f"{o.ringkas} ({o.kategori})" for o in temuan[:6]))
         return HasilMetode(
             metode_id=metode.id, status="gagal",
-            ringkasan=f"Sapuan INPV menemukan {len(temuan)} indikasi injeksi: {teks[:250]}"
+            ringkasan=("Sapuan INPV menemukan " + " | ".join(bagian))[:400]
                       + (f" | ZAP: {h.ringkasan}" if h.status == "gagal" else ""),
-            detail=(h.detail or "") + f"\nSapuan INPV: {teks}\n{s.teks_cakupan()}",
-            bukti=list(h.bukti) + list(s.bukti), durasi_ms=h.durasi_ms,
+            detail=(h.detail or "") + f"\nSapuan INPV: {'; '.join(f'{o.ringkas} ({o.kategori}: {o.catatan})' for o in temuan[:8]) or 'tak ada refleksi'}"
+                   + pesan_stored + f"\n{s.teks_cakupan()}",
+            bukti=list(h.bukti) + list(s.bukti) + bukti_stored, durasi_ms=h.durasi_ms,
         )
-    h.detail = ((h.detail or "") + f"\nSapuan INPV: tidak ada indikasi ({s.teks_cakupan()})").strip()
+    h.detail = ((h.detail or "") + f"\nSapuan INPV: tidak ada indikasi ({s.teks_cakupan()})" + pesan_stored).strip()
     return h
 
 

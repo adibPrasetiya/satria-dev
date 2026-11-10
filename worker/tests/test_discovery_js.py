@@ -10,6 +10,7 @@ c.post("/cuti",d);axios.delete(`${API}/cuti/${id}`);
 fetch("/api/v1/lampiran",{method:"POST",body:f});x.open("PUT","/api/v1/profil");
 request({url:"/api/v1/unit",method:"patch"});const u="/api/v1/laporan/ekspor";
 document.querySelector(".btn");m.get("kunci");fetch("/assets/app.js");
+axios.get(`/api/v1/cuti?status=${s}&page=${p}&q=kata`);fetch("/api/v1/cari?keyword=${k}");
 """
 
 
@@ -25,6 +26,16 @@ def test_ekstrak_metode_dan_path():
     # Bukan path API: selector CSS, kunci map, berkas aset.
     assert not any(p in ("kunci", ".btn", "/assets/app.js") for _m, p in eps)
     assert r["base"] == ["https://api.contoh.test/api/v1"]
+
+
+def test_ekstrak_nama_query_parameter():
+    r = dj.ekstrak(BUNDLE)
+    q = {(e["method"], e["path"]): set(e.get("query") or []) for e in r["endpoints"]}
+    # GET berbasis query string: nama parameter diidentifikasi (nilai ${var} diabaikan).
+    assert q[("GET", "/api/v1/cuti")] == {"status", "page", "q"}
+    assert q[("GET", "/api/v1/cari")] == {"keyword"}
+    # Endpoint tanpa query → daftar kosong, bukan field palsu.
+    assert q[("POST", "/cuti")] == set()
 
 
 def test_rangkai_url_tanpa_menggandakan_basis():

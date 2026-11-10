@@ -24,6 +24,7 @@ from ..http_client import KlienScan, LuarRuangLingkup
 from ..models import Bukti, ScanContext
 from ..sesi import hosts_target, login
 from . import cakupan as ck
+from . import orkestra as ork
 from . import payload as pl
 from . import profil_field as pf
 from . import vonis as vn
@@ -46,6 +47,10 @@ class Sapuan:
     login_ok: bool = False
     ai: dict[str, Any] = field(default_factory=dict)
     galat: str = ""
+    # Orkestrasi adaptif baseline.
+    anggaran: ork.AnggaranAI = field(default_factory=ork.AnggaranAI.dari_env)
+    baseline_diperbaiki: int = 0        # jumlah endpoint yang baseline-nya perlu diperbaiki
+    panggilan_perbaikan: int = 0        # panggilan AI untuk perbaikan baseline
 
     def cakupan(self) -> dict[str, Any]:
         hit: dict[str, int] = {"diuji": 0, "tanpa_input": 0, "dilewati": 0}
@@ -208,6 +213,9 @@ def _jalankan(ctx: ScanContext) -> Sapuan:
     pakai = penggunaan.selisih(awal_ai)
     hasil.ai["pemakaian"] = pakai
     ctx.catat("info", "  " + hasil.teks_cakupan())
+    if hasil.baseline_diperbaiki:
+        ctx.catat("info", f"  Orkestrasi adaptif: {hasil.baseline_diperbaiki} baseline diperbaiki agar valid "
+                          f"({hasil.panggilan_perbaikan} via AI, sisanya deterministik).")
     if pakai["panggilan"]:
         ctx.catat("info", f"  AI: {pakai['panggilan']} panggilan, {'±' if pakai['perkiraan'] else ''}{pakai['token']} token.")
     elif ai_inpv.mode() != "off":
@@ -244,12 +252,30 @@ def _uji_endpoint(ctx: ScanContext, klien: KlienScan, r: ck.Rencana, profil: dic
         except Exception:
             return None
 
-    # Baseline: payload valid (query + body) — pembanding status & panjang.
-    url_base = _url_query(url_dasar, q_valid) if q_valid else r.url
-    base = kirim(url_base, b_valid if metode in ("POST", "PUT", "PATCH") else None, f"INPV — {r.label} (baseline valid)")
+    # Baseline adaptif: payload valid; bila ditolak validasi, orkestrator memperbaikinya (deterministik
+    # → AI berbatas) hingga diterima, agar penolakan varian satu-field bisa diatribusikan dengan benar.
+    def uji_payload(q: dict[str, Any], b: Optional[dict[str, Any]], judul: str) -> Any:
+        url = _url_query(url_dasar, q) if q else url_dasar
+        body = b if metode in ("POST", "PUT", "PATCH") else None
+        return kirim(url, body, f"INPV — {r.label} ({judul})")
+
+    if r.status == "diuji" and metode != "DELETE":
+        hb = ork.baseline_tervalidasi(ep, metode, q_valid, b_valid, uji_payload, anggaran=hasil.anggaran,
+                                      catat_ai=lambda info: hasil.ai.setdefault("perbaikan", []).append(info))
+        q_valid = hb.query
+        b_valid = hb.body if hb.body is not None else b_valid
+        base = hb.resp
+        hasil.panggilan_perbaikan += hb.panggilan_ai
+        if hb.diperbaiki:
+            hasil.baseline_diperbaiki += 1
+    else:
+        base = kirim(_url_query(url_dasar, q_valid) if q_valid else r.url,
+                     b_valid if metode in ("POST", "PUT", "PATCH") else None, f"INPV — {r.label} (baseline valid)")
+        hb = None
     st_b = base.status_code if base is not None else None
     len_b = len(base.text) if base is not None else None
-    # Baseline valid pun ditolak validasi → penolakan varian tak bisa diatribusikan ke field uji.
+    # Baseline valid pun ditolak validasi (walau sudah diperbaiki) → penolakan varian tak bisa
+    # diatribusikan ke field uji; tandai agar vonis menjadi "payload_belum_valid" (tinjauan).
     baseline_ditolak = st_b in (400, 422) and metode != "DELETE" and r.status == "diuji"
     hitung: dict[str, int] = {}
 
@@ -290,9 +316,12 @@ def _uji_endpoint(ctx: ScanContext, klien: KlienScan, r: ck.Rencana, profil: dic
         for v in pl.varian_path(tok):
             catat_obs(kirim(_ganti_id(url_dasar, ep.get("path_template", ""), str(v.nilai)), None, f"INPV — {r.label} (path id · {v.jenis})"),
                       "{id}", "path", v, {})
+    perbaikan = ""
+    if hb is not None and hb.diperbaiki:
+        perbaikan = f" · baseline diperbaiki ({', '.join(hb.diperbaiki[:4])}{'…' if len(hb.diperbaiki) > 4 else ''} → {'diterima' if hb.diterima else 'tetap ditolak'})"
     ringkas = ", ".join(f"{k} {n}" for k, n in sorted(hitung.items(), key=lambda x: -x[1]))
     ctx.catat("info", f"  • {r.label}: baseline {st_b if st_b is not None else 'gagal'}{' (payload dasar ditolak)' if baseline_ditolak else ''}"
-                      f" · {sum(hitung.values())} varian → {ringkas or '—'}")
+                      f"{perbaikan} · {sum(hitung.values())} varian → {ringkas or '—'}")
 
 
 def _pilih_bukti(semua: list[Bukti], obs: list[vn.Observasi]) -> list[Bukti]:

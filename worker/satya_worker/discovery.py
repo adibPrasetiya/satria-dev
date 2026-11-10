@@ -12,6 +12,7 @@ Parser HTML memakai pustaka standar (`html.parser`) — tanpa dependensi baru.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Any, Optional
@@ -385,6 +386,7 @@ def temukan(
     pakai_browser: bool = True,
     pakai_katana: bool = True,
     pakai_ai: bool = True,
+    pakai_ffuf: bool = True,
     ctx: Optional[ScanContext] = None,
     log: Logger = None,
 ) -> dict[str, Any]:
@@ -563,6 +565,8 @@ def temukan(
         base_url, spec_obj, spec_url_simpan, halaman, ringkasan_browser, katana_hasil, ringkasan_zap, doa,
         hasil_js=hasil_js,
     )
+    if pakai_ffuf:
+        _enrich_ffuf_parameter(endpoints_lengkap, cookie_hdr, log)
     if pakai_ai:
         _tajamkan_lapisan_ai(endpoints_lengkap, log)
     pr.tahap(log, "inventaris", f"Inventaris endpoint terpadu: {len(endpoints_lengkap)} endpoint unik.", jumlah=len(endpoints_lengkap))
@@ -898,6 +902,42 @@ def _analisis_bundle(
     return hasil
 
 
+def _enrich_ffuf_parameter(endpoints: list[dict[str, Any]], cookie: Optional[str], log: Logger) -> None:
+    """Pengaya opsional: pakai ffuf untuk menemukan NAMA parameter query pada endpoint GET API yang
+    belum punya parameter terdeteksi. No-op anggun bila biner ffuf tak terpasang/di-disable."""
+    from . import endpoint_map as em
+    from . import ffuf_client as ff
+
+    if not ff.tersedia():
+        return
+    try:
+        maks_ep = int(os.environ.get("FFUF_MAKS_ENDPOINT", "10"))
+    except ValueError:
+        maks_ep = 10
+    kandidat = [
+        e for e in endpoints
+        if str(e.get("metode_http") or "GET").upper() == "GET" and (e.get("lapisan") or "api") == "api"
+        and not any(f.get("lokasi") == "query" for f in e.get("request_fields") or [])
+    ][:maks_ep]
+    if not kandidat:
+        return
+    pr.tahap(log, "ffuf", f"ffuf menemukan parameter query pada ≤{len(kandidat)} endpoint API…")
+    total = 0
+    for e in kandidat:
+        try:
+            nama = ff.temukan_parameter(str(e.get("url") or ""), cookie=cookie)
+        except Exception:
+            nama = []
+        ada = {f.get("nama") for f in e.get("request_fields") or []}
+        baru = [em.field(n, "query") for n in nama if n not in ada]
+        if baru:
+            e.setdefault("request_fields", []).extend(baru)
+            e["sumber"] = list(dict.fromkeys((e.get("sumber") or []) + ["ffuf"]))
+            e["catatan"] = (e.get("catatan") or "") + f" [ffuf: +{len(baru)} param]"
+            total += len(baru)
+    _lognya(log, "info", f"ffuf: {total} parameter query baru ditemukan pada {len(kandidat)} endpoint.")
+
+
 def _tajamkan_lapisan_ai(endpoints: list[dict[str, Any]], log: Logger) -> None:
     """Minta AI mengoreksi lapisan/metode endpoint yang ambigu (METADATA saja). Gagal → diam."""
     from . import ai as ai_mod
@@ -1032,8 +1072,12 @@ def _bangun_inventaris(
         url = _rebase_js(e["url"], base_url, ringkasan_browser)
         if _metode_js_terbantah(e["method"], url, ringkasan_browser) or lapisan(e["method"], url, "") == "aset":
             continue
+        # Field query terlihat di bundle (nama parameter) + query pada URL (bila ada) → endpoint
+        # berbasis query string tetap punya permukaan uji, bukan dianggap "tanpa input".
+        rf = em.field_dari_query(url) + [em.field(q, "query") for q in (e.get("query") or [])
+                                         if q not in {f.get("nama") for f in em.field_dari_query(url)}]
         inv.tambah(e["method"], url, sumber="js", titik_uji=klasifikasi_tautan(url),
-                   catatan=f"Dari bundle {e.get('berkas', '')}", lapisan="api")
+                   request_fields=rf, catatan=f"Dari bundle {e.get('berkas', '')}", lapisan="api")
 
     return inv.sebagai_list()
 

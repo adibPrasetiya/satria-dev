@@ -134,6 +134,46 @@ def nilai_ambigu(kasus: list[dict[str, Any]]) -> tuple[dict[str, str], dict[str,
     return {str(k): str(x) for k, x in v.items() if str(x) in sah}, info
 
 
+def _prompt_perbaiki(meta: dict[str, Any]) -> str:
+    return (
+        "Asesmen keamanan web berizin. Sebuah request API ditolak server (validasi) karena payload "
+        "dasar belum valid — bukan karena field yang sedang diuji. Perbaiki agar payload DITERIMA: "
+        "beri nilai VALID spesifik domain untuk tiap field bermasalah (bukan data orang nyata, bukan "
+        "payload eksploit; hormati tipe/format/panjang bila diberi). Untuk field yang hilang tapi wajib, "
+        "sertakan juga. m=metode, path, field_bermasalah=[{nama,tipe,format,bentuk?}], field_ada=[nama], "
+        "pesan_galat (tersamar). Jawab HANYA JSON ringkas: {\"nilai\":{\"<field>\":<nilai_valid>}}\n"
+        + json.dumps(meta, ensure_ascii=False, separators=(",", ":"))
+    )
+
+
+def perbaiki_payload(meta: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Minta AI memperbaiki payload dasar yang ditolak agar menjadi valid (orkestrasi adaptif).
+
+    `meta`: {m, path, field_bermasalah:[{nama,tipe,format,bentuk?}], field_ada:[nama], pesan_galat}.
+    Return ({field: nilai_valid}, info). AI menerima METADATA tersamar saja; nilai sensitif tak dikirim
+    dan tak diterima kembali untuk field sandi/token. Pemanggil menegakkan anggaran panggilan."""
+    info: dict[str, Any] = {"dikirim": 0}
+    if mode() == "off" or not meta.get("field_bermasalah"):
+        return {}, info
+    provider = _provider()
+    if provider is None or not hasattr(provider, "tanya_json"):
+        return {}, info
+    # Jangan kirim nama field sensitif ke AI; field sandi/token tak ikut diperbaiki otomatis.
+    meta = dict(meta)
+    meta["field_bermasalah"] = [f for f in meta["field_bermasalah"] if not _KUNCI_SENSITIF.search(str(f.get("nama", "")))]
+    if not meta["field_bermasalah"]:
+        return {}, info
+    info["dikirim"] = len(meta["field_bermasalah"])
+    jawab = provider.tanya_json(_prompt_perbaiki(redaksi(meta)), max_tokens=40 * len(meta["field_bermasalah"]) + 200)
+    nilai = jawab.get("nilai") if isinstance(jawab, dict) else None
+    if not isinstance(nilai, dict):
+        info["galat"] = (jawab or {}).get("_galat", "respons AI tak valid") if isinstance(jawab, dict) else "respons AI tak valid"
+        return {}, info
+    bersih = {str(k): v for k, v in nilai.items()
+              if isinstance(v, (str, int, float, bool)) and not _KUNCI_SENSITIF.search(str(k)) and len(str(v)) <= 200}
+    return bersih, info
+
+
 def provider_aktif() -> Optional[str]:
     p = _provider()
     return f"{p.nama} ({p.model})" if p is not None else None
