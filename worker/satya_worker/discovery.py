@@ -902,28 +902,50 @@ def _analisis_bundle(
     return hasil
 
 
+def _url_templat(url: str) -> bool:
+    """URL masih memuat placeholder path (`{id}` / `%7Bid%7D`) → tak akan resolve; fuzz param sia-sia."""
+    u = (url or "").lower()
+    return "{" in u or "%7b" in u
+
+
 def _enrich_ffuf_parameter(endpoints: list[dict[str, Any]], cookie: Optional[str], log: Logger) -> None:
     """Pengaya opsional: pakai ffuf untuk menemukan NAMA parameter query pada endpoint GET API yang
-    belum punya parameter terdeteksi. No-op anggun bila biner ffuf tak terpasang/di-disable."""
+    belum punya parameter terdeteksi. No-op anggun bila biner ffuf tak terpasang/di-disable.
+
+    Dibatasi agar tak memblokir pipeline: endpoint ber-placeholder `{id}` dilewati (fuzz sia-sia),
+    jumlah endpoint dibatasi `FFUF_MAKS_ENDPOINT` (bawaan 5), dan ANGGARAN WAKTU TOTAL
+    `FFUF_BUDGET_TOTAL` detik (bawaan 120) — bila habis, sisa endpoint dilewati."""
+    import time
+
     from . import endpoint_map as em
     from . import ffuf_client as ff
 
     if not ff.tersedia():
         return
     try:
-        maks_ep = int(os.environ.get("FFUF_MAKS_ENDPOINT", "10"))
+        maks_ep = int(os.environ.get("FFUF_MAKS_ENDPOINT", "5"))
     except ValueError:
-        maks_ep = 10
+        maks_ep = 5
+    try:
+        budget = float(os.environ.get("FFUF_BUDGET_TOTAL", "120"))
+    except ValueError:
+        budget = 120.0
     kandidat = [
         e for e in endpoints
         if str(e.get("metode_http") or "GET").upper() == "GET" and (e.get("lapisan") or "api") == "api"
         and not any(f.get("lokasi") == "query" for f in e.get("request_fields") or [])
+        and not _url_templat(str(e.get("url") or ""))   # lewati /x/{id} yang belum terisi
     ][:maks_ep]
     if not kandidat:
         return
-    pr.tahap(log, "ffuf", f"ffuf menemukan parameter query pada ≤{len(kandidat)} endpoint API…")
-    total = 0
+    pr.tahap(log, "ffuf", f"ffuf menemukan parameter query pada ≤{len(kandidat)} endpoint API (anggaran {budget:.0f}s)…")
+    t0 = time.monotonic()
+    total = diproses = 0
     for e in kandidat:
+        if time.monotonic() - t0 > budget:
+            _lognya(log, "info", f"ffuf: anggaran waktu {budget:.0f}s habis — {diproses}/{len(kandidat)} endpoint diproses, sisanya dilewati.")
+            break
+        diproses += 1
         try:
             nama = ff.temukan_parameter(str(e.get("url") or ""), cookie=cookie)
         except Exception:
@@ -935,7 +957,7 @@ def _enrich_ffuf_parameter(endpoints: list[dict[str, Any]], cookie: Optional[str
             e["sumber"] = list(dict.fromkeys((e.get("sumber") or []) + ["ffuf"]))
             e["catatan"] = (e.get("catatan") or "") + f" [ffuf: +{len(baru)} param]"
             total += len(baru)
-    _lognya(log, "info", f"ffuf: {total} parameter query baru ditemukan pada {len(kandidat)} endpoint.")
+    _lognya(log, "info", f"ffuf: {total} parameter query baru pada {diproses} endpoint ({time.monotonic() - t0:.0f}s).")
 
 
 def _tajamkan_lapisan_ai(endpoints: list[dict[str, Any]], log: Logger) -> None:
