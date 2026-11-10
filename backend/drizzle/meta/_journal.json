@@ -113,6 +113,13 @@
       "when": 1793360000000,
       "tag": "0015_scans_recon_rujukan",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1793420000000,
+      "tag": "0016_scans_laporan_status",
+      "breakpoints": true
     }
   ]
 }

@@ -193,4 +193,22 @@ describe('laporan.service', () => {
     await assert.rejects(buat({ scan: { ...SCAN, status: 'berjalan' } }).svc.generate({ id: '1' }, '12'), { statusCode: 400 });
     await assert.rejects(buat({ ai: false }).svc.generate({ id: '1' }, '12'), { statusCode: 503 });
   });
+
+  it('generateOtomatis: riwayat terakhir → siap & disimpan', async () => {
+    const { svc, tersimpan } = buat();
+    assert.equal(await svc.generateOtomatis('12'), 'siap');
+    assert.equal(tersimpan.length, 1);
+  });
+
+  it('generateOtomatis: bukan riwayat terakhir → gagal & tidak disimpan', async () => {
+    const { svc, tersimpan } = buat({ terakhir: 20 });
+    assert.equal(await svc.generateOtomatis('12'), 'gagal');
+    assert.equal(tersimpan.length, 0);
+  });
+
+  it('generateOtomatis: AI tak aktif → gagal (tak melempar)', async () => {
+    const { svc, tersimpan } = buat({ ai: false });
+    assert.equal(await svc.generateOtomatis('12'), 'gagal');
+    assert.equal(tersimpan.length, 0);
+  });
 });

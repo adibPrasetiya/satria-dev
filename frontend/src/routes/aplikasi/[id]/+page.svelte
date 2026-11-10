@@ -59,6 +59,30 @@
 	const scanSelesai = $derived(scans.find((s) => s.status === 'selesai'));
 	const scanBerjalan = $derived(scans.find((s) => s.status === 'berjalan'));
 	const penilaian = $derived(scanSelesai ? nilaiKelaikan(scanSelesai.hasil) : null);
+
+	// Status laporan scan selesai terakhir → tombol Lihat⊕Generate (salah satu saja).
+	let menyusunLaporan = $state(false);
+	const laporanSiap = $derived(!!scanSelesai && (!!scanSelesai.ai || scanSelesai.laporan_status === 'siap'));
+	const laporanProses = $derived(
+		!!scanSelesai && !laporanSiap && (scanSelesai.laporan_status === 'proses' || menyusunLaporan)
+	);
+	async function generateLaporan() {
+		if (!scanSelesai || menyusunLaporan) return;
+		menyusunLaporan = true;
+		try {
+			const hasil = await api.analisisAi(scanSelesai.id);
+			// Perbarui objek scan di daftar agar tombol berganti menjadi "Lihat Laporan".
+			const i = scans.findIndex((s) => s.id === scanSelesai.id);
+			if (i >= 0) scans[i] = { ...scans[i], ai: hasil.ai, laporan_status: 'siap' };
+			toast.success('Laporan selesai disusun — klik Lihat Laporan');
+		} catch (e) {
+			const i = scans.findIndex((s) => s.id === scanSelesai.id);
+			if (i >= 0) scans[i] = { ...scans[i], laporan_status: 'gagal' };
+			toast.error(e instanceof Error ? e.message : 'Gagal menyusun laporan');
+		} finally {
+			menyusunLaporan = false;
+		}
+	}
 	// Mengubah data aset: admin, atau pemilik dari satuan yang sama (data mock lama: pendaftarnya sendiri).
 	const bisaUbah = $derived(
 		!!app &&
@@ -127,7 +151,16 @@
 		{/snippet}
 		{#snippet aksi()}
 			{#if scanSelesai}
-				<Button variant="outline" href="/laporan/{scanSelesai.id}"><FileBarChart /> Laporan Terakhir</Button>
+				{#if laporanSiap}
+					<Button variant="outline" href="/laporan/{scanSelesai.id}"><FileBarChart /> Lihat Laporan</Button>
+				{:else if laporanProses}
+					<Button variant="outline" disabled><LoaderCircle class="animate-spin" /> Menyusun Laporan…</Button>
+				{:else}
+					<Button variant="outline" onclick={generateLaporan} disabled={menyusunLaporan}>
+						{#if menyusunLaporan}<LoaderCircle class="animate-spin" />{:else}<FileBarChart />{/if}
+						{menyusunLaporan ? 'Menyusun…' : 'Generate Laporan'}
+					</Button>
+				{/if}
 			{/if}
 			{#if scanBerjalan}
 				<Button href="/scan/{scanBerjalan.id}"><LoaderCircle class="animate-spin" /> Pantau Pengujian</Button>

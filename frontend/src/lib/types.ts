@@ -379,6 +379,9 @@ export interface Scan {
 	hasil: Record<string, HasilMetode>;
 	log: LogScan[];
 	ai?: AnalisisAi;
+	/** Status penyusunan laporan AI: 'siap' (ai ada) | 'proses' (sedang disusun, auto saat selesai)
+	 *  | 'gagal' | 'belum'. Dasar tombol Lihat⊕Generate (hanya salah satu). */
+	laporan_status?: StatusLaporan;
 	/** Posisi antrean & worker yang mengerjakan (hanya selama berjalan). */
 	antrean?: AntreanScan;
 }
@@ -420,10 +423,13 @@ export interface StatusWorker {
 export type Putusan = 'laik' | 'laik_bersyarat' | 'tidak_laik';
 
 /** Event progres scan (SSE /api/scans/:id/events). */
+export type StatusLaporan = 'belum' | 'proses' | 'siap' | 'gagal';
+
 export type EventScan =
 	| { tipe: 'metode'; hasil: HasilMetode }
 	| { tipe: 'log'; log: LogScan }
 	| { tipe: 'status'; status: StatusScan; selesai_pada?: string }
+	| { tipe: 'laporan'; status: StatusLaporan }
 	| { tipe: 'worker'; peristiwa: 'diklaim' | 'terputus'; worker_id: string | null; metode_id: string };
 
 // ---------------------------------------------------------------------------

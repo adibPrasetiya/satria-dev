@@ -176,6 +176,11 @@ export const scansRepository = {
     await db.update(scans).set({ status, ...(finishedAt ? { finishedAt } : {}) }).where(eq(scans.id, id));
   },
 
+  /** Status penyusunan laporan AI (belum|proses|siap|gagal) — dasar tombol Lihat/Generate di UI. */
+  async setLaporanStatus(id, laporanStatus) {
+    await db.update(scans).set({ laporanStatus }).where(eq(scans.id, id));
+  },
+
   /** Saat scan dibatalkan: task yang masih antre diselesaikan dengan hasil "dibatalkan". */
   async finishPendingTasksAsCancelled(scanId) {
     await db
