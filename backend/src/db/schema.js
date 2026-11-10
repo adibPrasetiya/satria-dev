@@ -259,6 +259,8 @@ export const SCAN_STATUSES = ['antre', 'berjalan', 'selesai', 'dibatalkan'];
 export const TASK_STATUSES = ['antre', 'berjalan', 'selesai'];
 export const LOG_LEVELS = ['info', 'peringatan', 'galat'];
 export const VERDICTS = ['laik', 'laik_bersyarat', 'tidak_laik'];
+// Status penyusunan laporan AI: belum diminta, sedang disusun (auto saat selesai), siap, atau gagal.
+export const LAPORAN_STATUSES = ['belum', 'proses', 'siap', 'gagal'];
 
 // Persiapan pengujian per aplikasi: pemetaan titik uji -> URL nyata & template form.
 // Dipakai worker untuk tahu endpoint mana yang diuji dan nama field form-nya.
@@ -311,6 +313,9 @@ export const scans = mysqlTable(
     // Laporan hasil generate AI (ringkasan eksekutif + rekomendasi). Hanya disimpan untuk scan SELESAI
     // terakhir sebuah aplikasi; laporan riwayat lama selalu di-generate ulang & tidak disimpan.
     aiAnalysis: json('ai_analysis').$type(),
+    // Status penyusunan laporan: diisi 'proses' saat auto-generate dimulai (scan selesai), lalu
+    // 'siap' (ai_analysis terisi) atau 'gagal'. Dasar tombol Lihat/Generate di UI (salah satu saja).
+    laporanStatus: mysqlEnum('laporan_status', LAPORAN_STATUSES).notNull().default('belum'),
   },
   (table) => [
     index('scans_application_id_idx').on(table.applicationId),

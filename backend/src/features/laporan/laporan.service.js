@@ -51,46 +51,66 @@ export function createLaporanService({
   auditor = audit,
   sekarang = () => new Date(),
 } = {}) {
+  /** Susun analisis AI untuk sebuah scan (tanpa otorisasi/penyimpanan). Return { scan, analisis, disimpan }. */
+  async function susun(scanId) {
+    const scan = await scanRepo.findScanById(Number(scanId));
+    if (!scan) throw AppError.notFound('Pengujian tidak ditemukan');
+    if (scan.status === 'berjalan' || scan.status === 'antre') {
+      throw AppError.badRequest('Laporan baru dapat dibuat setelah pengujian selesai');
+    }
+    const ai = provider();
+    if (!ai) {
+      throw new AppError(503, 'Layanan AI penyusun laporan belum dikonfigurasi', undefined, 'AI_TIDAK_AKTIF');
+    }
+    const [aplikasi, metode, acuan, akunUji, terakhir] = await Promise.all([
+      apps.findById(scan.applicationId),
+      repository.metodeScan(scan.id),
+      repository.acuan(),
+      repository.akunUji(scan.applicationId),
+      repository.scanSelesaiTerakhir(scan.applicationId),
+    ]);
+    const konteks = susunKonteks({ aplikasi, scan, metode, akunUji, acuan });
+    let keluaran;
+    try {
+      keluaran = await ai.tanyaJson(bangunPrompt(konteks));
+    } catch (error) {
+      throw new AppError(502, `AI gagal menyusun laporan: ${error.message}`, undefined, 'AI_GAGAL');
+    }
+    const analisis = {
+      ...rapikanKeluaran(keluaran, konteks.temuan.map((t) => t.metode_id)),
+      provider: ai.nama,
+      model: ai.model,
+      dibuat_pada: sekarang().toISOString(),
+      disamarkan: true,
+    };
+    return { scan, analisis, disimpan: scan.status === 'selesai' && terakhir === Number(scan.id) };
+  }
+
   return {
+    /** Dipicu pengguna (tombol Generate / buka laporan). Otorisasi + DTO; menyimpan bila riwayat terakhir. */
     async generate(actor, scanId) {
-      // Otorisasi (404 bila di luar cakupan) sekaligus DTO yang akan dikembalikan.
-      const dto = await scans.get(actor, scanId);
-      const scan = await scanRepo.findScanById(Number(scanId));
-      if (scan.status === 'berjalan' || scan.status === 'antre') {
-        throw AppError.badRequest('Laporan baru dapat dibuat setelah pengujian selesai');
+      const dto = await scans.get(actor, scanId); // otorisasi (404 bila di luar cakupan)
+      const { scan, analisis, disimpan } = await susun(scanId);
+      if (disimpan) {
+        await repository.simpan(scan.applicationId, scan.id, analisis);
+        if (scanRepo.setLaporanStatus) await scanRepo.setLaporanStatus(scan.id, 'siap').catch(() => {});
       }
-      const ai = provider();
-      if (!ai) {
-        throw new AppError(503, 'Layanan AI penyusun laporan belum dikonfigurasi', undefined, 'AI_TIDAK_AKTIF');
-      }
-
-      const [aplikasi, metode, acuan, akunUji, terakhir] = await Promise.all([
-        apps.findById(scan.applicationId),
-        repository.metodeScan(scan.id),
-        repository.acuan(),
-        repository.akunUji(scan.applicationId),
-        repository.scanSelesaiTerakhir(scan.applicationId),
-      ]);
-      const konteks = susunKonteks({ aplikasi, scan, metode, akunUji, acuan });
-
-      let keluaran;
-      try {
-        keluaran = await ai.tanyaJson(bangunPrompt(konteks));
-      } catch (error) {
-        throw new AppError(502, `AI gagal menyusun laporan: ${error.message}`, undefined, 'AI_GAGAL');
-      }
-
-      const disimpan = scan.status === 'selesai' && terakhir === Number(scan.id);
-      const analisis = {
-        ...rapikanKeluaran(keluaran, konteks.temuan.map((t) => t.metode_id)),
-        provider: ai.nama,
-        model: ai.model,
-        dibuat_pada: sekarang().toISOString(),
-        disamarkan: true,
-      };
-      if (disimpan) await repository.simpan(scan.applicationId, scan.id, analisis);
-      auditor('laporan.generate', { scanId: String(scan.id), provider: ai.nama, disimpan });
+      auditor('laporan.generate', { scanId: String(scan.id), provider: analisis.provider, disimpan });
       return { ...dto, ai: { ...analisis, disimpan } };
+    },
+
+    /** Dipicu otomatis saat scan selesai (tanpa pengguna). Return status 'siap' | 'gagal'. Tak melempar. */
+    async generateOtomatis(scanId) {
+      try {
+        const { scan, analisis, disimpan } = await susun(scanId);
+        if (!disimpan) return 'gagal'; // auto hanya untuk scan selesai terakhir
+        await repository.simpan(scan.applicationId, scan.id, analisis);
+        auditor('laporan.generate.otomatis', { scanId: String(scan.id), provider: analisis.provider });
+        return 'siap';
+      } catch (error) {
+        auditor('laporan.generate.gagal', { scanId: String(scanId), alasan: error?.code || error?.message });
+        return 'gagal';
+      }
     },
   };
 }

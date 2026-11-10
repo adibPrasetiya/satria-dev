@@ -77,6 +77,9 @@ function toScanDto(scan, tasks, logs) {
     hasil: Object.fromEntries(tasks.map((t) => [t.methodCode, taskToHasil(t)])),
     // Laporan AI tersimpan (hanya ada pada scan selesai terakhir aplikasi).
     ...(scan.aiAnalysis ? { ai: { ...scan.aiAnalysis, disimpan: true } } : {}),
+    // Status penyusunan laporan: 'siap' (ai ada) | 'proses' (sedang disusun) | 'gagal' | 'belum'.
+    // Dasar tombol Lihat⊕Generate di UI (hanya salah satu muncul).
+    laporan_status: scan.aiAnalysis ? 'siap' : scan.laporanStatus ?? 'belum',
     log: logs.map((l) => ({ waktu: l.createdAt, level: l.level, pesan: l.message, ...(l.data ? { data: l.data } : {}) })),
   };
 }
@@ -143,7 +146,21 @@ export function createScansService({
     await repository.insertLog(scanId, 'info', 'Pengujian selesai.');
     events.siarkan(scanId, { tipe: 'status', status: 'selesai', selesai_pada: finishedAt.toISOString() });
     auditor('scan.selesai', { scanId: String(scanId) });
+    // Auto-generate laporan AI untuk scan yang baru selesai (fire-and-forget; tak menunda respons).
+    mulaiLaporanOtomatis(scanId).catch(() => {});
     return true;
+  }
+
+  /** Tandai 'proses' lalu susun laporan AI di latar; status akhir ('siap'/'gagal') disiarkan via SSE. */
+  async function mulaiLaporanOtomatis(scanId) {
+    if (!repository.setLaporanStatus) return;
+    await repository.setLaporanStatus(scanId, 'proses').catch(() => {});
+    events.siarkan(scanId, { tipe: 'laporan', status: 'proses' });
+    // Impor dinamis memutus siklus impor (laporan.service mengimpor scans.service).
+    const { laporanService } = await import('../laporan/laporan.service.js');
+    const status = await laporanService.generateOtomatis(scanId);
+    await repository.setLaporanStatus(scanId, status).catch(() => {});
+    events.siarkan(scanId, { tipe: 'laporan', status });
   }
 
   /** Tulis beberapa baris rekap (hitungan per status + daftar temuan GAGAL) ke log scan. */

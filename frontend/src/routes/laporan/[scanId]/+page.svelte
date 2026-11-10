@@ -18,6 +18,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import Memuat from '#lib/components/Memuat.svelte';
 	import Kosong from '#lib/components/Kosong.svelte';
+	import BatangLaporan from '#lib/components/laporan/BatangLaporan.svelte';
 	import { cn } from '#lib/utils.js';
 	import { toast } from 'svelte-sonner';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
@@ -98,6 +99,19 @@
 	const SEV = ['kritis', 'tinggi', 'sedang', 'rendah'] as const;
 	const perSev = $derived(
 		SEV.map((s) => ({ s, n: temuan.filter((t) => t.severity === s).length }))
+	);
+	// Data chart laporan (bar statis, cetak): sebaran severity temuan & sebaran status metode.
+	const chartSeveritas = $derived(perSev.map(({ s, n }) => ({ label: s, nilai: n, warna: WARNA_SEVERITY[s] })));
+	const chartStatus = $derived(
+		(
+			[
+				['lulus', 'Lulus'],
+				['gagal', 'Gagal'],
+				['tidak_dapat_diverifikasi', 'Perlu tinjauan'],
+				['luar_cakupan', 'Out of scope'],
+				['tidak_berlaku', 'Tidak berlaku']
+			] as const
+		).map(([k, label]) => ({ label, nilai: nilai?.hitungan?.[k] ?? 0, warna: WARNA_STATUS_CETAK[k] }))
 	);
 	const rekomendasiPer = $derived(
 		new Map((scan?.ai?.rekomendasi ?? []).map((r) => [r.metode_id, r]))
@@ -504,10 +518,15 @@
 		<!-- ================= 4. TEMUAN ================= -->
 		<section class="lembar" id="temuan">
 			<h2 class="judul-bab"><span>4</span> Temuan</h2>
+			<h3>4.1 Ikhtisar</h3>
+			<div class="ikhtisar-chart">
+				<BatangLaporan judul="Sebaran severity temuan" data={chartSeveritas} />
+				<BatangLaporan judul="Sebaran status metode uji" data={chartStatus} />
+			</div>
 			{#if !temuan.length}
 				<p class="paragraf">Tidak ditemukan metode uji yang gagal pada pengujian ini.</p>
 			{:else}
-				<h3>4.1 Daftar Temuan</h3>
+				<h3>4.2 Daftar Temuan</h3>
 				<table class="tabel">
 					<thead
 						><tr><th class="angka">No.</th><th>Kode</th><th>Temuan</th><th>Severity</th></tr></thead
@@ -526,7 +545,7 @@
 						{/each}
 					</tbody>
 				</table>
-				<h3>4.2 Rincian Temuan</h3>
+				<h3>4.3 Rincian Temuan</h3>
 				{#each temuan as t, i (t.id)}
 					<article class="kartu-temuan" style="--s:{WARNA_SEVERITY[t.severity]}">
 						<header>
@@ -1056,6 +1075,19 @@
 	}
 	.kartu-temuan dt {
 		color: var(--redup);
+	}
+	/* --- ikhtisar chart temuan --- */
+	.ikhtisar-chart {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 6mm;
+		margin: 2mm 0 4mm;
+	}
+	@media (max-width: 640px) {
+		.ikhtisar-chart {
+			grid-template-columns: 1fr;
+			gap: 2mm;
+		}
 	}
 	/* --- PoC & bukti dalam kartu temuan --- */
 	.poc {

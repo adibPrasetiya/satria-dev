@@ -28,6 +28,7 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Box from '@lucide/svelte/icons/box';
 	import FileText from '@lucide/svelte/icons/file-text';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Square from '@lucide/svelte/icons/square';
 	import Network from '@lucide/svelte/icons/network';
 	import Play from '@lucide/svelte/icons/play';
@@ -77,7 +78,14 @@
 					scan.selesai_pada = e.selesai_pada;
 					terkini = null;
 					menghentikan = false;
-					if (e.status === 'selesai') toast.success('Pengujian selesai — laporan siap ditinjau');
+					if (e.status === 'selesai') {
+						scan.laporan_status = 'proses'; // auto-generate laporan dimulai di backend
+						toast.success('Pengujian selesai — laporan sedang disusun…');
+					}
+				} else if (e.tipe === 'laporan') {
+					scan.laporan_status = e.status;
+					if (e.status === 'siap') toast.success('Laporan selesai disusun — siap dilihat');
+					else if (e.status === 'gagal') toast.error('Penyusunan laporan gagal — coba Generate ulang');
 				} else if (e.tipe === 'worker') {
 					void segarkanAntrean();
 					void storeWorker.segarkan();
@@ -255,6 +263,28 @@
 			menghentikan = false;
 		}
 	}
+	// Status laporan → tombol Lihat⊕Generate (salah satu saja). 'siap' bila laporan tersimpan ada.
+	let menyusunLaporan = $state(false);
+	const laporanSiap = $derived(!!scan && (!!scan.ai || scan.laporan_status === 'siap'));
+	const laporanProses = $derived(!!scan && !laporanSiap && (scan.laporan_status === 'proses' || menyusunLaporan));
+
+	// Generate laporan tanpa membuka jendela: susun di latar, lalu tombol berganti jadi "Lihat Laporan".
+	async function generateLaporan() {
+		if (!scan || menyusunLaporan) return;
+		menyusunLaporan = true;
+		try {
+			const hasil = await api.analisisAi(scan.id);
+			scan.ai = hasil.ai;
+			scan.laporan_status = 'siap';
+			toast.success('Laporan selesai disusun — klik Lihat Laporan');
+		} catch (e) {
+			scan.laporan_status = 'gagal';
+			toast.error(e instanceof Error ? e.message : 'Gagal menyusun laporan');
+		} finally {
+			menyusunLaporan = false;
+		}
+	}
+
 	const bisaHentikan = $derived(
 		!!scan &&
 			!!app &&
@@ -347,16 +377,38 @@
 					</button>
 				{/if}
 				{#if !aktif}
-					<a
-						href="/laporan/{scan.id}"
-						title={scan.ai
-							? 'Buka laporan tersimpan (riwayat terakhir)'
-							: 'Susun laporan dengan AI untuk riwayat pengujian ini'}
-						class="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e0a526] px-4 text-[13.5px] font-semibold whitespace-nowrap text-black transition hover:bg-[#f0b53a]"
-					>
-						<FileText class="size-4" />
-						{scan.ai ? 'Lihat Laporan' : 'Generate Laporan'}
-					</a>
+					{#if laporanSiap}
+						<!-- Laporan sudah berhasil disusun → hanya tombol Lihat (membuka laporan). -->
+						<a
+							href="/laporan/{scan.id}"
+							title="Buka laporan hasil pengujian"
+							class="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e0a526] px-4 text-[13.5px] font-semibold whitespace-nowrap text-black transition hover:bg-[#f0b53a]"
+						>
+							<FileText class="size-4" />
+							Lihat Laporan
+						</a>
+					{:else if laporanProses}
+						<!-- Sedang disusun otomatis → indikator, tanpa membuka jendela apa pun. -->
+						<span
+							class="inline-flex h-10 items-center gap-2 rounded-xl bg-white/10 px-4 text-[13.5px] font-semibold whitespace-nowrap text-white/70"
+							title="Laporan sedang disusun otomatis"
+						>
+							<LoaderCircle class="size-4 animate-spin" />
+							Menyusun Laporan…
+						</span>
+					{:else}
+						<!-- Belum ada / gagal → tombol Generate; tidak membuka jendela, hanya menyusun. -->
+						<button
+							type="button"
+							onclick={generateLaporan}
+							disabled={menyusunLaporan}
+							title="Susun laporan dengan AI (tidak membuka jendela)"
+							class="inline-flex h-10 items-center gap-2 rounded-xl bg-[#e0a526] px-4 text-[13.5px] font-semibold whitespace-nowrap text-black transition hover:bg-[#f0b53a] disabled:opacity-60"
+						>
+							{#if menyusunLaporan}<LoaderCircle class="size-4 animate-spin" />{:else}<FileText class="size-4" />{/if}
+							{menyusunLaporan ? 'Menyusun…' : 'Generate Laporan'}
+						</button>
+					{/if}
 				{/if}
 			</div>
 		</div>
