@@ -382,6 +382,27 @@ def _path_aman(url: str) -> str:
     return (urlsplit(url).path or "/") if url else ""
 
 
+# Status HTTP navigasi yang menandakan rute tidak ada (host statis/SPA tanpa catch-all).
+_STATUS_TIDAK_ADA = (404, 410)
+
+
+def _goto_status(page: Any, url: str) -> tuple[bool, Optional[int]]:
+    """Navigasi best-effort seperti `pw._goto`, tetapi juga mengembalikan status HTTP dokumen.
+
+    Status `None` bila navigasi tak menghasilkan respons (mis. perubahan hash/same-document).
+    """
+    for tunggu in ("networkidle", "load"):
+        try:
+            resp = page.goto(url, wait_until=tunggu)
+        except Exception:
+            continue
+        try:
+            return True, (resp.status if resp is not None else None)
+        except Exception:
+            return True, None
+    return False, None
+
+
 def _ada_field_sandi(page: Any) -> bool:
     try:
         return page.query_selector("input[type=password]") is not None
@@ -507,7 +528,15 @@ def jelajah_browser(
             ambil_link = True
             # Tanda tangan halaman "tidak ditemukan" SPA: rute tebakan yang merender halaman
             # identik dianggap tidak ada (SPA biasanya mengembalikan index.html untuk semua path).
-            sig404 = _tanda_tangan(page) if pw._goto(page, urljoin(dasar, "__satya_cek_404__")) else None  # noqa: SLF001
+            # Jeda render disamakan dgn rute biasa agar komponen "not found" SPA sempat tampil.
+            sig404 = None
+            ok404, _ = _goto_status(page, urljoin(dasar, "__satya_cek_404__"))
+            if ok404:
+                try:
+                    page.wait_for_timeout(1200)
+                except Exception:
+                    pass
+                sig404 = _tanda_tangan(page)
 
             from . import koordinasi
 
@@ -519,7 +548,13 @@ def jelajah_browser(
                 dikunjungi.add(url)
                 if _host(url) != host0:
                     continue
-                if not pw._goto(page, url):  # noqa: SLF001
+                ok, status_nav = _goto_status(page, url)
+                if not ok:
+                    continue
+                if status_nav in _STATUS_TIDAK_ADA:
+                    # Server menyatakan rute tak ada (mis. Netlify/host statis "Page not found") —
+                    # bukan rute frontend; jangan dihitung, jangan diproses form/tautannya.
+                    _log(log, "info", f"Browser: lewati {_path_aman(url)} (HTTP {status_nav}).")
                     continue
                 try:
                     page.wait_for_timeout(1200)
@@ -527,7 +562,7 @@ def jelajah_browser(
                     pass
                 rute_terkunjungi.append(url)
                 rute_info.append({"url": pr.tanpa_query(_url_page(page) or url), "asal": "tautan" if url in dari_tautan else "tebakan",
-                                  "sig": _tanda_tangan(page)})
+                                  "sig": _tanda_tangan(page), "status": status_nav or 200})
 
                 forms = _baca_forms(page)
                 for frm in forms:
@@ -570,14 +605,21 @@ def jelajah_browser(
 
             # Rute nyata → peristiwa `halaman` (lapisan frontend).
             rute_nyata: dict[str, dict[str, Any]] = {}
+            # Tanda tangan beranda: SPA dgn rewrite catch-all (`/* → /index.html 200`) tanpa
+            # komponen "not found" merender beranda untuk path apa pun → bukan rute tersendiri.
+            sig_beranda = next((r["sig"] for r in rute_info if _path_aman(r["url"]) == _path_aman(dasar)), None)
             for r in rute_info:
-                if r["asal"] == "tebakan" and sig404 is not None and r["sig"] == sig404:
-                    continue
+                if r["asal"] == "tebakan" and r["sig"] is not None:
+                    if r["sig"] == sig404:
+                        continue
+                    if sig_beranda is not None and r["sig"] == sig_beranda and _path_aman(r["url"]) != _path_aman(dasar):
+                        continue
                 rute_nyata.setdefault(r["url"], r)
             if rute_nyata:
                 pr.pancar(
                     log, f"Browser: {len(rute_nyata)} rute frontend terender.",
-                    {"jenis": "halaman", "items": [{"url": u, "status": 200, "judul": "", "sumber": "browser"} for u in list(rute_nyata)[:60]]},
+                    {"jenis": "halaman", "items": [{"url": u, "status": r.get("status") or 200, "judul": "", "sumber": "browser"}
+                                                for u, r in list(rute_nyata.items())[:60]]},
                 )
 
             # Intersep aksi form/tombol (request non-GET dibatalkan) — untuk backend tanpa dokumentasi.
