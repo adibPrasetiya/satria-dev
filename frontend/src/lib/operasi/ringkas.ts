@@ -1,7 +1,7 @@
 // Turunan data halaman operasi dari hasil scan: baris rincian per metode & daftar temuan.
 // Murni (tanpa I/O).
 import { indeksMetode, URUTAN_SEVERITY } from '#lib/catalog.js';
-import type { HasilMetode, Scan, Severity, StatusMetode } from '#lib/types.js';
+import type { Bukti, HasilMetode, Scan, Severity, StatusMetode } from '#lib/types.js';
 
 export interface BarisMetode {
 	id: string;
@@ -15,6 +15,10 @@ export interface BarisMetode {
 	durasi_ms?: number;
 	menunggu_tinjauan: boolean;
 	kriteria: string;
+	/** Detail teknis, langkah PoC, & bukti request/response (untuk rincian & laporan). */
+	detail: string;
+	poc: string[];
+	bukti: Bukti[];
 }
 
 /** Semua metode pengujian pada scan (tanpa task penemuan), urut sesuai katalog. */
@@ -34,7 +38,10 @@ export function barisMetode(scan: Scan): BarisMetode[] {
 			ringkasan: h.ringkasan ?? '',
 			durasi_ms: h.durasi_ms,
 			menunggu_tinjauan: !!h.menunggu_tinjauan,
-			kriteria: m?.metode.kriteria_lulus ?? ''
+			kriteria: m?.metode.kriteria_lulus ?? '',
+			detail: h.detail ?? '',
+			poc: h.poc ?? [],
+			bukti: h.bukti ?? []
 		});
 	}
 	const urutan = new Map([...indeksMetode.keys()].map((k, i) => [k, i]));

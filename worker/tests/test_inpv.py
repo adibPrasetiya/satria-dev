@@ -183,6 +183,10 @@ def test_input_tak_valid_diproses_gagal(api):
     ctx = _ctx(api, [_ep(api, "POST", "/api/terima", ({"nama": "nama", "lokasi": "body", "tipe": "str"},))])
     h = jalankan_metode(ctx, _metode("INPV-4.2-T02", "input.reject_on_error"))
     assert h.status == "gagal" and "diproses" in h.ringkasan, h.ringkasan
+    # PoC langkah reproduksi + bukti request/response terlampir pada temuan.
+    assert h.poc and any("MEMPROSES" in l or "memproses" in l.lower() for l in h.poc), h.poc
+    assert h.bukti, "bukti request/response dilampirkan pada temuan"
+    assert any(b.isi and ">" in b.isi for b in h.bukti), "bukti memuat pasangan request/response"
 
 
 def test_crash_gagal(api):
@@ -190,6 +194,7 @@ def test_crash_gagal(api):
     h = jalankan_metode(ctx, _metode("INPV-4.1-T01", "input.server_side_validation", "form_input"))
     assert h.status == "gagal" and "galat server" in h.ringkasan, h.ringkasan
     assert h.bukti, "bukti request crash dilampirkan"
+    assert h.poc and h.poc[0].startswith("Siapkan request GET /api/crash"), h.poc
 
 
 def test_indikasi_injeksi_digabung_ke_check_zap(api, monkeypatch):

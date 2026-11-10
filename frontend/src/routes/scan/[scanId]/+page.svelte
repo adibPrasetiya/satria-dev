@@ -525,7 +525,7 @@
 					{#if tabUtama === 'detail'}
 						<TabDetailAnalisis {baris} bind:sorot={sorotMetode} />
 					{:else if tabUtama === 'temuan'}
-						<TabTemuan {temuan} berjalan={scan.status === 'berjalan'} onrinci={rinciMetode} />
+						<TabTemuan {temuan} berjalan={scan.status === 'berjalan'} />
 					{:else}
 						<TabLaporanSementara {scan} {temuan} ondetail={() => (tabUtama = 'temuan')} />
 					{/if}

@@ -543,6 +543,31 @@
 							<dd>{t.ringkasan || '—'}</dd>
 							<dt>Kriteria lulus</dt>
 							<dd>{t.kriteria || '—'}</dd>
+							{#if t.poc.length}
+								<dt>Langkah reproduksi (PoC)</dt>
+								<dd><ol class="poc">{#each t.poc as l, j (j)}<li>{l}</li>{/each}</ol></dd>
+							{/if}
+							{#if t.bukti.length}
+								<dt>Bukti</dt>
+								<dd>
+									{#each t.bukti.slice(0, 3) as b, j (j)}
+										{#if b.jenis === 'screenshot' && (b.nama_file || b.isi)}
+											<figure class="bukti-gambar">
+												<img src={b.nama_file || b.isi} alt={b.judul} />
+												<figcaption>{b.judul}</figcaption>
+											</figure>
+										{:else if b.isi}
+											<div class="bukti-rr">
+												<p class="bukti-judul">{b.judul}</p>
+												<pre>{b.isi}</pre>
+											</div>
+										{/if}
+									{/each}
+									{#if t.bukti.length > 3}
+										<p class="bukti-sisa">… dan {t.bukti.length - 3} bukti lain (lihat halaman operasi pengujian).</p>
+									{/if}
+								</dd>
+							{/if}
 						</dl>
 					</article>
 				{/each}
@@ -1031,6 +1056,58 @@
 	}
 	.kartu-temuan dt {
 		color: var(--redup);
+	}
+	/* --- PoC & bukti dalam kartu temuan --- */
+	.poc {
+		margin: 0;
+		padding-left: 4.5mm;
+		display: grid;
+		gap: 0.8mm;
+	}
+	.poc li {
+		font-size: 9.3pt;
+		line-height: 1.4;
+	}
+	.bukti-rr {
+		border: 0.2mm solid var(--garis);
+		border-radius: 1mm;
+		margin: 0 0 1.5mm;
+		overflow: hidden;
+		break-inside: avoid;
+	}
+	.bukti-judul {
+		margin: 0;
+		padding: 0.8mm 1.5mm;
+		background: #f4f6f1;
+		border-bottom: 0.2mm solid var(--garis);
+		font-size: 8pt;
+		color: var(--redup);
+	}
+	.bukti-rr pre {
+		margin: 0;
+		padding: 1.2mm 1.5mm;
+		font-family: ui-monospace, 'Cascadia Code', Menlo, monospace;
+		font-size: 7.6pt;
+		line-height: 1.35;
+		white-space: pre-wrap;
+		word-break: break-word;
+		color: #273227;
+	}
+	.bukti-gambar {
+		margin: 0 0 1.5mm;
+		break-inside: avoid;
+	}
+	.bukti-gambar img {
+		max-width: 100%;
+		max-height: 70mm;
+		border: 0.2mm solid var(--garis);
+		border-radius: 1mm;
+	}
+	.bukti-gambar figcaption,
+	.bukti-sisa {
+		font-size: 8pt;
+		color: var(--redup);
+		margin: 0.5mm 0 0;
 	}
 	.kartu-rek p {
 		margin: 0 0 2mm;
