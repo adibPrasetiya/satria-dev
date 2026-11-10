@@ -70,15 +70,40 @@ def _normalisasi_path(mentah: str) -> Optional[str]:
     return "/".join(bagian)
 
 
+def _nama_query(mentah: str) -> list[str]:
+    """Nama parameter query dari URL literal di bundle (`/cari?q=${x}&sort=asc` → ['q','sort']).
+
+    Hanya nama yang dipertahankan (nilai sering berupa variabel `${…}` tanpa makna); segmen yang
+    jelas bukan identifier (template var kosong) dibuang."""
+    s = mentah.strip()
+    if "?" not in s:
+        return []
+    qs = s.split("?", 1)[1].split("#", 1)[0]
+    out: list[str] = []
+    for bagian in qs.split("&"):
+        nama = _RX_TEMPLATE_VAR.sub("", bagian.split("=", 1)[0]).strip()
+        if re.fullmatch(r"[A-Za-z_][\w.\-\[\]]{0,40}", nama) and nama not in out:
+            out.append(nama)
+    return out[:20]
+
+
 def ekstrak(js: str) -> dict[str, Any]:
-    """Ekstrak `{endpoints: [{method, path}], base: [url…]}` dari teks bundle."""
+    """Ekstrak `{endpoints: [{method, path, query}], base: [url…]}` dari teks bundle.
+
+    `query` = nama parameter query yang terlihat pada URL literal (dikumpulkan lintas kemunculan
+    path yang sama) sehingga endpoint berbasis query string tetap teridentifikasi & dapat diuji."""
     temuan: dict[tuple[str, str], str] = {}
+    query: dict[tuple[str, str], list[str]] = {}
 
     def tambah(method: str, mentah: str) -> None:
         path = _normalisasi_path(mentah)
         if path:
             kunci = (method.upper(), path)
             temuan.setdefault(kunci, method.upper())
+            qs = query.setdefault(kunci, [])
+            for nama in _nama_query(mentah):
+                if nama not in qs:
+                    qs.append(nama)
 
     for m in _RX_KLIEN.finditer(js):
         tambah(m.group(1), m.group(3))
@@ -96,10 +121,15 @@ def ekstrak(js: str) -> dict[str, Any]:
     for m in _RX_LITERAL.finditer(js):
         path = _normalisasi_path(m.group(1))
         if path and path not in dengan_metode:
-            temuan.setdefault(("GET", path), "GET")
+            kunci = ("GET", path)
+            temuan.setdefault(kunci, "GET")
+            qs = query.setdefault(kunci, [])
+            for nama in _nama_query(m.group(1)):
+                if nama not in qs:
+                    qs.append(nama)
 
     base = list(dict.fromkeys(m.group(1).rstrip("/") for m in _RX_BASE.finditer(js)))
-    eps = [{"method": k[0], "path": k[1]} for k in sorted(temuan, key=lambda k: (k[1], k[0]))]
+    eps = [{"method": k[0], "path": k[1], "query": query.get(k, [])} for k in sorted(temuan, key=lambda k: (k[1], k[0]))]
     return {"endpoints": eps[:MAKS_ENDPOINT], "base": base[:5]}
 
 
@@ -154,9 +184,14 @@ def analisis(
             basis.extend(b for b in ex["base"] if b not in basis)
             nama = urlsplit(u).path.rsplit("/", 1)[-1] or u
             for ep in ex["endpoints"]:
-                hasil.setdefault((ep["method"], ep["path"]), {**ep, "berkas": nama})
+                k = (ep["method"], ep["path"])
+                lama = hasil.setdefault(k, {**ep, "berkas": nama})
+                for nm in ep.get("query") or []:  # gabung query lintas berkas untuk path yang sama
+                    if nm not in lama.setdefault("query", []):
+                        lama["query"].append(nm)
 
     out: list[dict[str, Any]] = []
     for ep in hasil.values():
-        out.append({"method": ep["method"], "url": rangkai_url(base_url, basis, ep["path"]), "path": ep["path"], "berkas": ep["berkas"]})
+        out.append({"method": ep["method"], "url": rangkai_url(base_url, basis, ep["path"]), "path": ep["path"],
+                    "query": ep.get("query") or [], "berkas": ep["berkas"]})
     return {"berkas": dibaca, "endpoints": out[:MAKS_ENDPOINT], "base": basis}

@@ -84,6 +84,13 @@ class _Api(BaseHTTPRequestHandler):
             return self._balas(201, {"ok": True})
         if u.path == "/api/terima":
             return self._balas(201, {"id": 99, "nama": "tersimpan"})
+        if u.path == "/api/berjenjang":
+            # Server menolak dulu karena field LAIN (kategori wajib == 'resmi') sebelum menilai 'judul'.
+            if b.get("kategori") != "resmi":
+                return self._balas(422, {"errors": [{"field": "kategori", "message": "kategori harus 'resmi'"}]})
+            if not isinstance(b.get("judul"), str) or len(b.get("judul", "")) > 50 or "<" in b.get("judul", ""):
+                return self._balas(422, {"errors": [{"field": "judul", "message": "judul tidak valid"}]})
+            return self._balas(201, {"ok": True})
         return self._balas(404, {"message": "not found"})
 
     def do_PUT(self):
@@ -216,6 +223,51 @@ def test_ai_hemat_berkelompok_ter_cache_dan_tersamar(api, monkeypatch):
     inpv.sapu.reset_cache()
     inpv.sapuan(_ctx(api, eps, sid="ai-2"))
     assert not any('"p":' in p for p in ai.prompt[jumlah:]), "scan ulang memakai cache profil (0 panggilan profil)"
+
+
+F_BERJENJANG = ({"nama": "judul", "lokasi": "body", "tipe": "str", "contoh": "Laporan"},
+                {"nama": "kategori", "lokasi": "body", "tipe": "str"})
+
+
+def test_baseline_ditolak_field_lain_tanpa_ai_tidak_lulus_palsu(api, monkeypatch):
+    """400/422 karena field LAIN (payload dasar belum valid) tak boleh dihitung sebagai 'ditolak tepat'
+    → vonis tinjauan, bukan lulus palsu. Ini inti keluhan: 400 bukan selalu penolakan yang diharapkan."""
+    monkeypatch.setattr(ai_mod, "muat_provider_dari_env", lambda: None)  # tanpa AI: deterministik tak bisa tebak 'resmi'
+    ctx = _ctx(api, [_ep(api, "POST", "/api/berjenjang", F_BERJENJANG)])
+    h = jalankan_metode(ctx, _metode("INPV-4.1-T01", "input.server_side_validation", "form_input"))
+    assert h.status == "tidak_dapat_diverifikasi", h.ringkasan
+    assert "field LAIN" in h.ringkasan or "payload dasar" in h.ringkasan, h.ringkasan
+
+
+class _AiPerbaiki:
+    nama, model = "perbaiki", "uji"
+
+    def __init__(self):
+        self.prompt: list[str] = []
+
+    def tanya_json(self, prompt: str, max_tokens: int = 2000) -> dict:
+        self.prompt.append(prompt)
+        if "field_bermasalah" in prompt:            # orkestrasi adaptif: perbaiki payload dasar
+            return {"nilai": {"kategori": "resmi"}}
+        if '"p":' in prompt or "validasi" in prompt:  # profil field ambigu
+            return {"p": {}}
+        return {"v": {}}
+
+
+def test_baseline_diperbaiki_ai_lalu_validasi_teratribusi(api, monkeypatch):
+    """Orkestrator adaptif memperbaiki baseline (AI isi 'kategori'='resmi') agar DITERIMA, lalu penolakan
+    varian 'judul' teratribusi ke field yang diuji — bukan lagi payload_belum_valid."""
+    ai = _AiPerbaiki()
+    monkeypatch.setattr(ai_mod, "muat_provider_dari_env", lambda: ai)
+    ctx = _ctx(api, [_ep(api, "POST", "/api/berjenjang", F_BERJENJANG)])
+    s = inpv.sapuan(ctx)
+    assert s.baseline_diperbaiki >= 1 and s.panggilan_perbaikan >= 1
+    assert any("field_bermasalah" in p for p in ai.prompt), "AI diminta memperbaiki payload dasar"
+    # 'kategori' tak pernah dikirim sebagai nilai sensitif, tapi nilai valid diterapkan → ada baseline 201.
+    judul_obs = [o for o in s.observasi if o.field == "judul"]
+    assert judul_obs, "field judul teruji"
+    # Setelah baseline valid, penolakan judul tak lagi diatribusikan ke field lain.
+    assert not any(o.kategori == "payload_belum_valid" for o in judul_obs), [o.kategori for o in judul_obs]
 
 
 def test_tanpa_ai_tetap_berjalan(api, monkeypatch):
