@@ -60,17 +60,38 @@ def _maks() -> int:
     return int(_env_num("FFUF_MAX", 40))
 
 
-def _wordlist(env: str, bawaan: Optional[list[str]]) -> Optional[str]:
-    """Path wordlist dari env, atau tulis `bawaan` ke berkas sementara. None bila tak ada sumber."""
-    p = os.environ.get(env, "").strip()
-    if p and os.path.isfile(p):
-        return p
-    if not bawaan:
-        return None
+def _maks_baris() -> int:
+    """Batas jumlah entri wordlist agar ffuf TUNTAS dalam FFUF_TIMEOUT (ffuf hanya menulis hasil saat
+    selesai — bila di-kill timeout, keluaran kosong). 0 = tanpa batas. Bawaan 1500 (~38 dtk @ rate 40)."""
+    return int(_env_num("FFUF_WORDLIST_MAXLINES", 1500))
+
+
+def _tulis_temp(baris: list[str]) -> str:
     fd, path = tempfile.mkstemp(prefix="satya_ffuf_", suffix=".txt", text=True)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write("\n".join(bawaan))
+        f.write("\n".join(baris))
     return path
+
+
+def _wordlist(env: str, bawaan: Optional[list[str]]) -> Optional[str]:
+    """Path wordlist dari env (dipangkas ke `FFUF_WORDLIST_MAXLINES` agar ffuf tuntas dalam timeout),
+    atau tulis `bawaan` ke berkas sementara. None bila tak ada sumber."""
+    cap = _maks_baris()
+    p = os.environ.get(env, "").strip()
+    if p and os.path.isfile(p):
+        if cap <= 0:
+            return p
+        try:
+            with open(p, "r", encoding="utf-8", errors="replace") as f:
+                baris = [b.rstrip("\n") for _, b in zip(range(cap + 1), f)]
+        except OSError:
+            return p
+        if len(baris) <= cap:
+            return p                      # sudah cukup kecil → pakai apa adanya
+        return _tulis_temp(baris[:cap])   # dipangkas → berkas sementara
+    if not bawaan:
+        return None
+    return _tulis_temp(bawaan if cap <= 0 else bawaan[:cap])
 
 
 def _jalankan_ffuf(url: str, wordlist: str, *, cookie: Optional[str] = None) -> list[dict[str, Any]]:
