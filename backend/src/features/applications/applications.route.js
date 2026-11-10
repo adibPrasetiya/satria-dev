@@ -9,7 +9,8 @@ import {
   updateApplicationSchema,
 } from './applications.validation.js';
 
-// Aset aplikasi: semua peran bisa melihat (pemilik terbatas satuannya); mendaftar & mengubah hanya pemilik/admin.
+// Aset aplikasi: semua peran bisa melihat (pemilik terbatas satuannya); mendaftar, mengubah, dan
+// mengarsipkan hanya pemilik/admin. Tidak ada hapus permanen — aset diarsipkan agar riwayat tetap utuh.
 export const applicationsRouter = Router();
 
 applicationsRouter.get('/', validate(listApplicationsSchema, 'query'), applicationsController.list);
@@ -21,4 +22,16 @@ applicationsRouter.patch(
   validate(applicationIdSchema, 'params'),
   validate(updateApplicationSchema),
   applicationsController.update,
+);
+applicationsRouter.post(
+  '/:id/arsip',
+  requireRole('pemilik', 'admin'),
+  validate(applicationIdSchema, 'params'),
+  applicationsController.arsipkan,
+);
+applicationsRouter.post(
+  '/:id/pulihkan',
+  requireRole('pemilik', 'admin'),
+  validate(applicationIdSchema, 'params'),
+  applicationsController.pulihkan,
 );

@@ -49,6 +49,17 @@ if [ -f .env ] && grep -q '^WORKER_ENGINES=' .env; then
   done
 fi
 
+# IP publik worker untuk keterangan blokir di UI ("minta whitelist IP …"). Dideteksi dari tabel
+# routing (tanpa layanan eksternal) dan hanya diisi bila bukan alamat privat/NAT. Idempoten.
+if [ -f .env ] && ! grep -q '^WORKER_IP_PUBLIK=.\+' .env; then
+  IP_SRC=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
+  if [ -n "$IP_SRC" ] && ! echo "$IP_SRC" | grep -Eq '^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)'; then
+    sed -i '/^WORKER_IP_PUBLIK=$/d' .env
+    echo "WORKER_IP_PUBLIK=$IP_SRC" >> .env
+    echo "==> worker/.env: set WORKER_IP_PUBLIK=$IP_SRC"
+  fi
+fi
+
 # Biner nuclei (APIS-12.2-T02): unduh rilis precompiled sekali (tanpa Go). Idempoten.
 # Tanpa biner, check exposure.api_docs_debug tetap jalan sebagai tidak_dapat_diverifikasi.
 NUCLEI_VER="3.11.1"

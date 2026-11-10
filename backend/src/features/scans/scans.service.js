@@ -110,6 +110,13 @@ export function createScansService({
     return app;
   }
 
+  /** Aset terarsip tidak bisa diuji / dipersiapkan ulang (riwayatnya tetap bisa dilihat). */
+  function wajibAktif(app) {
+    if (app.archivedAt) {
+      throw AppError.conflict('Aplikasi ini diarsipkan. Pulihkan dari daftar arsip lebih dulu untuk mengujinya.');
+    }
+  }
+
   async function dtoById(scanId) {
     const scan = await repository.findScanById(scanId);
     if (!scan) throw AppError.notFound('Pengujian tidak ditemukan');
@@ -265,6 +272,7 @@ export function createScansService({
   ) {
     wajibPenguji(actor);
     const app = await findVisibleApp(actor, appId);
+    wajibAktif(app);
     // Black box memakai alur eksploratif yang sama dengan grey box, hanya tanpa akun uji
     // (terarah memakai persiapan + akun yang diisi pengguna, jadi tidak berlaku untuk black box).
     const blackbox = pendekatan === 'blackbox';
@@ -385,7 +393,8 @@ export function createScansService({
     if (seesAll(actor)) {
       rows = await repository.listScans({});
     } else {
-      const { rows: apps } = await applications.list({ unitId: Number(actor.satuan_id), offset: 0, limit: 1000 });
+      // Termasuk aset terarsip: riwayat pengujiannya tetap milik satuan ini.
+      const { rows: apps } = await applications.list({ unitId: Number(actor.satuan_id), arsip: 'semua', offset: 0, limit: 1000 });
       rows = await repository.listScans({ applicationIds: apps.map((a) => a.id) });
     }
     return Promise.all(rows.map((s) => dtoById(s.id)));
@@ -411,6 +420,7 @@ export function createScansService({
   async function simpanTarget(actor, appId, data) {
     wajibPenguji(actor);
     const app = await findVisibleApp(actor, appId);
+    wajibAktif(app);
     const target = await repository.upsertTarget(app.id, {
       testPoints: data.test_points,
       forms: data.forms,

@@ -127,6 +127,13 @@
       "when": 1793480000000,
       "tag": "0017_users_verifikasi_email",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1793540000000,
+      "tag": "0018_applications_arsip",
+      "breakpoints": true
     }
   ]
 }

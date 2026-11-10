@@ -15,7 +15,13 @@ class BackendClient:
     def __init__(self, base_url: str, token: str, *, worker_id: str = "worker", timeout: float = 20.0) -> None:
         self._base = base_url.rstrip("/")
         self._worker_id = worker_id
+        self._token = token
+        self._timeout = timeout
         self._klien = httpx.Client(timeout=timeout, headers={"X-Worker-Token": token})
+
+    def salin(self) -> "BackendClient":
+        """Klien baru berkonfigurasi sama — untuk dipakai dari thread lain (httpx.Client tak thread-safe)."""
+        return BackendClient(self._base, self._token, worker_id=self._worker_id, timeout=self._timeout)
 
     def __enter__(self) -> "BackendClient":
         return self

@@ -10,7 +10,7 @@
 	async function simpan(data: Parameters<typeof api.buatAplikasi>[0]) {
 		const app = await api.buatAplikasi(data);
 		toast.success(`Aplikasi "${app.nama}" terdaftar`);
-		goto(`/aplikasi/${app.id}`);
+		goto('/aplikasi');
 	}
 </script>
 

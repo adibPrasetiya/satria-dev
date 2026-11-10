@@ -112,6 +112,9 @@ export interface Api {
 	/** Registrasi aset (data dasar saja). Galat 409 bila URL dasar sudah terdaftar. */
 	buatAplikasi(data: AsetBaru): Promise<Aplikasi>;
 	ubahAplikasi(id: string, data: Partial<AsetBaru>): Promise<Aplikasi>;
+	/** Arsipkan aset (pengganti hapus; riwayat tetap). Galat 409 bila masih ada pengujian berjalan. */
+	arsipkanAplikasi(id: string): Promise<Aplikasi>;
+	pulihkanAplikasi(id: string): Promise<Aplikasi>;
 	verifikasiKepemilikan(id: string): Promise<Aplikasi>;
 	ajukanIzinIntrusif(id: string, izin: Omit<IzinIntrusif, 'status'>): Promise<Aplikasi>;
 	putuskanIzinIntrusif(id: string, disetujui: boolean, catatan: string): Promise<Aplikasi>;

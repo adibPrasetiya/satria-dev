@@ -24,6 +24,8 @@ const DI_BACKEND = [
 	'getAplikasi',
 	'buatAplikasi',
 	'ubahAplikasi',
+	'arsipkanAplikasi',
+	'pulihkanAplikasi',
 	'simpanTargetUji',
 	'getTargetUji',
 	'listScan',

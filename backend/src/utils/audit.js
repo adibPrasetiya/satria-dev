@@ -23,6 +23,8 @@ const PESAN = {
   'satuan.ubah': 'Admin mengubah satuan kerja',
   'aplikasi.daftar': 'Aset aplikasi didaftarkan',
   'aplikasi.ubah': 'Data aset aplikasi diubah',
+  'aplikasi.arsip': 'Aset aplikasi diarsipkan',
+  'aplikasi.pulihkan': 'Aset aplikasi dipulihkan dari arsip',
   'katalog.kontrol.tambah': 'Admin menambah kontrol katalog',
   'katalog.kontrol.ubah': 'Admin mengubah kontrol katalog',
   'katalog.metode.tambah': 'Admin menambah metode pengujian',

@@ -234,7 +234,7 @@
 	<Memuat />
 {:else if !bisaUji}
 	<Kosong judul="Tidak berwenang" pesan="Hanya asesor atau administrator yang dapat melakukan pengujian.">
-		<Button href="/aplikasi/{app.id}" variant="outline">Kembali ke aset</Button>
+		<Button href="/aplikasi" variant="outline">Kembali ke daftar aplikasi</Button>
 	</Kosong>
 {:else}
 	<PageHeader
@@ -245,8 +245,8 @@
 			: 'dengan akun uji terbatas'} · penemuan otomatis"
 	>
 		{#snippet atas()}
-			<a href="/aplikasi/{app!.id}" class="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-				<ChevronLeft class="size-3.5" /> Berkas aplikasi
+			<a href="/aplikasi" class="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+				<ChevronLeft class="size-3.5" /> Daftar aplikasi
 			</a>
 		{/snippet}
 	</PageHeader>
@@ -623,7 +623,7 @@
 					if (!setujuPemindaian) waktuSetuju = new Date();
 					setujuPemindaian = true;
 				}}
-				onbatal={() => goto(`/aplikasi/${app!.id}`)}
+				onbatal={() => goto('/aplikasi')}
 			/>
 		{/if}
 

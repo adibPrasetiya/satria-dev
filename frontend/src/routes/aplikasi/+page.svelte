@@ -6,6 +6,7 @@
 	import { relatif } from '#lib/format.js';
 	import { cn } from '#lib/utils.js';
 	import type {
+		BarisAplikasi,
 		FilterAplikasi,
 		FilterPutusan,
 		HalamanAplikasi,
@@ -16,6 +17,8 @@
 	} from '#lib/types.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import PageHeader from '#lib/components/PageHeader.svelte';
@@ -37,6 +40,12 @@
 	import ChevronsLeft from '@lucide/svelte/icons/chevrons-left';
 	import ChevronsRight from '@lucide/svelte/icons/chevrons-right';
 	import X from '@lucide/svelte/icons/x';
+	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import History from '@lucide/svelte/icons/history';
+	import ClipboardList from '@lucide/svelte/icons/clipboard-list';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import Archive from '@lucide/svelte/icons/archive';
+	import ArchiveRestore from '@lucide/svelte/icons/archive-restore';
 
 	// Filter, urutan, dan paginasi dikerjakan di backend (GET /applications); halaman ini hanya
 	// menyimpan parameter & menampilkan satu halaman hasil.
@@ -52,6 +61,9 @@
 	let fLingkungan = $state<Lingkungan | ''>('');
 	let fKlasifikasi = $state<KlasifikasiData | ''>('');
 	let fSatuan = $state('');
+	// Aset terarsip (pengganti hapus) disembunyikan kecuali tab "Arsip" dipilih.
+	let fArsip = $state<'aktif' | 'arsip'>('aktif');
+	let muatUlang = $state(0); // dinaikkan setelah arsip/pulihkan agar daftar diambil ulang
 
 	// --- Urutan & halaman ---
 	let urut = $state<UrutAplikasi>('uji');
@@ -64,23 +76,49 @@
 	let dlgTindakan = $state(false);
 	let dlgMetode = $state(false);
 	// Pemilik tidak melakukan pengujian → langsung ke riwayat/hasil tanpa modal tindakan.
-	function bukaAset(id: string) {
-		dipilih = id;
-		if (auth.bisaMenguji) dlgTindakan = true;
-		else bukaRiwayat(id);
+	// Aset terarsip tak bisa diuji → langsung ke riwayatnya.
+	function bukaAset(r: BarisAplikasi) {
+		dipilih = r.id;
+		if (auth.bisaMenguji && !r.diarsipkan_pada) dlgTindakan = true;
+		else bukaRiwayat(r.id);
 	}
 
-	// Riwayat pengujian → halaman operasi pengujian terakhir (riwayat lain dipilih di sana);
-	// aplikasi yang belum pernah diuji → berkas aplikasi.
+	// Riwayat pengujian → halaman operasi pengujian terakhir (riwayat lain dipilih di sana).
 	async function bukaRiwayat(id: string) {
 		try {
 			const [terakhir] = await api.listScan(id);
 			if (terakhir) return goto(`/scan/${terakhir.id}`);
 			toast.info('Aplikasi ini belum pernah diuji.');
-		} catch {
-			/* gagal memuat riwayat → tampilkan berkas aplikasi */
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Gagal memuat riwayat pengujian');
 		}
-		goto(`/aplikasi/${id}`);
+	}
+
+	// --- Arsip (pengganti hapus): riwayat pengujian & laporan tetap tersimpan ---
+	let akanDiarsip = $state<BarisAplikasi | null>(null);
+	let sibukArsip = $state(false);
+	async function arsipkan() {
+		if (!akanDiarsip) return;
+		sibukArsip = true;
+		try {
+			const a = await api.arsipkanAplikasi(akanDiarsip.id);
+			toast.success(`Aplikasi "${a.nama}" diarsipkan`);
+			akanDiarsip = null;
+			muatUlang++;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Gagal mengarsipkan aplikasi');
+		} finally {
+			sibukArsip = false;
+		}
+	}
+	async function pulihkan(r: BarisAplikasi) {
+		try {
+			const a = await api.pulihkanAplikasi(r.id);
+			toast.success(`Aplikasi "${a.nama}" dipulihkan dari arsip`);
+			muatUlang++;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Gagal memulihkan aplikasi');
+		}
 	}
 
 	// Pencarian dikirim setelah pengguna berhenti mengetik.
@@ -98,6 +136,7 @@
 			fLingkungan,
 			fKlasifikasi,
 			fSatuan,
+			fArsip,
 			urut,
 			arah,
 			perHalaman
@@ -108,6 +147,7 @@
 	// Cakupan (pemilik: satuannya; asesor/admin: semua) ditentukan backend.
 	let nomorPermintaan = 0;
 	$effect(() => {
+		void muatUlang;
 		if (kunciFilter !== kunciTerakhir) {
 			kunciTerakhir = kunciFilter;
 			if (halaman !== 1) {
@@ -123,6 +163,7 @@
 			lingkungan: fLingkungan,
 			klasifikasi: fKlasifikasi,
 			satuan_id: fSatuan,
+			arsip: fArsip,
 			sort: urut,
 			order: arah,
 			ringkasan: true
@@ -230,7 +271,13 @@
 		{ label: 'Kepatuhan', urut: 'skor', class: 'w-44' },
 		{ label: 'Temuan', urut: 'temuan' },
 		{ label: 'Putusan' },
-		{ label: 'Uji Terakhir', urut: 'uji' }
+		{ label: 'Uji Terakhir', urut: 'uji' },
+		{ label: '', class: 'w-10 px-1' }
+	];
+
+	const OPSI_ARSIP: { k: 'aktif' | 'arsip'; label: string }[] = [
+		{ k: 'aktif', label: 'Aktif' },
+		{ k: 'arsip', label: 'Arsip' }
 	];
 
 	const STAT: { key: FilterPutusan | ''; label: string; warna: string }[] = [
@@ -258,7 +305,7 @@
 	<Kosong judul="Gagal memuat" pesan={galat} />
 {:else if !data}
 	<Memuat />
-{:else if data.ringkasan?.semua === 0 && !adaFilter}
+{:else if data.ringkasan?.semua === 0 && !adaFilter && fArsip === 'aktif'}
 	<Kosong judul="Belum ada aplikasi" pesan="Registrasikan aplikasi untuk memulai asesmen.">
 		{#if auth.bisaMendaftarkan}
 			<Button href="/aplikasi/baru"><CirclePlus /> Registrasi Aplikasi</Button>
@@ -339,6 +386,23 @@
 				/>
 			</div>
 			<div class="flex items-center justify-between gap-2 lg:justify-end">
+				<div class="inline-flex rounded-md border p-0.5" role="group" aria-label="Status arsip">
+					{#each OPSI_ARSIP as o (o.k)}
+						<button
+							type="button"
+							aria-pressed={fArsip === o.k}
+							onclick={() => (fArsip = o.k)}
+							class={cn(
+								'inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
+								fArsip === o.k
+									? 'bg-primary text-primary-foreground'
+									: 'text-muted-foreground hover:text-foreground'
+							)}
+						>
+							{#if o.k === 'arsip'}<Archive class="size-3" />{/if}{o.label}
+						</button>
+					{/each}
+				</div>
 				<span
 					class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground"
 				>
@@ -398,19 +462,31 @@
 				<Table.Body>
 					{#each data.items as r (r.id)}
 						{@const p = r.pengujian}
+						{@const arsip = !!r.diarsipkan_pada}
 						<Table.Row
-							class="cursor-pointer"
+							class={cn('cursor-pointer', arsip && 'text-muted-foreground')}
 							tabindex={0}
-							onclick={() => bukaAset(r.id)}
+							onclick={() => bukaAset(r)}
 							onkeydown={(e) => {
+								if (e.target !== e.currentTarget) return;
 								if (e.key === 'Enter' || e.key === ' ') {
 									e.preventDefault();
-									bukaAset(r.id);
+									bukaAset(r);
 								}
 							}}
 						>
 							<Table.Cell class="max-w-md">
-								<span class="block truncate font-medium">{r.nama}</span>
+								<span class="flex items-center gap-2">
+									<span class="truncate font-medium">{r.nama}</span>
+									{#if arsip}
+										<span
+											class="inline-flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-px text-[10px] tracking-wide uppercase"
+											title="Diarsipkan {relatif(r.diarsipkan_pada ?? undefined)}"
+										>
+											<Archive class="size-3" /> Arsip
+										</span>
+									{/if}
+								</span>
 								<p class="truncate font-mono text-xs text-muted-foreground">{r.url_dasar}</p>
 							</Table.Cell>
 							<Table.Cell class="max-w-64">
@@ -489,6 +565,47 @@
 							</Table.Cell>
 							<Table.Cell class="text-xs whitespace-nowrap text-muted-foreground">
 								{relatif(p.scan_terakhir_pada ?? undefined)}
+							</Table.Cell>
+							<!-- Aksi baris: klik di sini tidak membuka modal tindakan baris. -->
+							<Table.Cell class="px-1 text-right" onclick={(e: MouseEvent) => e.stopPropagation()}>
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger
+										class="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+										aria-label="Aksi untuk {r.nama}"
+									>
+										<Ellipsis class="size-4" />
+									</DropdownMenu.Trigger>
+									<DropdownMenu.Content align="end" class="w-52">
+										<DropdownMenu.Item onSelect={() => bukaRiwayat(r.id)}>
+											<History /> Riwayat pengujian
+										</DropdownMenu.Item>
+										{#if !arsip && auth.bisaMenguji}
+											<DropdownMenu.Item onSelect={() => goto(`/aplikasi/${r.id}/persiapan`)}>
+												<ClipboardList /> Persiapan uji
+											</DropdownMenu.Item>
+										{/if}
+										{#if auth.bisaMendaftarkan}
+											{#if !arsip}
+												<DropdownMenu.Item onSelect={() => goto(`/aplikasi/${r.id}/ubah`)}>
+													<Pencil /> Ubah data
+												</DropdownMenu.Item>
+												<DropdownMenu.Separator />
+												<DropdownMenu.Item
+													class="text-destructive data-highlighted:text-destructive"
+													disabled={p.berjalan}
+													onSelect={() => (akanDiarsip = r)}
+												>
+													<Archive /> Arsipkan
+												</DropdownMenu.Item>
+											{:else}
+												<DropdownMenu.Separator />
+												<DropdownMenu.Item onSelect={() => pulihkan(r)}>
+													<ArchiveRestore /> Pulihkan dari arsip
+												</DropdownMenu.Item>
+											{/if}
+										{/if}
+									</DropdownMenu.Content>
+								</DropdownMenu.Root>
 							</Table.Cell>
 						</Table.Row>
 					{:else}
@@ -584,6 +701,29 @@
 		</div>
 	</div>
 {/if}
+
+<Dialog.Root open={!!akanDiarsip} onOpenChange={(o) => !o && !sibukArsip && (akanDiarsip = null)}>
+	<Dialog.Content>
+		{#if akanDiarsip}
+			<Dialog.Header>
+				<Dialog.Title>Arsipkan aplikasi?</Dialog.Title>
+				<Dialog.Description>{akanDiarsip.nama} · {akanDiarsip.url_dasar}</Dialog.Description>
+			</Dialog.Header>
+			<ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+				<li>Aplikasi disembunyikan dari daftar & dasbor, dan tidak bisa diuji atau diubah.</li>
+				<li>Riwayat pengujian, temuan, dan laporannya <b>tetap tersimpan</b>.</li>
+				<li>Bisa dipulihkan kapan saja dari tab <b>Arsip</b>.</li>
+			</ul>
+			<Dialog.Footer>
+				<Button variant="outline" onclick={() => (akanDiarsip = null)} disabled={sibukArsip}>Batal</Button>
+				<Button variant="destructive" onclick={arsipkan} disabled={sibukArsip}>
+					{#if sibukArsip}<LoaderCircle class="animate-spin" />{:else}<Archive />{/if}
+					Arsipkan
+				</Button>
+			</Dialog.Footer>
+		{/if}
+	</Dialog.Content>
+</Dialog.Root>
 
 <DialogPilihTindakan
 	bind:open={dlgTindakan}

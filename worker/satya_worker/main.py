@@ -77,15 +77,24 @@ def proses_satu(backend: BackendClient, engines: list[str], detak: Optional["koo
         detak.segera()  # registry & lease langsung diperbarui
     _cetak(task_id, f"▶ {metode.id} ({metode.engine}) → {ctx.base_url}")
     pengawas: Optional[keterjangkauan.Pengawas] = None
+    fase = _fase(metode)
+    host = keterjangkauan.host_port(ctx.base_url)[0]
     try:
         # Preflight: target tak terjangkau (mis. IP worker diblokir) → akhiri task segera dengan
         # alasan jelas, alih-alih membiarkan tiap alat menunggu timeout-nya sendiri.
         koordinasi.set_tahap("cek keterjangkauan target")
         pf = keterjangkauan.preflight(ctx.base_url)
         if not pf.ok:
-            _akhiri_tak_terjangkau(backend, task_id, metode, pf.alasan, preflight=True)
+            _akhiri_tak_terjangkau(backend, task_id, metode, pf.alasan, lapisan=pf.lapisan or "tcp", awal=True, host=host)
             return True
-        pengawas = keterjangkauan.Pengawas(ctx.base_url)
+        lapor = _lapor_thread(backend, task_id)
+        if pf.waf:
+            # Terjangkau, tetapi halaman utama sudah berupa penolakan WAF/rate-limit sejak awal.
+            alasan = (f"Sejak awal {fase}, target membalas worker dengan {pf.waf}. Kemungkinan IP worker "
+                      "dibatasi/diblokir WAF — hasil bisa tidak lengkap atau tidak mewakili aplikasi.")
+            lapor("peringatan", alasan, keterjangkauan.peristiwa_terblokir(
+                fase=fase, lapisan="http", alasan=alasan, fatal=False, awal=True, host=host, status=pf.status))
+        pengawas = keterjangkauan.Pengawas(ctx.base_url, fase=fase, status_dasar=pf.status, lapor=lapor)
         pengawas.start()
         if metode.engine == "discovery":
             return proses_penemuan(backend, task_id, ctx, metode)
@@ -96,19 +105,46 @@ def proses_satu(backend: BackendClient, engines: list[str], detak: Optional["koo
         koordinasi.STATUS.selesai_task()
 
 
+def _fase(metode: MetodeSpec) -> str:
+    return "recon" if metode.engine == "discovery" else "pengujian"
+
+
 def _cetak(task_id: str, pesan: str) -> None:
     """Baris progres ke stderr (log PM2) dengan cap waktu — agar operator bisa melihat posisi task."""
     print(f"{datetime.now():%H:%M:%S} [task {task_id}] {pesan}", file=sys.stderr, flush=True)
 
 
+def _lapor_thread(backend: BackendClient, task_id: str) -> Any:
+    """Callback log yang aman dipanggil dari thread lain (pengawas): klien HTTP sendiri per panggilan
+    (httpx.Client tak dibagi antar-thread). Dipanggil sangat jarang (≤1× per task)."""
+
+    def lapor(level: str, pesan: str, data: Optional[dict[str, Any]] = None) -> None:
+        _cetak(task_id, f"{level.upper()}: {pesan}")
+        try:
+            with backend.salin() as b:
+                b.kirim_log(task_id, level, pesan, data)
+        except Exception:
+            pass
+
+    return lapor
+
+
 def _akhiri_tak_terjangkau(backend: BackendClient, task_id: str, metode: MetodeSpec, alasan: str,
-                           *, preflight: bool = False) -> None:
-    """Laporkan task sebagai tidak dapat diverifikasi karena target tak terjangkau dari worker."""
-    awal = "Target tidak terjangkau dari worker" if preflight else "Pengujian dihentikan: target berhenti merespons"
-    ringkasan = (f"{awal} — {alasan} Pastikan target aktif dan IP worker tidak diblokir "
-                 "(minta whitelist ke pengelola target), lalu jalankan ulang.")
+                           *, lapisan: str = "tcp", awal: bool = False, host: str = "") -> None:
+    """Laporkan task sebagai tidak dapat diverifikasi karena target tak terjangkau dari worker.
+
+    Selain log `galat`, dipancarkan peristiwa `terblokir` (fatal) agar UI menampilkan keterangan
+    blokir yang menonjol (bukan sekadar satu baris di antara log)."""
+    fase = _fase(metode)
+    nama = "Recon" if fase == "recon" else "Pengujian"
+    pembuka = (f"{nama} tidak dijalankan: target tidak terjangkau dari worker" if awal
+               else f"{nama} dihentikan: target berhenti merespons worker")
+    alasan = alasan.rstrip(".") + "."
+    ringkasan = f"{pembuka} — {alasan} {keterjangkauan.saran_whitelist()}"
     try:
-        backend.kirim_log(task_id, "galat", ringkasan)
+        backend.kirim_log(task_id, "galat", ringkasan, keterjangkauan.peristiwa_terblokir(
+            fase=fase, lapisan="dns" if "DNS" in alasan else lapisan, alasan=alasan,
+            fatal=True, awal=awal, host=host))
     except Exception:
         pass
     backend.kirim_hasil(task_id, {"metode_id": metode.id, "status": "tidak_dapat_diverifikasi", "ringkasan": ringkasan, "bukti": []})
@@ -132,7 +168,7 @@ def _proses_metode(backend: BackendClient, task_id: str, ctx: ScanContext, metod
         backend.kirim_hasil(task_id, hasil.to_dict())
         print(f"[{hasil.status.upper():24}] {metode.id}  {hasil.ringkasan}", file=sys.stderr)
     except koordinasi.TargetTakTerjangkau as e:
-        _akhiri_tak_terjangkau(backend, task_id, metode, e.alasan)
+        _akhiri_tak_terjangkau(backend, task_id, metode, e.alasan, host=keterjangkauan.host_port(ctx.base_url)[0])
     except koordinasi.Dibatalkan:
         backend.kirim_hasil(task_id, {"metode_id": metode.id, "status": "tidak_dapat_diverifikasi", "ringkasan": "Dihentikan: pengujian dibatalkan.", "bukti": []})
     except Exception as e:  # jangan sampai satu task menjatuhkan worker
@@ -173,7 +209,7 @@ def proses_penemuan(backend: BackendClient, task_id: str, ctx: ScanContext, meto
         )
         hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan=ringkasan)
     except koordinasi.TargetTakTerjangkau as e:
-        _akhiri_tak_terjangkau(backend, task_id, metode, e.alasan)
+        _akhiri_tak_terjangkau(backend, task_id, metode, e.alasan, host=keterjangkauan.host_port(ctx.base_url)[0])
         return True
     except koordinasi.Dibatalkan:
         backend.kirim_log(task_id, "peringatan", "Penemuan dihentikan: pengujian dibatalkan pengguna.")
