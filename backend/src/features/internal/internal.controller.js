@@ -1,6 +1,7 @@
 import { success } from '../../utils/response.js';
 import { internalService } from './internal.service.js';
 import { workersService } from '../workers/workers.service.js';
+import { simpanGambar } from '../evidence/evidence.service.js';
 
 export const internalController = {
   async claim(req, res) {
@@ -36,5 +37,10 @@ export const internalController = {
   async discovery(req, res) {
     const data = await internalService.discovery(req.params.id, req.body);
     return success(res, { message: 'Penemuan diterima', data });
+  },
+
+  async evidence(req, res) {
+    const data = await simpanGambar(req.params.id, req.body.gambar);
+    return success(res, { message: 'Bukti gambar disimpan', data });
   },
 };

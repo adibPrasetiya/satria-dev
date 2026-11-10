@@ -89,10 +89,13 @@ def _proses_metode(backend: BackendClient, task_id: str, ctx: ScanContext, metod
         # `data` = peristiwa uji terstruktur untuk animasi pengujian (lihat peristiwa_uji.py).
         backend.kirim_log(task_id, level, pesan, data)
 
+    def unggah_gambar(gambar_png: bytes) -> Optional[str]:
+        return backend.unggah_gambar(ctx.scan_id, gambar_png)
+
     try:
         koordinasi.periksa_batal()
         # Baris "▶ metode" kini dipancarkan runner sebagai peristiwa uji `mulai`.
-        hasil = jalankan_metode(ctx, metode, log=log_ke_ui)
+        hasil = jalankan_metode(ctx, metode, log=log_ke_ui, unggah=unggah_gambar)
         backend.kirim_hasil(task_id, hasil.to_dict())
         print(f"[{hasil.status.upper():24}] {metode.id}  {hasil.ringkasan}", file=sys.stderr)
     except koordinasi.Dibatalkan:

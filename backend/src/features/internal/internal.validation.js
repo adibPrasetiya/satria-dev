@@ -17,6 +17,12 @@ export const heartbeatSchema = Joi.object({
 
 export const berhentiSchema = Joi.object({ worker_id: Joi.string().trim().max(100).required() });
 
+// Unggah bukti gambar (screenshot) dari worker — PNG base64; divalidasi bentuk (magic byte) di service.
+export const evidenceUploadSchema = Joi.object({
+  gambar: Joi.string().base64().max(9_000_000).required(),
+  nama: Joi.string().allow('').max(300).default(''),
+});
+
 export const claimSchema = Joi.object({
   worker_id: Joi.string().trim().max(100).default('worker'),
   engines: Joi.array()
