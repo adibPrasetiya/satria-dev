@@ -86,7 +86,11 @@ def buka_konteks(ctx: ScanContext) -> Iterator[tuple[Any, Any]]:
             raise PlaywrightTidakTersedia(
                 f"Gagal meluncurkan browser (coba `python -m playwright install {_nama_browser()}`): {e}"
             ) from e
-        context = browser.new_context(ignore_https_errors=False)
+        # Service worker diblokir: SW PWA (mis. Workbox `navigateFallback`) menyajikan index.html
+        # dari cache untuk SEMUA path → rute tebakan (/admin, /beranda…) tampak 200 padahal server
+        # membalas 404, dan respons XHR bisa berasal dari cache bukan server. Pemindai harus
+        # melihat respons server yang sebenarnya.
+        context = browser.new_context(ignore_https_errors=False, service_workers="block")
         context.set_default_navigation_timeout(_nav_timeout())
         context.set_default_timeout(_nav_timeout())
         page = context.new_page()
