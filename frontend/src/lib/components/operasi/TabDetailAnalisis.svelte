@@ -4,6 +4,7 @@
 	import { LABEL_STATUS } from '#lib/catalog.js';
 	import { WARNA_SEVERITY, WARNA_STATUS, type BarisMetode } from '#lib/operasi/ringkas.js';
 	import { cn } from '#lib/utils.js';
+	import BuktiTemuan from '#lib/components/operasi/BuktiTemuan.svelte';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Loader from '@lucide/svelte/icons/loader-circle';
 	import Search from '@lucide/svelte/icons/search';
@@ -149,6 +150,7 @@
 								<p class="mt-2 text-xs text-white/45">
 									{b.fungsi}{b.namaFungsi ? ` · ${b.namaFungsi}` : ''} · kontrol {b.kontrol || '—'}
 								</p>
+								<BuktiTemuan poc={b.poc} detail={b.detail} bukti={b.bukti} />
 							</td>
 						</tr>
 					{/if}

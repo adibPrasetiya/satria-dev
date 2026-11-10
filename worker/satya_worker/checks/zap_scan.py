@@ -200,6 +200,28 @@ def _uji_tersimpan(ctx: ScanContext, metode: MetodeSpec) -> Any:
         return None
 
 
+def _poc_injeksi(stored_rentan: list, temuan: list) -> list[str]:
+    """Langkah reproduksi naratif untuk temuan XSS tersimpan / injeksi terpantul."""
+    langkah: list[str] = []
+    if stored_rentan:
+        t = stored_rentan[0]
+        langkah += [
+            f"Kirim {t.tulis} dengan field '{t.field_tulis}' berisi penanda skrip inert (mis. <satya…>).",
+            f"Buka/ambil {t.baca} — penanda muncul MENTAH tanpa encoding, artinya masukan tak dipercaya "
+            f"tidak difilter saat disimpan lalu ditampilkan (XSS tersimpan).",
+            "Ganti penanda dengan payload skrip nyata untuk mengeksekusi di peramban korban.",
+            "Bukti request tulis & response baca terlampir di bawah.",
+        ]
+    elif temuan:
+        o = temuan[0]
+        langkah += [
+            f"Kirim penanda injeksi pada {o.endpoint} melalui {o.lokasi} '{o.field}'.",
+            f"Server memantulkan/mengeksekusi penanda ({o.kategori}: {o.catatan or 'terpantul mentah'}).",
+            "Bukti request/response terlampir di bawah.",
+        ]
+    return langkah
+
+
 def gabung_sapuan(ctx: ScanContext, metode: MetodeSpec, h: HasilMetode) -> HasilMetode:
     """Gabungkan indikasi injeksi dari sapuan INPV (sisi worker) + uji XSS tersimpan dengan vonis ZAP:
     GAGAL bila salah satu menemukan indikasi. Bila ZAP tak tersedia dan semuanya bersih, tetap
@@ -231,6 +253,7 @@ def gabung_sapuan(ctx: ScanContext, metode: MetodeSpec, h: HasilMetode) -> Hasil
             detail=(h.detail or "") + f"\nSapuan INPV: {'; '.join(f'{o.ringkas} ({o.kategori}: {o.catatan})' for o in temuan[:8]) or 'tak ada refleksi'}"
                    + pesan_stored + f"\n{s.teks_cakupan()}",
             bukti=list(h.bukti) + list(s.bukti) + bukti_stored, durasi_ms=h.durasi_ms,
+            poc=_poc_injeksi(stored_rentan, temuan),
         )
     h.detail = ((h.detail or "") + f"\nSapuan INPV: tidak ada indikasi ({s.teks_cakupan()})" + pesan_stored).strip()
     return h

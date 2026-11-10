@@ -40,6 +40,8 @@ const hasil = Joi.object({
   ringkasan: Joi.string().allow('').max(1000),
   detail: Joi.string().allow('').max(5000),
   bukti: Joi.array().items(bukti).max(50).default([]),
+  // Langkah reproduksi naratif (PoC) per temuan — dibatasi agar hasil tetap ramping.
+  poc: Joi.array().items(Joi.string().allow('').max(2000)).max(30).default([]),
   menunggu_tinjauan: Joi.boolean(),
   durasi_ms: Joi.number().integer().min(0),
 }).unknown(true);

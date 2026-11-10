@@ -320,6 +320,8 @@ export interface HasilMetode {
 	status: StatusMetode;
 	ringkasan?: string;
 	detail?: string;
+	/** Langkah reproduksi naratif (PoC) temuan. */
+	poc?: string[];
 	bukti: Bukti[];
 	/** true bila metode menunggu bukti/putusan asesor. */
 	menunggu_tinjauan?: boolean;

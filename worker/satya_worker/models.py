@@ -49,6 +49,8 @@ class HasilMetode:
     ringkasan: str = ""
     detail: str = ""
     bukti: list[Bukti] = field(default_factory=list)
+    # Langkah reproduksi naratif (PoC): urutan tindakan yang membuktikan temuan, dapat diaudit asesor.
+    poc: list[str] = field(default_factory=list)
     menunggu_tinjauan: bool = False
     durasi_ms: Optional[int] = None
 
@@ -62,6 +64,8 @@ class HasilMetode:
             d["ringkasan"] = self.ringkasan
         if self.detail:
             d["detail"] = self.detail
+        if self.poc:
+            d["poc"] = list(self.poc)
         if self.menunggu_tinjauan:
             d["menunggu_tinjauan"] = True
         if self.durasi_ms is not None:

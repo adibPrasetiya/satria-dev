@@ -269,6 +269,36 @@ export function buatSeed(): StateMock {
 			waktu: jamLalu(20)
 		}
 	];
+	// Contoh temuan INPV dengan langkah PoC & bukti request/response yang tertangkap worker.
+	const mInpv = scanSipers.hasil['INPV-4.2-T02'];
+	if (mInpv) {
+		mInpv.status = 'gagal';
+		mInpv.menunggu_tinjauan = false;
+		mInpv.ringkasan = 'Input tak valid DITERIMA & diproses pada field POST /api/pengajuan:jumlah_hari.';
+		mInpv.detail =
+			'Matriks cakupan INPV: 18 endpoint = 9 diuji + 3 tanpa input + 6 dilewati; 214 request.\n' +
+			'Penolakan input tak valid (API): 9 observasi — diterima 1, ditolak_tepat 6, terblokir_auth 2.';
+		mInpv.poc = [
+			"Siapkan request POST /api/pengajuan dengan seluruh field diisi nilai VALID, lalu ubah body 'jumlah_hari' menjadi nilai tipe salah.",
+			'Kirim request tersebut ke server (baseline dengan nilai valid diterima HTTP 201).',
+			"Server membalas HTTP 201 dan MEMPROSES input tanpa menolak — validasi sisi server tidak menegakkan aturan field 'jumlah_hari' (seharusnya ditolak 400/422).",
+			'Bukti request/response (POST) terlampir di bawah.'
+		];
+		mInpv.bukti = [
+			{
+				jenis: 'request_response',
+				judul: "INPV — POST /api/pengajuan (body 'jumlah_hari' · tipe_salah)",
+				isi:
+					'> POST https://sipers.example/api/pengajuan\n' +
+					'> body: {"jumlah_hari": "satya-bukan-angka", "alasan": "keperluan keluarga", "tanggal_mulai": "2026-12-01"}\n' +
+					'< 201 Created\n' +
+					"< {'content-type': 'application/json', 'x-request-id': 'a1b2c3'}\n" +
+					'< {"id": 4821, "status": "diajukan", "jumlah_hari": "satya-bukan-angka"}',
+				waktu: jamLalu(47.9)
+			}
+		];
+	}
+
 	scanSipers.ai = analisisTiruan(scanSipers.hasil, model);
 
 	const scanLatihan: Scan = {

@@ -51,6 +51,42 @@ def _field_unik(obs: Iterable[vn.Observasi]) -> list[str]:
     return sorted({f"{o.endpoint}:{o.field}" for o in obs})
 
 
+_LABEL_JENIS = {
+    "tipe_salah": "tipe salah", "format": "format tak valid", "rentang": "di luar rentang",
+    "panjang": "melebihi batas panjang", "enum": "di luar daftar pilihan", "kosong": "kosong (field wajib)",
+    "sqli": "karakter injeksi SQL", "xss": "penanda skrip (XSS)", "ssti": "ekspresi template (SSTI)",
+    "traversal": "path traversal", "ai": "nilai tak valid spesifik domain",
+}
+
+
+def _poc_langkah(obs: list[vn.Observasi], *, kelas: str) -> list[str]:
+    """Langkah reproduksi naratif (PoC) dari observasi yang menggerakkan vonis. `kelas`: crash|diproses."""
+    if not obs:
+        return []
+    o = obs[0]
+    metode_http = o.endpoint.split(" ", 1)[0]
+    jenis = _LABEL_JENIS.get(o.jenis, o.jenis)
+    lokasi = {"body": "body", "query": "parameter query", "path": "segmen path"}.get(o.lokasi, o.lokasi)
+    baseline = f" (baseline dengan nilai valid diterima HTTP {o.status_baseline})" if o.status_baseline is not None else ""
+    langkah = [
+        f"Siapkan request {o.endpoint} dengan seluruh field diisi nilai VALID, lalu ubah {lokasi} '{o.field}' "
+        f"menjadi nilai {jenis}.",
+        f"Kirim request tersebut ke server{baseline}.",
+    ]
+    if kelas == "crash":
+        langkah.append(f"Server membalas HTTP {o.status} — {o.catatan or 'galat server (5xx/stack trace)'}. "
+                       f"Input tak valid tidak ditangani dengan aman (seharusnya ditolak 400/422).")
+    else:  # diproses
+        langkah.append(f"Server membalas HTTP {o.status} dan MEMPROSES input tanpa menolak — validasi sisi server "
+                       f"tidak menegakkan aturan field '{o.field}' (seharusnya ditolak 400/422).")
+    lain = _field_unik(obs)
+    if len(lain) > 1:
+        langkah.append(f"Perilaku sama tereproduksi pada {len(lain)} titik: {', '.join(lain[:6])}"
+                       + ("…" if len(lain) > 6 else "") + ".")
+    langkah.append(f"Bukti request/response ({metode_http}) terlampir di bawah.")
+    return langkah
+
+
 def _detail(s: "inpv.Sapuan", obs: list[vn.Observasi], judul: str) -> str:
     hit: dict[str, int] = {}
     for o in obs:
@@ -87,13 +123,14 @@ def evaluasi(metode: MetodeSpec, s: "inpv.Sapuan", obs: list[vn.Observasi], *, j
         return HasilMetode(
             metode_id=metode.id, status="gagal",
             ringkasan=f"{len(crash)} input tak valid memicu galat server (5xx/stack trace) pada {len(_field_unik(crash))} field — input tak ditangani.",
-            detail=detail + "\nCrash: " + _daftar(crash), bukti=bukti,
+            detail=detail + "\nCrash: " + _daftar(crash), bukti=bukti, poc=_poc_langkah(crash, kelas="crash"),
         )
     if diproses:
         return HasilMetode(
             metode_id=metode.id, status="gagal",
             ringkasan=f"Input tak valid DITERIMA & diproses pada {len(_field_unik(diproses))} field: {', '.join(_field_unik(diproses)[:5])}.",
-            detail=detail + "\nDiproses: " + _daftar(diproses) + (f"\nTak pasti: {_daftar(tak_pasti)}" if tak_pasti else ""), bukti=bukti,
+            detail=detail + "\nDiproses: " + _daftar(diproses) + (f"\nTak pasti: {_daftar(tak_pasti)}" if tak_pasti else ""),
+            bukti=bukti, poc=_poc_langkah(diproses, kelas="diproses"),
         )
     if ditolak and len(tak_pasti) <= len(ditolak):
         return HasilMetode(

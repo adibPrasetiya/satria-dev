@@ -116,6 +116,9 @@ def test_xss_check_gagal_karena_stored(app):
                               "titik_uji": "form_input", "engine": "zap", "profil": "intrusif"})
     h = zap_scan._jalankan(_ctx(app, EPS(app)), m)
     assert h.status == "gagal" and "TERSIMPAN" in h.ringkasan, h.ringkasan
+    # PoC langkah reproduksi untuk XSS tersimpan + bukti tulis/baca terlampir.
+    assert h.poc and any("tersimpan" in l.lower() for l in h.poc), h.poc
+    assert h.bukti, "bukti request tulis & response baca terlampir"
 
 
 def test_tanpa_izin_prober_tak_dijalankan(app):
