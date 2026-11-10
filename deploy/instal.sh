@@ -79,6 +79,19 @@ if [ ! -x "$NUCLEI_BIN_PATH" ] && ! command -v nuclei >/dev/null 2>&1; then
   rm -rf /tmp/satya-nuclei
 fi
 
+# --- 4c. ffuf (pengaya recon INPV: nama parameter query & path; biner precompiled, tanpa Go) ----
+FFUF_VERSION="2.3.0"
+FFUF_BIN_PATH="$HOME/.local/bin/ffuf"
+if [ ! -x "$FFUF_BIN_PATH" ] && ! command -v ffuf >/dev/null 2>&1; then
+  log "Unduh biner ffuf $FFUF_VERSION"
+  mkdir -p "$HOME/.local/bin" /tmp/satya-ffuf
+  if curl -fsSL "https://github.com/ffuf/ffuf/releases/download/v${FFUF_VERSION}/ffuf_${FFUF_VERSION}_linux_amd64.tar.gz" -o /tmp/satya-ffuf/f.tgz; then
+    tar -xzf /tmp/satya-ffuf/f.tgz -C /tmp/satya-ffuf ffuf \
+      && mv -f /tmp/satya-ffuf/ffuf "$FFUF_BIN_PATH" && chmod +x "$FFUF_BIN_PATH"
+  fi
+  rm -rf /tmp/satya-ffuf
+fi
+
 # --- 5. Clone / update repo -------------------------------------------------
 if [ ! -d "$APP_DIR/.git" ]; then
   log "Clone repo ke $APP_DIR"
@@ -154,6 +167,10 @@ PLAYWRIGHT_BROWSER=chromium
 SSLYZE_ENABLE=
 SSLYZE_PORT=443
 SSLYZE_TIMEOUT=10
+# ffuf (pengaya recon INPV: nama parameter query & path): biner precompiled di ~/.local/bin (lihat #4c).
+# BUKAN engine → tak masuk WORKER_ENGINES. Tanpa biner, tahap ffuf dilewati.
+FFUF_BIN=${FFUF_BIN_PATH}
+FFUF_ENABLE=
 # nuclei (engine Keamanan API APIS-12.2-T02): biner precompiled dipasang di ~/.local/bin (lihat #4b).
 NUCLEI_BIN=${NUCLEI_BIN_PATH}
 NUCLEI_ENABLE=
@@ -197,6 +214,11 @@ else
   if [ -x "$NUCLEI_BIN_PATH" ] && ! grep -q '^NUCLEI_BIN=' worker/.env; then
     echo "NUCLEI_BIN=${NUCLEI_BIN_PATH}" >> worker/.env
     echo "   worker/.env: set NUCLEI_BIN=${NUCLEI_BIN_PATH}."
+  fi
+  # Arahkan ke biner ffuf bila terpasang & belum tercatat (ffuf bukan engine → tak sentuh WORKER_ENGINES).
+  if [ -x "$FFUF_BIN_PATH" ] && ! grep -q '^FFUF_BIN=' worker/.env; then
+    echo "FFUF_BIN=${FFUF_BIN_PATH}" >> worker/.env
+    echo "   worker/.env: set FFUF_BIN=${FFUF_BIN_PATH}."
   fi
 fi
 
