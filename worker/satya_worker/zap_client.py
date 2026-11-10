@@ -21,6 +21,8 @@ from typing import Any, Optional
 
 import httpx
 
+from . import koordinasi
+
 
 class ZapTidakTersedia(Exception):
     """ZAP belum dikonfigurasi atau tidak dapat dihubungi."""
@@ -117,21 +119,21 @@ class ZapClient:
         while self.spider_status(sid) < 100:
             if time.monotonic() - t0 > batas:
                 return False
-            time.sleep(2)
+            koordinasi.tunggu(2)
         # Ajax spider untuk aplikasi SPA (best-effort).
         try:
             self.ajax_start(url)
             while self.ajax_status() == "running":
                 if time.monotonic() - t0 > batas:
                     break
-                time.sleep(2)
+                koordinasi.tunggu(2)
         except httpx.HTTPError:
             pass
         # Tunggu antrean passive scan kosong.
         while self.pscan_records_to_scan() > 0:
             if time.monotonic() - t0 > batas:
                 break
-            time.sleep(1)
+            koordinasi.tunggu(1)
         return True
 
     def jalankan_ascan(self, url: str, *, batas: float) -> bool:
@@ -143,7 +145,7 @@ class ZapClient:
         while self.ascan_status(sid) < 100:
             if time.monotonic() - t0 > batas:
                 return False
-            time.sleep(3)
+            koordinasi.tunggu(3)
         return True
 
 

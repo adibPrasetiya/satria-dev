@@ -50,7 +50,7 @@ def test_keluaran_dibaca_utf8(monkeypatch):
         return subprocess.CompletedProcess(cmd, 0, stdout=baris, stderr="")
 
     monkeypatch.setattr(kc, "tersedia", lambda: True)
-    monkeypatch.setattr(kc.subprocess, "run", palsu)
+    monkeypatch.setattr(kc.koordinasi, "jalankan_proses", palsu)
     hasil = kc.jalankan("https://contoh.test")
     assert dipanggil["encoding"] == "utf-8" and dipanggil["errors"] == "replace"
     assert hasil and "“judul”" in hasil[0]["url"]

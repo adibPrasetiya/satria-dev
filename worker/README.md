@@ -245,6 +245,15 @@ diklaim, worker menjalankan check lalu mengirim hasil ke `POST /internal/tasks/{
 Ctrl+C menghentikan worker secara rapi. Konfigurasi lewat env (lihat `.env.example`):
 `BACKEND_URL`, `WORKER_TOKEN`, `WORKER_ID`, `WORKER_ENGINES`, `POLL_INTERVAL`.
 
+**Target tak terjangkau.** Sebelum tiap task worker melakukan *preflight* (DNS → TCP → satu
+request HTTP) ke `base_url`; selama task, thread pengawas mem-probe TCP berkala. Bila target tak
+membalas (khasnya: IP worker diblokir firewall/WAF target, SYN tak dibalas), task diakhiri
+`tidak_dapat_diverifikasi` dengan alasan jelas — alat eksternal yang sedang jalan (katana, ffuf,
+nuclei, polling ZAP) dimatikan, bukan ditunggu sampai timeout. Atur lewat `TARGET_CEK_AKTIF`,
+`TARGET_PREFLIGHT_TIMEOUT`, `TARGET_CEK_INTERVAL`, `TARGET_GAGAL_MAKS` (lihat
+`satya_worker/keterjangkauan.py`). Progres tahap tiap task juga dicetak ke stderr dengan cap
+waktu (`HH:MM:SS [task N] …`) sehingga terlihat di `pm2 logs satya-worker`.
+
 **Mode context** (`contoh.context.json`) adalah bentuk `ScanContext` + daftar `metode` untuk
 uji cepat tanpa backend: URL dasar, pemetaan titik uji, template form, akun uji.
 
@@ -281,6 +290,7 @@ worker/
 ├── satya_worker/
 │   ├── models.py          # ScanContext, MetodeSpec, HasilMetode, Bukti (↔ types.ts)
 │   ├── http_client.py     # klien httpx: scope guard + rekam bukti + penyamaran
+│   ├── keterjangkauan.py  # preflight target + pemutus sirkuit (target tak terjangkau)
 │   ├── registry.py        # @check("<check_id>")
 │   ├── runner.py          # cari check → jalankan; tak dikenal → tidak_dapat_diverifikasi
 │   ├── backend_client.py  # klien /internal: claim / result / log / discovery (mode loop)

@@ -21,12 +21,13 @@ import os
 import signal
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
 import httpx
 
-from . import koordinasi
+from . import keterjangkauan, koordinasi
 from .backend_client import BackendClient
 from .discovery import temukan
 from .models import HasilMetode, MetodeSpec, ScanContext
@@ -74,12 +75,44 @@ def proses_satu(backend: BackendClient, engines: list[str], detak: Optional["koo
     koordinasi.STATUS.mulai_task(task_id, metode.id)
     if detak is not None:
         detak.segera()  # registry & lease langsung diperbarui
+    _cetak(task_id, f"▶ {metode.id} ({metode.engine}) → {ctx.base_url}")
+    pengawas: Optional[keterjangkauan.Pengawas] = None
     try:
+        # Preflight: target tak terjangkau (mis. IP worker diblokir) → akhiri task segera dengan
+        # alasan jelas, alih-alih membiarkan tiap alat menunggu timeout-nya sendiri.
+        koordinasi.set_tahap("cek keterjangkauan target")
+        pf = keterjangkauan.preflight(ctx.base_url)
+        if not pf.ok:
+            _akhiri_tak_terjangkau(backend, task_id, metode, pf.alasan, preflight=True)
+            return True
+        pengawas = keterjangkauan.Pengawas(ctx.base_url)
+        pengawas.start()
         if metode.engine == "discovery":
             return proses_penemuan(backend, task_id, ctx, metode)
         return _proses_metode(backend, task_id, ctx, metode)
     finally:
+        if pengawas is not None:
+            pengawas.hentikan()
         koordinasi.STATUS.selesai_task()
+
+
+def _cetak(task_id: str, pesan: str) -> None:
+    """Baris progres ke stderr (log PM2) dengan cap waktu — agar operator bisa melihat posisi task."""
+    print(f"{datetime.now():%H:%M:%S} [task {task_id}] {pesan}", file=sys.stderr, flush=True)
+
+
+def _akhiri_tak_terjangkau(backend: BackendClient, task_id: str, metode: MetodeSpec, alasan: str,
+                           *, preflight: bool = False) -> None:
+    """Laporkan task sebagai tidak dapat diverifikasi karena target tak terjangkau dari worker."""
+    awal = "Target tidak terjangkau dari worker" if preflight else "Pengujian dihentikan: target berhenti merespons"
+    ringkasan = (f"{awal} — {alasan} Pastikan target aktif dan IP worker tidak diblokir "
+                 "(minta whitelist ke pengelola target), lalu jalankan ulang.")
+    try:
+        backend.kirim_log(task_id, "galat", ringkasan)
+    except Exception:
+        pass
+    backend.kirim_hasil(task_id, {"metode_id": metode.id, "status": "tidak_dapat_diverifikasi", "ringkasan": ringkasan, "bukti": []})
+    _cetak(task_id, f"[TIDAK_DAPAT_DIVERIFIKASI] {metode.id}  {ringkasan}")
 
 
 def _proses_metode(backend: BackendClient, task_id: str, ctx: ScanContext, metode: MetodeSpec) -> bool:
@@ -98,6 +131,8 @@ def _proses_metode(backend: BackendClient, task_id: str, ctx: ScanContext, metod
         hasil = jalankan_metode(ctx, metode, log=log_ke_ui, unggah=unggah_gambar)
         backend.kirim_hasil(task_id, hasil.to_dict())
         print(f"[{hasil.status.upper():24}] {metode.id}  {hasil.ringkasan}", file=sys.stderr)
+    except koordinasi.TargetTakTerjangkau as e:
+        _akhiri_tak_terjangkau(backend, task_id, metode, e.alasan)
     except koordinasi.Dibatalkan:
         backend.kirim_hasil(task_id, {"metode_id": metode.id, "status": "tidak_dapat_diverifikasi", "ringkasan": "Dihentikan: pengujian dibatalkan.", "bukti": []})
     except Exception as e:  # jangan sampai satu task menjatuhkan worker
@@ -120,6 +155,9 @@ def proses_penemuan(backend: BackendClient, task_id: str, ctx: ScanContext, meto
     def log_ke_ui(level: str, pesan: str, data: Optional[dict[str, Any]] = None) -> None:
         # `data` = peristiwa terstruktur untuk visualisasi penemuan (lihat peristiwa.py).
         backend.kirim_log(task_id, level, pesan, data)
+        # Tahap & peringatan juga ke log PM2 agar progres recon terlihat dari server.
+        if (data or {}).get("jenis") == "tahap" or level in ("peringatan", "galat"):
+            _cetak(task_id, f"{'' if level == 'info' else level.upper() + ': '}{pesan}")
 
     try:
         penemuan = temukan(ctx.base_url, openapi_url=ctx.openapi_url or None, ctx=ctx, log=log_ke_ui)
@@ -134,6 +172,9 @@ def proses_penemuan(backend: BackendClient, task_id: str, ctx: ScanContext, meto
             f"titik uji terdeteksi [{titik}], {disemai} metode disemai."
         )
         hasil = HasilMetode(metode_id=metode.id, status="lulus", ringkasan=ringkasan)
+    except koordinasi.TargetTakTerjangkau as e:
+        _akhiri_tak_terjangkau(backend, task_id, metode, e.alasan)
+        return True
     except koordinasi.Dibatalkan:
         backend.kirim_log(task_id, "peringatan", "Penemuan dihentikan: pengujian dibatalkan pengguna.")
         hasil = HasilMetode(metode_id=metode.id, status="tidak_dapat_diverifikasi", ringkasan="Penemuan dihentikan karena pengujian dibatalkan.")

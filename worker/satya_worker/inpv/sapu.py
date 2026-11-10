@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import os
 import threading
-import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from urllib.parse import urlencode, urlsplit, urlunsplit
@@ -247,7 +246,7 @@ def _uji_endpoint(ctx: ScanContext, klien: KlienScan, r: ck.Rencana, profil: dic
             return None
         hasil.jumlah_request += 1
         if jeda:
-            time.sleep(jeda)
+            koordinasi.tunggu(jeda)
         try:
             return _kirim(klien, metode, url, body, form, judul)
         except LuarRuangLingkup:
