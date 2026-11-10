@@ -64,6 +64,22 @@ class BackendClient:
         resp.raise_for_status()
         return resp.json().get("data") or {}
 
+    def unggah_gambar(self, scan_id: str, gambar_png: bytes) -> Optional[str]:
+        """Unggah bukti gambar (PNG) untuk sebuah scan; return URL capability atau None bila gagal.
+        Best-effort: kegagalan tak boleh menjatuhkan check (bukti teks tetap ada)."""
+        import base64
+
+        try:
+            resp = self._klien.post(
+                f"{self._base}/internal/scans/{scan_id}/evidence",
+                json={"gambar": base64.b64encode(gambar_png).decode("ascii")},
+                timeout=20.0,
+            )
+            resp.raise_for_status()
+            return (resp.json().get("data") or {}).get("url")
+        except (httpx.HTTPError, ValueError):
+            return None
+
     def kirim_log(self, task_id: str, level: str, pesan: str, data: Optional[dict[str, Any]] = None) -> None:
         # Log bersifat best-effort: kegagalan mengirim log tidak boleh menjatuhkan task.
         body: dict[str, Any] = {"level": level, "pesan": pesan[:500]}

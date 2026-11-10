@@ -2,7 +2,16 @@ import { Router } from 'express';
 import { authenticateWorker } from '../../middleware/authenticateWorker.js';
 import { validate } from '../../middleware/validate.js';
 import { internalController } from './internal.controller.js';
-import { berhentiSchema, claimSchema, discoverySchema, heartbeatSchema, logSchema, resultSchema, taskIdSchema } from './internal.validation.js';
+import {
+  berhentiSchema,
+  claimSchema,
+  discoverySchema,
+  evidenceUploadSchema,
+  heartbeatSchema,
+  logSchema,
+  resultSchema,
+  taskIdSchema,
+} from './internal.validation.js';
 
 // Dipakai HANYA oleh worker pengujian (bukan JWT pengguna). Dilindungi X-Worker-Token.
 export const internalRouter = Router();
@@ -18,4 +27,10 @@ internalRouter.post(
   validate(taskIdSchema, 'params'),
   validate(discoverySchema),
   internalController.discovery,
+);
+internalRouter.post(
+  '/scans/:id/evidence',
+  validate(taskIdSchema, 'params'),
+  validate(evidenceUploadSchema),
+  internalController.evidence,
 );

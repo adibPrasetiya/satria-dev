@@ -41,6 +41,8 @@ const schema = Joi.object({
   // Sementara log hanya ke terminal; true = juga tulis file JSON harian di LOG_DIR.
   LOG_TO_FILE: Joi.boolean().default(false),
   LOG_DIR: Joi.string().default('logs'),
+  // Direktori penyimpanan bukti gambar (screenshot) yang diunggah worker; disajikan read-only.
+  EVIDENCE_DIR: Joi.string().default('evidence'),
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'http', 'debug').allow(''),
 }).unknown(true);
 
@@ -90,4 +92,5 @@ export const env = Object.freeze({
     dir: value.LOG_DIR,
     level: value.LOG_LEVEL || (value.NODE_ENV === 'production' ? 'info' : 'debug'),
   },
+  evidenceDir: value.EVIDENCE_DIR,
 });

@@ -201,6 +201,8 @@ class ScanContext:
     _log: Optional[Any] = field(default=None, compare=False, repr=False)
     # Metode yang sedang dijalankan (diisi runner) — dipakai peristiwa uji otomatis.
     _metode_aktif: str = field(default="", compare=False, repr=False)
+    # Pengunggah bukti gambar (diisi runner dari BackendClient); None → screenshot tak diunggah.
+    _unggah_gambar: Optional[Any] = field(default=None, compare=False, repr=False)
 
     def catat(self, level: str, pesan: str) -> None:
         """Kirim satu baris log proses ke UI (best-effort; aman bila kanal tak ada)."""
@@ -209,6 +211,15 @@ class ScanContext:
                 self._log(level, pesan)
             except Exception:
                 pass  # logging tak boleh menjatuhkan check
+
+    def unggah_gambar(self, gambar_png: bytes) -> Optional[str]:
+        """Unggah bukti gambar (PNG) ke backend; return URL capability atau None (kanal tak ada/gagal)."""
+        if not self._unggah_gambar or not gambar_png:
+            return None
+        try:
+            return self._unggah_gambar(gambar_png)
+        except Exception:
+            return None
 
     def langkah(self, langkah: str, label: str, **detail: Any) -> None:
         """Peristiwa uji terstruktur: satu langkah check (siapkan_payload, periksa_skema, …)

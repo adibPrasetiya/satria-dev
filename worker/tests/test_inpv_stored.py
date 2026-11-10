@@ -121,6 +121,19 @@ def test_xss_check_gagal_karena_stored(app):
     assert h.bukti, "bukti request tulis & response baca terlampir"
 
 
+def test_screenshot_diunggah_saat_stored(app, monkeypatch):
+    # Saat temuan XSS tersimpan & kanal unggah tersedia: HTML dirender → PNG → diunggah sebagai bukti.
+    from satya_worker.inpv import tangkap_layar
+    monkeypatch.setattr(tangkap_layar, 'dari_html', lambda html, **k: b'\x89PNG-fake-bytes')
+    diunggah = []
+    ctx = _ctx(app, EPS(app))
+    ctx._unggah_gambar = lambda png: (diunggah.append(png) or '/api/v1/evidence/9/' + 'a' * 32 + '.png')
+    s = stored.probe(ctx)
+    assert s.rentan, s.teks()
+    assert diunggah, 'PNG hasil render diunggah'
+    assert any(b.jenis == 'screenshot' and b.nama_file for b in s.bukti), [b.jenis for b in s.bukti]
+
+
 def test_tanpa_izin_prober_tak_dijalankan(app):
     # profil intrusif tapi TANPA izin intrusif → prober XSS tersimpan tak dijalankan & tak melapor.
     m = MetodeSpec.from_dict({"id": "INPV-4.7-T01", "check_id": "zap.active.xss_policy",

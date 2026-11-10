@@ -18,7 +18,7 @@ from . import checks  # noqa: F401,E402
 Logger = Optional[Callable[[str, str], None]]
 
 
-def jalankan_metode(ctx: ScanContext, metode: MetodeSpec, log: Logger = None) -> HasilMetode:
+def jalankan_metode(ctx: ScanContext, metode: MetodeSpec, log: Logger = None, unggah=None) -> HasilMetode:
     """Jalankan satu metode. `log(level, pesan[, data])` (opsional) menyalurkan narasi proses
     check ke UI; dipasang ke `ctx._log` agar check bisa memanggil `ctx.catat(...)`/`ctx.langkah(...)`.
     Runner memancarkan peristiwa uji `mulai` & `hasil` (animasi graf pengujian)."""
@@ -37,10 +37,12 @@ def jalankan_metode(ctx: ScanContext, metode: MetodeSpec, log: Logger = None) ->
         return h
     ctx._log = log  # kanal narasi langkah (None → ctx.catat no-op)
     ctx._metode_aktif = metode.id
+    ctx._unggah_gambar = unggah  # kanal unggah bukti gambar (None → ctx.unggah_gambar no-op)
     try:
         h = plugin.run(ctx, metode)
     finally:
         ctx._log = None
         ctx._metode_aktif = ""
+        ctx._unggah_gambar = None
     pu.hasil(log, metode, h)
     return h

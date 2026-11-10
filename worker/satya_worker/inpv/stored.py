@@ -55,6 +55,7 @@ class HasilStored:
     dijalankan: bool = False       # False bila dilewati (tanpa izin / tak ada endpoint)
     alasan: str = ""
     bukti: list[Bukti] = field(default_factory=list)
+    bukti_gambar: list[Bukti] = field(default_factory=list)   # screenshot halaman yang memuat payload
 
     @property
     def rentan(self) -> list[TemuanStored]:
@@ -151,7 +152,7 @@ def _jalankan(ctx: ScanContext) -> HasilStored:
             ctx.catat("info", f"  Uji XSS tersimpan: {len(tulis)} endpoint create, sesi {'aktif' if hasil.login_ok else 'anonim'}.")
             for ep in tulis:
                 _uji_satu(ctx, klien, ep, baca_per_segmen, hasil, dibaca_url)
-            hasil.bukti = list(klien.bukti)[:20]
+            hasil.bukti = hasil.bukti_gambar + list(klien.bukti)[:20]
     except Exception as e:
         hasil.alasan = f"{type(e).__name__}: {e}"
     return hasil
@@ -165,9 +166,10 @@ def _uji_satu(ctx: ScanContext, klien: KlienScan, ep: dict[str, Any],
     tok = secrets.token_hex(3)
     penanda = f"<satya{tok}>"                         # tag inert unik — dicari mentah vs ter-encode
     ter_encode = f"&lt;satya{tok}&gt;"
+    terlihat = f"SATYA-XSS-{tok}"                     # teks terlihat → tampak pada screenshot bukti
     field_tulis = max(fields, key=len)                # field teks terpanjang → paling mungkin bebas-teks
     payload = asd.payload_endpoint(ep, "body")
-    payload[field_tulis] = f"Satya uji {penanda}"
+    payload[field_tulis] = f"{terlihat} {penanda}"
     label_tulis = f"{ep.get('metode_http')} {ep.get('path_template')}"
     form = "x-www-form-urlencoded" in str(ep.get("content_type") or "")
     try:
@@ -197,6 +199,22 @@ def _uji_satu(ctx: ScanContext, klien: KlienScan, ep: dict[str, Any],
             hasil.temuan.append(TemuanStored(label_tulis, f"GET {e.get('path_template')}", field_tulis, True,
                                              r.headers.get("content-type", "")))
             ctx.catat("peringatan", f"    • XSS TERSIMPAN: penanda dari {label_tulis} muncul MENTAH di GET {e.get('path_template')}.")
+            # Bukti visual: render HTML respons (payload tersimpan terlihat) → PNG → unggah sebagai aset.
+            # Hanya bila kanal unggah tersedia (hindari render sia-sia saat tak bisa menyimpan).
+            if getattr(ctx, "_unggah_gambar", None) and "html" in (r.headers.get("content-type", "") or "").lower():
+                try:
+                    from . import tangkap_layar as tl
+
+                    png = tl.dari_html(teks, base_url=url)
+                    gambar_url = ctx.unggah_gambar(png) if png else None
+                except Exception:
+                    gambar_url = None
+                if gambar_url:
+                    hasil.bukti_gambar.append(Bukti(
+                        jenis="screenshot", nama_file=gambar_url,
+                        judul=f"XSS tersimpan terlihat di GET {e.get('path_template')} (penanda {terlihat})",
+                    ))
+                    ctx.catat("info", "      ◦ Tangkapan layar bukti XSS tersimpan diunggah.")
             return
         if ter_encode in teks:
             hasil.temuan.append(TemuanStored(label_tulis, f"GET {e.get('path_template')}", field_tulis, False,
