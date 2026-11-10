@@ -75,6 +75,15 @@ export const usersRepository = {
     await db.delete(users).where(and(eq(users.id, id), eq(users.isVerified, false)));
   },
 
+  /** Ganti peran → semua sesi user dicabut agar ia masuk ulang dengan menu & hak akses peran baru. */
+  async setRole(id, role) {
+    await db.transaction(async (tx) => {
+      await tx.update(users).set({ role }).where(eq(users.id, id));
+      await revokeUserSessions(tx, id, 'role_change');
+    });
+    return this.findById(id);
+  },
+
   /** Nonaktif → semua sesi user dicabut sehingga ia langsung keluar. */
   async setActive(id, isActive) {
     await db.transaction(async (tx) => {

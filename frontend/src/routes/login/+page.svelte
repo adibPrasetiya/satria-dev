@@ -22,6 +22,8 @@
 	let capsLock = $state(false);
 	let tahap = $state<'diam' | 'memuat' | 'berhasil'>('diam');
 	let galatServer = $state<string | null>(null);
+	// Kata sandi benar tetapi email belum diverifikasi: tawarkan kirim ulang tautan verifikasi.
+	let belumVerifikasi = $state(false);
 	let goyang = $state(false);
 	let disentuh = $state({ email: false, password: false });
 
@@ -72,6 +74,7 @@
 		} catch (err) {
 			tahap = 'diam';
 			galatServer = (err as Error).message;
+			belumVerifikasi = (err as { code?: string }).code === 'ACCOUNT_PENDING';
 			password = '';
 			disentuh.password = false;
 			refSandi?.focus();
@@ -141,12 +144,23 @@
 		</FieldAuth>
 
 		{#if galatServer}
-			<p
-				class="flex items-center gap-2 rounded-md border border-red-400/35 bg-red-500/10 px-3 py-2.5 text-sm text-red-200"
+			<div
+				class="flex items-start gap-2 rounded-md border border-red-400/35 bg-red-500/10 px-3 py-2.5 text-sm text-red-200"
 				role="alert"
 			>
-				<CircleAlert class="size-4 shrink-0" />{galatServer}
-			</p>
+				<CircleAlert class="mt-0.5 size-4 shrink-0" />
+				<p>
+					{galatServer}
+					{#if belumVerifikasi}
+						<a
+							href={`/verifikasi-email?${new URLSearchParams({ email: email.trim() })}`}
+							class="mt-1 block text-xs font-medium text-gold hover:underline"
+						>
+							Kirim ulang email verifikasi ›
+						</a>
+					{/if}
+				</p>
+			</div>
 		{/if}
 
 		<Button

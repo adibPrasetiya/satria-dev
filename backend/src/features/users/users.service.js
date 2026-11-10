@@ -50,6 +50,21 @@ export function createUsersService({ repository = usersRepository, now = () => n
       auditor('pengguna.tolak', { targetUserId: user.id, targetEmail: user.email, targetNrp: user.nrp });
     },
 
+    /** Ubah peran akun terverifikasi. Sesi pengguna dicabut sehingga ia masuk ulang dengan peran baru. */
+    async setRole(actor, id, { peran }) {
+      assertNotSelf(actor, id);
+      const user = await findOrFail(id);
+      if (!user.isVerified) throw AppError.badRequest('Verifikasi akun terlebih dahulu');
+      if (user.role === peran) return toUserDto(user);
+      if (user.role === 'admin' && user.isActive && (await repository.countActiveAdmins()) <= 1) {
+        throw AppError.badRequest('Harus ada minimal satu administrator yang aktif');
+      }
+      const dari = user.role;
+      const updated = await repository.setRole(id, peran);
+      auditor('pengguna.peran', { targetUserId: user.id, targetEmail: user.email, dari, ke: peran });
+      return toUserDto(updated);
+    },
+
     async setStatus(actor, id, { aktif }) {
       assertNotSelf(actor, id);
       const user = await findOrFail(id);

@@ -9,7 +9,20 @@ export const authenticationController = {
     await authenticationService.register(req.body);
     return success(res, {
       statusCode: 202,
-      message: 'Pendaftaran diterima. Akun dapat digunakan setelah diverifikasi administrator.',
+      message: 'Pendaftaran diterima. Buka tautan verifikasi yang dikirim ke email Anda untuk mengaktifkan akun.',
+    });
+  },
+
+  async verifyEmail(req, res) {
+    await authenticationService.verifyEmail(req.body);
+    return success(res, { message: 'Email berhasil diverifikasi. Silakan masuk.' });
+  },
+
+  async resendVerification(req, res) {
+    await authenticationService.resendVerification(req.body);
+    return success(res, {
+      statusCode: 202,
+      message: `Jika akun terdaftar dan belum diverifikasi, tautan verifikasi baru telah dikirim dan berlaku ${env.emailVerificationTtlHours} jam.`,
     });
   },
 

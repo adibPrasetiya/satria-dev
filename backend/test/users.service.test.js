@@ -40,6 +40,7 @@ describe('users.service', () => {
         verify: async (id, { role, verifiedBy, verifiedAt }) => Object.assign(rows.find((r) => r.id === id), { isVerified: true, role, verifiedBy, verifiedAt }),
         removePending: async (id) => (rows = rows.filter((r) => r.id !== id || r.isVerified)),
         setActive: async (id, isActive) => Object.assign(rows.find((r) => r.id === id), { isActive }),
+        setRole: async (id, role) => Object.assign(rows.find((r) => r.id === id), { role }),
       },
     });
   });
@@ -85,5 +86,29 @@ describe('users.service', () => {
 
     // Admin lain mencoba menonaktifkan satu-satunya admin aktif.
     await assert.rejects(service.setStatus({ id: '3', peran: 'admin' }, 1, { aktif: false }), { statusCode: 400 });
+  });
+
+  it('setRole: mengubah peran akun terverifikasi & tercatat audit', async () => {
+    const user = await service.setRole(admin, 3, { peran: 'pemilik' });
+    assert.equal(user.peran, 'pemilik');
+    assert.deepEqual(events.at(-1), ['pengguna.peran', { targetUserId: 3, targetEmail: 'asesor@x.mil.id', dari: 'asesor', ke: 'pemilik' }]);
+  });
+
+  it('setRole: tolak akun pending, diri sendiri, dan menurunkan admin aktif terakhir', async () => {
+    await assert.rejects(service.setRole(admin, 2, { peran: 'asesor' }), { statusCode: 400 });
+    await assert.rejects(service.setRole(admin, 1, { peran: 'pemilik' }), { statusCode: 400 });
+    await assert.rejects(service.setRole(admin, 99, { peran: 'pemilik' }), { statusCode: 404 });
+    await assert.rejects(service.setRole({ id: '3', peran: 'admin' }, 1, { peran: 'asesor' }), { statusCode: 400 });
+
+    // Dengan dua admin aktif, salah satunya boleh diturunkan.
+    await service.setRole(admin, 3, { peran: 'admin' });
+    const turun = await service.setRole({ id: '3', peran: 'admin' }, 1, { peran: 'asesor' });
+    assert.equal(turun.peran, 'asesor');
+  });
+
+  it('setRole dengan peran yang sama tidak mengubah apa pun', async () => {
+    const before = events.length;
+    await service.setRole(admin, 3, { peran: 'asesor' });
+    assert.equal(events.length, before);
   });
 });

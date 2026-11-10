@@ -4,7 +4,7 @@
 	/** Adegan latar per halaman publik; null bila bukan halaman publik. */
 	export function adeganDari(path: string | undefined): Adegan | null {
 		if (!path) return null;
-		if (path.startsWith('/daftar')) return 'daftar';
+		if (path.startsWith('/daftar') || path.startsWith('/verifikasi-email')) return 'daftar';
 		// Lupa & atur ulang kata sandi satu alur pemulihan (latar bersih seperti pendaftaran).
 		if (path.startsWith('/lupa-sandi') || path.startsWith('/reset-sandi')) return 'lupa';
 		if (path.startsWith('/login')) return 'login';

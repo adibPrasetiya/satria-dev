@@ -4,7 +4,7 @@ import { audit } from '../../utils/audit.js';
 import { generateToken, hashToken } from '../../utils/crypto.js';
 import { signAccessToken, verifyAccessToken } from '../../utils/jwt.js';
 import { logger } from '../../utils/logger.js';
-import { emailResetSandi } from '../../utils/emailTemplate.js';
+import { emailResetSandi, emailVerifikasi } from '../../utils/emailTemplate.js';
 import { sendMail } from '../../utils/mailer.js';
 import { hashPassword, verifyPassword } from '../../utils/password.js';
 import { authenticationRepository } from './authentication.repository.js';
@@ -12,7 +12,9 @@ import { authenticationRepository } from './authentication.repository.js';
 const INVALID_CREDENTIALS = 'Email atau kata sandi salah';
 const INVALID_REFRESH_TOKEN = 'Refresh token tidak valid atau sudah kedaluwarsa';
 const INVALID_RESET_LINK = 'Tautan atur ulang kata sandi tidak valid atau sudah kedaluwarsa';
-const DAY_MS = 24 * 60 * 60 * 1000;
+const INVALID_VERIFY_LINK = 'Tautan verifikasi email tidak valid atau sudah kedaluwarsa';
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 const MINUTE_MS = 60 * 1000;
 
 /** Bentuk pengguna yang dikirim ke frontend (sesuai tipe `Pengguna` di frontend). */
@@ -34,7 +36,7 @@ export const toPublicUser = (user) => ({
 export const secondsPrecision = (date) => new Date(Math.floor(date.getTime() / 1000) * 1000);
 
 const accountPending = () =>
-  new AppError(403, 'Akun Anda belum diverifikasi administrator. Silakan tunggu persetujuan.', undefined, 'ACCOUNT_PENDING');
+  new AppError(403, 'Email akun Anda belum diverifikasi. Buka tautan verifikasi yang dikirim ke email Anda, atau minta tautan baru.', undefined, 'ACCOUNT_PENDING');
 const accountInactive = () => new AppError(403, 'Akun Anda dinonaktifkan. Hubungi administrator.', undefined, 'ACCOUNT_INACTIVE');
 const accountLocked = (until, now) => {
   const minutes = Math.max(1, Math.ceil((until.getTime() - now.getTime()) / MINUTE_MS));
@@ -61,9 +63,31 @@ export function createAuthenticationService({
     return { accessToken: signAccessToken(user), refreshToken, tokenType: 'Bearer', user: toPublicUser(user) };
   }
 
+  /** Buat tautan verifikasi email baru (tautan lama dibatalkan) lalu kirim. Gagal kirim hanya dicatat. */
+  async function sendVerification(user) {
+    const token = generateToken();
+    const current = now();
+    await repository.createEmailVerificationToken({
+      userId: user.id,
+      tokenHash: hashToken(token),
+      expiresAt: new Date(current.getTime() + config.emailVerificationTtlHours * HOUR_MS),
+      now: current,
+    });
+    const link = `${config.appUrl}/verifikasi-email?token=${encodeURIComponent(token)}`;
+    try {
+      await mailer({
+        to: user.email,
+        ...emailVerifikasi({ nama: user.name, tautan: link, jam: config.emailVerificationTtlHours, appUrl: config.appUrl }),
+      });
+    } catch (error) {
+      logger.error('Gagal mengirim email verifikasi', { userId: user.id, error: error.message });
+    }
+  }
+
   return {
     /**
-     * Pendaftaran mandiri: akun dibuat sebagai pemilik aplikasi dan belum terverifikasi.
+     * Pendaftaran mandiri: akun dibuat sebagai pemilik aplikasi dan belum terverifikasi; tautan verifikasi
+     * dikirim ke email pendaftar. Akun aktif setelah tautan dibuka (tanpa persetujuan admin).
      * Respons selalu sama walau email/NRP sudah terdaftar agar keberadaan akun tidak bocor.
      */
     async register({ nama, status_kepegawaian: employmentStatus, pangkat: rank, nrp, satuan_id: unitId, email, password }) {
@@ -89,6 +113,37 @@ export function createAuthenticationService({
         isVerified: false,
       });
       auditor('auth.daftar', { targetUserId: user?.id, email, nrp, unitId, statusKepegawaian: employmentStatus });
+      if (user) await sendVerification(user);
+    },
+
+    /** Buka tautan verifikasi email: token sekali pakai & berbatas waktu; akun langsung bisa dipakai masuk. */
+    async verifyEmail({ token }) {
+      const record = await repository.findEmailVerificationTokenByHash(hashToken(token));
+      const current = now();
+      if (!record || record.usedAt || record.expiresAt <= current) {
+        auditor('auth.verifikasi_email.gagal', {
+          userId: record?.userId,
+          alasan: !record ? 'token_tidak_dikenal' : record.usedAt ? 'sudah_dipakai' : 'kedaluwarsa',
+        });
+        throw AppError.badRequest(INVALID_VERIFY_LINK);
+      }
+      const user = await repository.findUserById(record.userId);
+      if (!user) throw AppError.badRequest(INVALID_VERIFY_LINK);
+
+      const ok = await repository.verifyEmail({ userId: user.id, tokenId: record.id, verifiedAt: secondsPrecision(current) });
+      if (!ok) {
+        auditor('auth.verifikasi_email.gagal', { userId: user.id, alasan: 'sudah_dipakai' });
+        throw AppError.badRequest(INVALID_VERIFY_LINK);
+      }
+      auditor('auth.verifikasi_email.berhasil', { userId: user.id, email: user.email });
+    },
+
+    /** Kirim ulang tautan verifikasi. Respons selalu sama agar keberadaan/status akun tidak bocor. */
+    async resendVerification({ email }) {
+      const user = await repository.findUserByEmail(email);
+      const kirim = Boolean(user && !user.isVerified);
+      if (kirim) await sendVerification(user);
+      auditor('auth.verifikasi_email.kirim_ulang', { email, userId: user?.id, tautanDikirim: kirim });
     },
 
     /**

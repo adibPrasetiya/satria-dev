@@ -297,8 +297,8 @@
 			<div>
 				<h1 class="font-heading text-2xl font-semibold">Pendaftaran terkirim</h1>
 				<p class="mt-2 text-sm text-white/65">
-					Akun akan aktif setelah disetujui administrator. Pemberitahuan dikirim ke
-					<b class="text-white">{f.email}</b>.
+					Tautan verifikasi telah dikirim ke <b class="text-white">{f.email}</b>. Buka tautan itu
+					untuk mengaktifkan akun Anda.
 				</p>
 			</div>
 		</div>
@@ -310,6 +310,15 @@
 				<ArrowLeft /> Kembali ke halaman masuk
 			</Button>
 		</div>
+		<p class="mt-5 text-center text-sm text-white/55">
+			Tidak menerima email?
+			<a
+				href={`/verifikasi-email?${new URLSearchParams({ email: f.email })}`}
+				class="font-medium text-gold hover:underline"
+			>
+				Kirim ulang
+			</a>
+		</p>
 	</LayarAuthPenuh>
 {:else}
 	<LayarAuthPenuh label="Daftar akun SATRIA" {goyang}>

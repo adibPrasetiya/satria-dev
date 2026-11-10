@@ -16,16 +16,19 @@ Detail perilaku & keamanan: `backend/README.md`.
 |---|---|---|---|
 | GET | `/units?search=&limit=` | — (publik) | `Satuan[]` = `{ id, nama }[]`: satuan aktif yang namanya mengandung `search`, urut nama, maks. `limit` (bawaan 20, maks. 50) |
 | POST | `/auth/check-availability` | `{ nrp }` **atau** `{ email }` | `{ tersedia: boolean }`; 429 setelah 10 cek / 15 menit per IP |
-| POST | `/auth/register` | `PendaftaranAkun` (`satuan_id` dari `/units`; 400 bila tidak ada di daftar) | 202 — akun pemilik, **belum terverifikasi**; respons sama walau email/NRP sudah ada |
+| POST | `/auth/register` | `PendaftaranAkun` (`satuan_id` dari `/units`; 400 bila tidak ada di daftar) | 202 — akun pemilik, **belum terverifikasi**, tautan `APP_URL/verifikasi-email?token=…` dikirim ke email; respons sama walau email/NRP sudah ada |
 | POST | `/auth/login` | `{ email, password }` | `{ accessToken, refreshToken, tokenType, user: Pengguna }`; 401 salah, 403 `ACCOUNT_PENDING`/`ACCOUNT_INACTIVE`, 423 `ACCOUNT_LOCKED` |
 | POST | `/auth/refresh` | `{ refreshToken }` | sama seperti login |
 | POST | `/auth/forgot-password` | `{ email }` | 202 — respons selalu sama; email (Resend) berisi `APP_URL/reset-sandi?token=…` |
 | POST | `/auth/reset-password` | `{ token, password }` | 200; 400 bila tautan tidak valid/kedaluwarsa |
+| POST | `/auth/verify-email` | `{ token }` | 200 — akun terverifikasi & bisa masuk; 400 bila tautan tidak valid/kedaluwarsa/sudah dipakai |
+| POST | `/auth/resend-verification` | `{ email }` | 202 — respons selalu sama; tautan lama dibatalkan |
 | GET | `/auth/me` | — | `Pengguna` |
 | POST | `/auth/change-password` | `{ passwordLama, passwordBaru }` (login) | token baru (sesi lain dicabut); 400 bila sandi lama salah/sama; 429 setelah 5 gagal / 15 menit |
 | POST | `/auth/logout` | `{ refreshToken }` | 200 |
 | GET | `/users?status=&search=&page=&limit=` | — (admin) | `{ items: Pengguna[], meta }` |
-| PATCH | `/users/:id/verify` | `{ peran }` (admin) | `Pengguna` |
+| PATCH | `/users/:id/verify` | `{ peran }` (admin, verifikasi manual) | `Pengguna` |
+| PATCH | `/users/:id/role` | `{ peran }` (admin; bukan diri sendiri, akun terverifikasi) | `Pengguna`; sesi pengguna dicabut; 400 bila menurunkan admin aktif terakhir |
 | PATCH | `/users/:id/status` | `{ aktif }` (admin) | `Pengguna` |
 | GET | `/catalog` | — | `Katalog` dari database (termasuk butir nonaktif, `aktif: false`) |
 | POST | `/catalog/functions/:kode/controls` | `KontrolBaru` (admin) | `Kontrol`; 409 bila kode sudah ada |

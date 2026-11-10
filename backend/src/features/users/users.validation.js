@@ -19,6 +19,12 @@ export const verifyUserSchema = Joi.object({
     .default('pemilik'),
 });
 
+export const updateRoleSchema = Joi.object({
+  peran: Joi.string()
+    .valid(...ROLES)
+    .required(),
+});
+
 export const updateStatusSchema = Joi.object({
   aktif: Joi.boolean().required(),
 });

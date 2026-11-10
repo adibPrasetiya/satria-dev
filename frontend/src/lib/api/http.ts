@@ -188,6 +188,8 @@ export const httpApi: Api = {
 	lupaSandi: (email) => req('/auth/forgot-password', { method: 'POST', json: { email } }),
 	resetSandi: (resetToken, password) =>
 		req('/auth/reset-password', { method: 'POST', json: { token: resetToken, password } }),
+	verifikasiEmail: (verifToken) => req('/auth/verify-email', { method: 'POST', json: { token: verifToken } }),
+	kirimUlangVerifikasi: (email) => req('/auth/resend-verification', { method: 'POST', json: { email } }),
 
 	async listPengguna(filter = {}) {
 		const q = new URLSearchParams({ limit: '100', status: filter.status ?? '', search: filter.search ?? '' });
@@ -197,6 +199,7 @@ export const httpApi: Api = {
 	verifikasiPengguna: (id, peran) => req(`/users/${id}/verify`, { method: 'PATCH', json: { peran } }),
 	tolakPendaftaran: (id) => req(`/users/${id}`, { method: 'DELETE' }),
 	ubahStatusPengguna: (id, aktif) => req(`/users/${id}/status`, { method: 'PATCH', json: { aktif } }),
+	ubahPeranPengguna: (id, peran) => req(`/users/${id}/role`, { method: 'PATCH', json: { peran } }),
 	async listSatuanAdmin({ search = '', status = '', jenis = '', provinsi = '', induk = '', page = 1, limit = 50 }) {
 		const q = new URLSearchParams({ search, status, jenis, provinsi, induk, page: String(page), limit: String(limit) });
 		const data = await req<{ items: SatuanAdmin[]; meta: { total: number; totalPages: number; limit: number } }>(

@@ -79,6 +79,10 @@ export interface Api {
 	lupaSandi(email: string): Promise<void>;
 	/** Set kata sandi baru dari tautan email (token sekali pakai). */
 	resetSandi(token: string, password: string): Promise<void>;
+	/** Buka tautan verifikasi email pendaftaran (token sekali pakai); akun langsung bisa dipakai masuk. */
+	verifikasiEmail(token: string): Promise<void>;
+	/** Kirim ulang tautan verifikasi; respons selalu sama, terdaftar atau tidak (cegah enumerasi akun). */
+	kirimUlangVerifikasi(email: string): Promise<void>;
 	/** Cabut sesi di server (refresh token). */
 	logout(): Promise<void>;
 	/** Ganti kata sandi akun yang sedang masuk; sesi di perangkat lain dicabut, sesi ini tetap berjalan. */
@@ -137,11 +141,13 @@ export interface Api {
 	analisisAi(scanId: string): Promise<Scan>;
 
 	listPengguna(filter?: { status?: StatusAkun | ''; search?: string }): Promise<Pengguna[]>;
-	/** Setujui pendaftaran sekaligus tetapkan peran. */
+	/** Verifikasi manual oleh admin (cadangan bila email verifikasi tidak sampai) sekaligus tetapkan peran. */
 	verifikasiPengguna(id: string, peran: Peran): Promise<Pengguna>;
 	/** Tolak pendaftaran (hanya akun yang belum diverifikasi; datanya dihapus). */
 	tolakPendaftaran(id: string): Promise<void>;
 	ubahStatusPengguna(id: string, aktif: boolean): Promise<Pengguna>;
+	/** Ubah peran akun terverifikasi; sesi pengguna itu dicabut agar ia masuk ulang dengan peran baru. */
+	ubahPeranPengguna(id: string, peran: Peran): Promise<Pengguna>;
 
 	/**
 	 * Daftar satuan kerja untuk admin (termasuk nonaktif), dengan pencarian & paginasi di server.
