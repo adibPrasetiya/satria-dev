@@ -117,8 +117,10 @@ def _ep(base: str, metode: str, path: str, fields=(), url_path: str | None = Non
             "request_fields": [dict(f) for f in fields], "sumber": ["browser"], **extra}
 
 
-def _ctx(base: str, endpoints: list[dict], sid: str = "s-inpv") -> ScanContext:
-    return ScanContext.from_dict({"scan_id": sid, "aplikasi_id": "a", "base_url": base, "endpoints": endpoints})
+def _ctx(base: str, endpoints: list[dict], sid: str = "s-inpv", *, izin: bool = True) -> ScanContext:
+    # izin=True → izin intrusif (uji menulis POST diaktifkan); default True untuk menguji jalur tulis.
+    return ScanContext.from_dict({"scan_id": sid, "aplikasi_id": "a", "base_url": base, "endpoints": endpoints,
+                                  "intrusif": {"izinkan_penguncian": izin}})
 
 
 def _metode(mid: str, check_id: str, titik: str = "api") -> MetodeSpec:
@@ -147,6 +149,22 @@ def test_cakupan_semua_endpoint_dan_pengaman_mutasi(api):
     assert not any(h in ("PUT /api/item/7", "DELETE /api/item/7") for h in _Api.hit)
     assert any(h.startswith("PUT /api/item/") for h in _Api.hit)
     assert "POST /api/password/reset" not in _Api.hit and "PUT /api/users/me" not in _Api.hit
+
+
+def test_post_fuzz_butuh_izin_intrusif(api):
+    # Tanpa izin intrusif, endpoint POST (menyimpan data) TIDAK difuzz; GET/PUT-ke-ID-fiktif tetap.
+    eps = [
+        _ep(api, "POST", "/api/validasi", F_VALIDASI),
+        _ep(api, "GET", "/api/banners"),
+        _ep(api, "PUT", "/api/item/{id}", ({"nama": "nama", "lokasi": "body"},), url_path="/api/item/7"),
+    ]
+    s = inpv.sapuan(_ctx(api, eps, sid="noizin", izin=False))
+    dilewati = {r.label: r.alasan for r in s.rencana if r.status == "dilewati"}
+    assert "POST /api/validasi" in dilewati and "izin intrusif" in dilewati["POST /api/validasi"]
+    assert "POST /api/validasi" not in _Api.hit, "POST tak boleh dikirim tanpa izin intrusif"
+    # GET & PUT (ke ID fiktif) tetap diuji.
+    assert any(r.label == "GET /api/banners" for r in s.rencana if r.status != "dilewati")
+    assert any(h.startswith("PUT /api/item/") for h in _Api.hit)
 
 
 def test_id_fiktif():

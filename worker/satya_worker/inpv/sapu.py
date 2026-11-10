@@ -155,8 +155,11 @@ def _jalankan(ctx: ScanContext) -> Sapuan:
     awal_ai = penggunaan.potret()
     base_host = pf.host(ctx.base_url)
     izin = hosts_target(ctx)
-    hasil.rencana = ck.rencanakan(_endpoints(ctx), base_host, izin)
+    izin_tulis = bool(getattr(ctx.intrusif, "izinkan_penguncian", False))
+    hasil.rencana = ck.rencanakan(_endpoints(ctx), base_host, izin, izin_tulis=izin_tulis)
     ctx.catat("info", "  " + hasil.teks_cakupan(rencana=True))
+    if not izin_tulis and any(str(r.endpoint.get("metode_http", "")).upper() == "POST" for r in hasil.rencana):
+        ctx.catat("info", "  Catatan: endpoint POST tidak difuzz (uji menulis butuh izin intrusif).")
     profil = _profil_semua(ctx, hasil.rencana, hasil)
     if hasil.ai.get("profil"):
         i = hasil.ai["profil"]

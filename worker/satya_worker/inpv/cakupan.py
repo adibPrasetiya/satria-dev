@@ -62,7 +62,11 @@ def id_fiktif(url: str, path_template: str) -> str:
     return urlunsplit((s.scheme, s.netloc, "/".join(bagian), s.query, ""))
 
 
-def rencanakan(endpoints: list[dict[str, Any]], base_host: str, host_izin: set[str]) -> list[Rencana]:
+def rencanakan(endpoints: list[dict[str, Any]], base_host: str, host_izin: set[str],
+               *, izin_tulis: bool = False) -> list[Rencana]:
+    """Rencana cakupan. `izin_tulis` (dari `ctx.intrusif.izinkan_penguncian`): bila False, endpoint
+    POST (create — menyimpan data persisten) TIDAK difuzz; mutasi PUT/PATCH/DELETE tetap diuji karena
+    diarahkan ke ID FIKTIF (non-destruktif). GET query/path-fuzz selalu aman."""
     out: list[Rencana] = []
     for ep in endpoints:
         metode = str(ep.get("metode_http") or "GET").upper()
@@ -85,6 +89,10 @@ def rencanakan(endpoints: list[dict[str, Any]], base_host: str, host_izin: set[s
             continue
         if (ep.get("titik_uji") or "") in ("unggah_file", "unduh_file") or "multipart" in str(ep.get("content_type") or ""):
             lewati("operasi berkas — diuji fungsi FILE")
+            continue
+        if metode == "POST" and not izin_tulis:
+            # POST membuat data persisten di aplikasi → hanya difuzz saat izin intrusif diberikan.
+            lewati("uji menulis (POST) butuh izin intrusif — tidak difuzz tanpa persetujuan")
             continue
         if metode in _MUTASI and not ada_id:
             lewati(f"{metode} tanpa ID — akan mengubah data akun uji")
