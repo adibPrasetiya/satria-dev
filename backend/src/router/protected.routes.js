@@ -3,6 +3,7 @@ import { applicationsRouter } from '../features/applications/applications.route.
 import { authProtectedRouter } from '../features/authentication/authentication.route.js';
 import { catalogRouter } from '../features/catalog/catalog.route.js';
 import { dashboardRouter } from '../features/dashboard/dashboard.route.js';
+import { kerentananRouter } from '../features/kerentanan/kerentanan.route.js';
 import { appsScanRouter, scansRouter } from '../features/scans/scans.route.js';
 import { unitsAdminRouter } from '../features/units/units.admin.route.js';
 import { usersRouter } from '../features/users/users.route.js';
@@ -22,6 +23,7 @@ router.use('/catalog', catalogRouter);
 router.use('/scans', scansRouter);
 router.use('/workers', workersRouter);
 router.use('/dashboard', dashboardRouter);
+router.use('/kerentanan', kerentananRouter);
 // POST /apps/:id/scans & PUT /apps/:id/scan-target (kontrak frontend memakai /apps, bukan /applications).
 router.use('/apps', appsScanRouter);
 

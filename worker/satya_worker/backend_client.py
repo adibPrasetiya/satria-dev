@@ -70,6 +70,13 @@ class BackendClient:
         resp.raise_for_status()
         return resp.json().get("data") or {}
 
+    def kirim_komponen(self, scan_id: str, items: list[dict[str, Any]]) -> dict[str, Any]:
+        """Kirim komponen teknologi hasil fingerprint (banner/nuclei/bundle JS) → inventaris aset
+        untuk pencocokan CVE di backend."""
+        resp = self._klien.post(f"{self._base}/internal/scans/{scan_id}/komponen", json={"items": items})
+        resp.raise_for_status()
+        return resp.json().get("data") or {}
+
     def unggah_gambar(self, scan_id: str, gambar_png: bytes) -> Optional[str]:
         """Unggah bukti gambar (PNG) untuk sebuah scan; return URL capability atau None bila gagal.
         Best-effort: kegagalan tak boleh menjatuhkan check (bukti teks tetap ada)."""

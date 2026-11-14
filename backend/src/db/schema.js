@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   char,
+  date,
   datetime,
   decimal,
   foreignKey,
@@ -10,8 +11,10 @@ import {
   json,
   mysqlEnum,
   mysqlTable,
+  primaryKey,
   smallint,
   text,
+  unique,
   varchar,
 } from 'drizzle-orm/mysql-core';
 import { ROLES } from '../config/app.js';
@@ -400,3 +403,152 @@ export const workers = mysqlTable('workers', {
   mulaiPada: datetime('mulai_pada').notNull().default(sql`CURRENT_TIMESTAMP`),
   terakhirTerlihat: datetime('terakhir_terlihat').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// ---------------------------------------------------------------------------
+// Inventaris komponen aplikasi (produk + versi) — dasar pencocokan CVE ke aset.
+
+export const KATEGORI_KOMPONEN = ['frontend', 'backend', 'database', 'server', 'library', 'os', 'lainnya'];
+// 'formulir' = disinkron otomatis dari field teknologi aset (ditimpa tiap kali field itu diubah);
+// 'manual' = koreksi/tambahan pengguna (tak pernah ditimpa otomatis); sisanya hasil recon worker.
+export const SUMBER_KOMPONEN = ['formulir', 'manual', 'banner', 'nuclei', 'bundle_js', 'tls'];
+export const KEYAKINAN_KOMPONEN = ['tinggi', 'sedang', 'rendah'];
+
+export const aplikasiKomponen = mysqlTable(
+  'aplikasi_komponen',
+  {
+    id: id(),
+    applicationId: bigint('application_id', { mode: 'number', unsigned: true })
+      .notNull()
+      .references(() => applications.id, { onDelete: 'cascade' }),
+    kategori: mysqlEnum('kategori', KATEGORI_KOMPONEN).notNull(),
+    // vendor/produk mengikuti penamaan CPE NVD (mis. f5/nginx); produk tak dikenal kamus → vendor NULL.
+    vendor: varchar('vendor', { length: 100 }),
+    produk: varchar('produk', { length: 100 }).notNull(),
+    nama: varchar('nama', { length: 100 }).notNull(),
+    versi: varchar('versi', { length: 60 }),
+    cpe: varchar('cpe', { length: 255 }),
+    purl: varchar('purl', { length: 255 }),
+    sumber: mysqlEnum('sumber', SUMBER_KOMPONEN).notNull(),
+    keyakinan: mysqlEnum('keyakinan', KEYAKINAN_KOMPONEN).notNull(),
+    // Teks asli yang menjadi dasar (isian formulir, nilai header, dsb.).
+    bukti: varchar('bukti', { length: 255 }),
+    scanId: bigint('scan_id', { mode: 'number', unsigned: true }).references(() => scans.id, { onDelete: 'set null' }),
+    terakhirTerlihat: datetime('terakhir_terlihat').notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique('aplikasi_komponen_unik').on(table.applicationId, table.produk, table.sumber),
+    index('aplikasi_komponen_vendor_produk_idx').on(table.vendor, table.produk),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Intel kerentanan (NVD/KEV/EPSS/OSV) & pencocokannya ke aset.
+
+export const STATUS_ANALISIS_CVE = ['menunggu', 'dianalisis', 'ditolak'];
+// 'terdampak'/'kemungkinan' = hasil pencocokan otomatis; 'ditangani'/'dikecualikan' = keputusan manusia
+// (tak pernah ditimpa); 'kedaluwarsa' = dulu cocok, kini tidak lagi (mis. versi komponen sudah diperbarui).
+export const STATUS_KERENTANAN = ['terdampak', 'kemungkinan', 'ditangani', 'dikecualikan', 'kedaluwarsa'];
+export const STATUS_KERENTANAN_MANUAL = ['ditangani', 'dikecualikan'];
+
+export const cve = mysqlTable(
+  'cve',
+  {
+    id: varchar('id', { length: 40 }).primaryKey(),
+    ringkasan: text('ringkasan'),
+    dipublikasiPada: datetime('dipublikasi_pada'),
+    diubahPada: datetime('diubah_pada'),
+    cvssSkor: decimal('cvss_skor', { precision: 3, scale: 1 }),
+    cvssVektor: varchar('cvss_vektor', { length: 200 }),
+    severitas: mysqlEnum('severitas', SEVERITIES),
+    cwe: json('cwe').$type(),
+    referensi: json('referensi').$type(),
+    statusAnalisis: mysqlEnum('status_analisis', STATUS_ANALISIS_CVE).notNull().default('menunggu'),
+    kev: boolean('kev').notNull().default(false),
+    kevDitambahkan: date('kev_ditambahkan', { mode: 'string' }),
+    kevTenggat: date('kev_tenggat', { mode: 'string' }),
+    kevRansomware: boolean('kev_ransomware').notNull().default(false),
+    epss: decimal('epss', { precision: 6, scale: 5 }),
+    epssPersentil: decimal('epss_persentil', { precision: 6, scale: 5 }),
+    sumber: mysqlEnum('sumber', ['nvd', 'osv']).notNull().default('nvd'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index('cve_kev_idx').on(table.kev)],
+);
+
+export const cveCpe = mysqlTable(
+  'cve_cpe',
+  {
+    id: id(),
+    cveId: varchar('cve_id', { length: 40 })
+      .notNull()
+      .references(() => cve.id, { onDelete: 'cascade' }),
+    vendor: varchar('vendor', { length: 100 }).notNull(),
+    produk: varchar('produk', { length: 100 }).notNull(),
+    // Versi persis dari kriteria CPE (bila bukan rentang); NULL = semua versi / lihat rentang.
+    versi: varchar('versi', { length: 60 }),
+    versiMulaiIncl: varchar('versi_mulai_incl', { length: 60 }),
+    versiMulaiExcl: varchar('versi_mulai_excl', { length: 60 }),
+    versiAkhirIncl: varchar('versi_akhir_incl', { length: 60 }),
+    versiAkhirExcl: varchar('versi_akhir_excl', { length: 60 }),
+  },
+  (table) => [index('cve_cpe_vendor_produk_idx').on(table.vendor, table.produk)],
+);
+
+export const cvePaket = mysqlTable(
+  'cve_paket',
+  {
+    cveId: varchar('cve_id', { length: 40 })
+      .notNull()
+      .references(() => cve.id, { onDelete: 'cascade' }),
+    purl: varchar('purl', { length: 255 }).notNull(),
+    versi: varchar('versi', { length: 60 }).notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'cve_paket_pk', columns: [table.cveId, table.purl, table.versi] }),
+    index('cve_paket_purl_idx').on(table.purl, table.versi),
+  ],
+);
+
+export const sinkronIntel = mysqlTable('sinkron_intel', {
+  kunci: varchar('kunci', { length: 255 }).primaryKey(),
+  kursor: datetime('kursor'),
+  status: mysqlEnum('status', ['berhasil', 'gagal', 'berjalan']).notNull(),
+  pesan: text('pesan'),
+  updatedAt: updatedAt(),
+});
+
+export const asetKerentanan = mysqlTable(
+  'aset_kerentanan',
+  {
+    id: id(),
+    applicationId: bigint('application_id', { mode: 'number', unsigned: true })
+      .notNull()
+      .references(() => applications.id, { onDelete: 'cascade' }),
+    cveId: varchar('cve_id', { length: 40 })
+      .notNull()
+      .references(() => cve.id, { onDelete: 'cascade' }),
+    vendor: varchar('vendor', { length: 100 }),
+    produk: varchar('produk', { length: 100 }).notNull(),
+    namaKomponen: varchar('nama_komponen', { length: 100 }).notNull(),
+    versi: varchar('versi', { length: 60 }),
+    sumberKomponen: varchar('sumber_komponen', { length: 20 }).notNull(),
+    status: mysqlEnum('status', STATUS_KERENTANAN).notNull(),
+    alasan: varchar('alasan', { length: 500 }).notNull(),
+    prioritas: smallint('prioritas', { unsigned: true }).notNull().default(0),
+    catatan: varchar('catatan', { length: 1000 }),
+    ditanganiOleh: bigint('ditangani_oleh', { mode: 'number', unsigned: true }).references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    ditanganiPada: datetime('ditangani_pada'),
+    diberitahuPada: datetime('diberitahu_pada'),
+    pertamaDitemukan: datetime('pertama_ditemukan').notNull().default(sql`CURRENT_TIMESTAMP`),
+    terakhirDievaluasi: datetime('terakhir_dievaluasi').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    unique('aset_kerentanan_unik').on(table.applicationId, table.cveId, table.produk),
+    index('aset_kerentanan_status_idx').on(table.status, table.prioritas),
+  ],
+);

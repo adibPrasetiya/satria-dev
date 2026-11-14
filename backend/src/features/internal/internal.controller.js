@@ -39,6 +39,11 @@ export const internalController = {
     return success(res, { message: 'Penemuan diterima', data });
   },
 
+  async komponen(req, res) {
+    const data = await internalService.komponen(req.params.id, req.body);
+    return success(res, { message: 'Komponen diterima', data });
+  },
+
   async evidence(req, res) {
     const data = await simpanGambar(req.params.id, req.body.gambar);
     return success(res, { message: 'Bukti gambar disimpan', data });

@@ -26,6 +26,7 @@ import type {
 import { buatSeed, DAFTAR_SATUAN, PENGGUNA_DEMO, type StateMock } from './seed';
 import { analisisTiruan, hasilMetode } from './simulasi';
 import { peristiwaUji } from './uji';
+import { buatMockKerentanan } from './kerentanan';
 import { GalatApi } from '#lib/api/http.js';
 import { JENIS_SATUAN, namaProvinsi } from '#lib/data/satuan.js';
 import { dataContoh, rincianProvinsiContoh, SIKLUS_MS } from '#lib/peta/contoh.js';
@@ -299,6 +300,8 @@ for (const s of state.scan) if (s.status === 'berjalan') setTimeout(() => jalank
 // ---------------------------------------------------------------------------
 
 export const mockApi: Api = {
+	...buatMockKerentanan(() => state.aplikasi),
+
 	// Mock tidak memeriksa kata sandi; pesan & urutan pemeriksaan mengikuti backend.
 	async login(email) {
 		await jeda();

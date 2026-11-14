@@ -84,6 +84,29 @@ Tabel `applications` hanya menyimpan **data dasar** aset: nama, deskripsi, satua
 lingkungan, klasifikasi data, dan teknologi. Persiapan pengujian (verifikasi kepemilikan, titik uji, akun uji, izin
 intrusif) disimpan terpisah per pengujian (fitur pengujian, menyusul).
 
+## Intel kerentanan (CVE ↔ aset)
+Fitur ini mencocokkan CVE terbaru dengan teknologi yang dipakai aset. Hasilnya **indikatif** dan tidak memengaruhi nilai kelaikan.
+- **Inventaris komponen** (`aplikasi_komponen`): diisi dari field teknologi aset (`formulir`, disinkron otomatis), dari
+  koreksi pengguna (`manual`, selalu menang), dan dari fingerprint worker saat recon (`banner`, `nuclei`, `bundle_js`).
+  Teks bebas ("Laravel 10 + PHP 8.2", "nginx/1.18.0") diurai dengan `src/config/kamusKomponen.js` (alias → CPE/purl).
+  Tambahkan entri kamus bila produk yang sering dipakai belum dikenali. Data lama dibentuk ulang lewat `npm run komponen:backfill`.
+- **Sinkron intel** (`npm run cve:sync`, PM2 `satya-sync-cve` tiap 6 jam, atau tombol admin di menu *Kerentanan*):
+  backfill NVD per produk inventaris dan perubahan inkremental (`lastModStartDate`), CISA KEV, skor EPSS, serta OSV untuk paket
+  berversi. Hanya CVE yang relevan dengan inventaris yang disimpan. Kunci di `sinkron_intel` mencegah dua sinkron berjalan bersamaan.
+  Env: `CVE_SYNC_ENABLED`, `NVD_API_KEY` (disarankan), `CVE_OSV_ENABLED`, `CVE_NOTIF_EMAIL`, proxy `HTTPS_PROXY` +
+  `NODE_USE_ENV_PROXY=1`.
+- **Pencocokan** (`aset_kerentanan`): versi komponen dibandingkan dengan rentang CPE NVD. Hasilnya:
+  - `terdampak`: versi berada dalam rentang rentan.
+  - `kemungkinan`: versi tidak diketahui atau kurang rinci, atau keyakinan identifikasi rendah. Komponen tanpa versi hanya dicocokkan
+    dengan CVE KEV, atau CVE tinggi/kritis yang terbit ≤ 2 tahun terakhir.
+  - `kedaluwarsa`: dulu cocok, kini tidak lagi.
+
+  Status `ditangani`/`dikecualikan` (wajib catatan) tidak pernah ditimpa pencocokan otomatis. Prioritas 0–100 dihitung dari KEV,
+  lalu EPSS, lalu CVSS, ditambah bobot lingkungan produksi dan klasifikasi data. Kecocokan baru yang KEV atau kritis dikirim lewat email ke pemilik aset.
+- Endpoint: `GET/POST /applications/:id/komponen`, `DELETE /applications/:id/komponen/:komponenId`, `GET /kerentanan`,
+  `GET /kerentanan/ringkasan`, `PATCH /kerentanan/:id/status`, `GET|POST /kerentanan/sinkron` (asesor/admin | admin),
+  worker: `POST /internal/scans/:id/komponen`.
+
 ## Katalog kontrol
 Katalog (fungsi keamanan → kontrol → metode pengujian, serta titik uji) disimpan di tabel `catalog_*`. Isi awal dari
 `controls/bssn_web.yaml` lewat `npm run catalog:seed`; perintah ini **menolak berjalan bila katalog sudah terisi** agar

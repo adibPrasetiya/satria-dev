@@ -17,6 +17,8 @@
     "catalog:seed": "node src/main.js seed-catalog",
     "catalog:sync": "node src/main.js sync-catalog",
     "satuan:seed": "node src/main.js seed-satuan",
+    "komponen:backfill": "node src/main.js backfill-komponen",
+    "cve:sync": "node src/main.js sync-cve",
     "scan-target:seed": "node scripts/seed-scan-target.mjs"
   },
   "dependencies": {

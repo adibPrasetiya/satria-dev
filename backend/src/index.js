@@ -2,6 +2,7 @@ import { app } from './app/app.js';
 import { APP_NAME, APP_VERSION } from './config/app.js';
 import { env } from './config/env.js';
 import { pool } from './db/index.js';
+import { pasangLanggananKomponen } from './features/kerentanan/kerentanan.langganan.js';
 import { errorMessage } from './utils/errorMessage.js';
 import { LOG_ROOT, logger } from './utils/logger.js';
 
@@ -31,6 +32,8 @@ async function checkDatabase() {
 
 export function startServer() {
   logConfig();
+  // Pencocokan CVE ulang saat komponen aset berubah (formulir, koreksi manual, hasil recon).
+  pasangLanggananKomponen();
   const server = app.listen(env.port, () => {
     logger.info(`${APP_NAME} ${APP_VERSION} API berjalan di http://localhost:${env.port} (${env.nodeEnv})`);
     checkDatabase();

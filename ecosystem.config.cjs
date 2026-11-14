@@ -27,6 +27,19 @@ module.exports = {
       max_restarts: 10,
       env: { PYTHONUNBUFFERED: '1' }
       // BACKEND_URL, WORKER_TOKEN dibaca worker dari worker/.env
+    },
+    {
+      // Sinkron intel kerentanan (NVD + CISA KEV + EPSS + OSV) lalu cocokkan ke komponen aset.
+      // Proses sekali jalan yang dipicu cron tiap 6 jam; aman bila tumpang-tindih (kunci di DB).
+      name: 'satya-sync-cve',
+      cwd: './backend',
+      script: 'src/main.js',
+      args: 'sync-cve',
+      instances: 1,
+      autorestart: false,
+      cron_restart: '15 */6 * * *',
+      env: { NODE_ENV: 'production' }
+      // NVD_API_KEY, CVE_SYNC_ENABLED, HTTPS_PROXY/NODE_USE_ENV_PROXY dibaca dari backend/.env
     }
   ]
 };

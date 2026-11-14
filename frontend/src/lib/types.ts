@@ -543,3 +543,121 @@ export interface PersiapanAuth {
 	dokumen: { kebijakan_masa_berlaku: string; bukti_hashing: string };
 	diperbarui_pada?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Inventaris komponen aset & intel kerentanan (CVE) — lihat backend features/komponen & kerentanan.
+
+export type KategoriKomponen = 'frontend' | 'backend' | 'database' | 'server' | 'library' | 'os' | 'lainnya';
+export type SumberKomponen = 'formulir' | 'manual' | 'banner' | 'nuclei' | 'bundle_js' | 'tls';
+export type KeyakinanKomponen = 'tinggi' | 'sedang' | 'rendah';
+
+export interface KomponenAset {
+	id: string;
+	kategori: KategoriKomponen;
+	vendor: string | null;
+	produk: string;
+	nama: string;
+	versi: string | null;
+	cpe: string | null;
+	purl: string | null;
+	sumber: SumberKomponen;
+	keyakinan: KeyakinanKomponen;
+	bukti: string | null;
+	scan_id: string | null;
+	terakhir_terlihat: string;
+	/** Dikenali kamus (punya CPE/purl) sehingga bisa dicocokkan ke CVE. */
+	dikenali: boolean;
+	/** Baris yang dipakai pencocokan untuk produk ini (manual > berversi > formulir > recon). */
+	dipakai: boolean;
+}
+
+export interface InventarisKomponen {
+	items: KomponenAset[];
+	ringkasan: { produk: number; dikenali: number; berversi: number };
+}
+
+export type StatusKerentanan = 'terdampak' | 'kemungkinan' | 'ditangani' | 'dikecualikan' | 'kedaluwarsa';
+export type TingkatPrioritas = 'segera' | 'tinggi' | 'sedang' | 'rendah';
+
+export interface KerentananAset {
+	id: string;
+	aplikasi: { id: string; nama: string; satuan: string; lingkungan: Lingkungan };
+	komponen: { vendor: string | null; produk: string; nama: string; versi: string | null; sumber: SumberKomponen };
+	cve: {
+		id: string;
+		ringkasan: string | null;
+		dipublikasi_pada: string | null;
+		diubah_pada: string | null;
+		cvss: number | null;
+		cvss_vektor: string | null;
+		severitas: Severity | null;
+		cwe: string[];
+		referensi: string[];
+		status_analisis: 'menunggu' | 'dianalisis' | 'ditolak';
+		/** Dieksploitasi aktif (CISA Known Exploited Vulnerabilities). */
+		kev: boolean;
+		kev_ditambahkan: string | null;
+		kev_tenggat: string | null;
+		kev_ransomware: boolean;
+		/** Probabilitas eksploitasi 30 hari (FIRST EPSS), 0–1. */
+		epss: number | null;
+		epss_persentil: number | null;
+		sumber: 'nvd' | 'osv';
+		tautan: string;
+	};
+	status: StatusKerentanan;
+	alasan: string;
+	prioritas: number;
+	tingkat: TingkatPrioritas;
+	catatan: string | null;
+	ditangani_oleh: string | null;
+	ditangani_pada: string | null;
+	pertama_ditemukan: string;
+	terakhir_dievaluasi: string;
+}
+
+export interface RingkasanKerentanan {
+	terdampak: number;
+	kemungkinan: number;
+	ditangani: number;
+	dikecualikan: number;
+	kev: number;
+	kritis: number;
+	baru7hari: number;
+	aplikasi: number;
+}
+
+export interface FilterKerentanan {
+	page?: number;
+	limit?: 10 | 25 | 50 | 100;
+	aplikasi_id?: string;
+	/** Dipisah koma; kosong = aktif (terdampak, kemungkinan). */
+	status?: string;
+	kev?: boolean;
+	severitas?: Severity | '';
+	search?: string;
+	sort?: 'prioritas' | 'terbaru' | 'publikasi';
+}
+
+export interface HalamanKerentanan {
+	items: KerentananAset[];
+	meta: { page: number; limit: number; total: number; totalPages: number; ringkasan: RingkasanKerentanan };
+}
+
+export interface StatusLangkahSinkron {
+	status: 'berhasil' | 'gagal' | 'berjalan';
+	pesan: string | null;
+	kursor: string | null;
+	diperbarui: string;
+}
+
+export interface StatusSinkronIntel {
+	aktif: boolean;
+	kunci_nvd: boolean;
+	osv: boolean;
+	global: StatusLangkahSinkron | null;
+	nvd: StatusLangkahSinkron | null;
+	kev: StatusLangkahSinkron | null;
+	epss: StatusLangkahSinkron | null;
+	produk: ({ produk: string } & StatusLangkahSinkron)[];
+}

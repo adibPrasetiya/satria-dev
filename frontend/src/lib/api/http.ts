@@ -296,6 +296,21 @@ export const httpApi: Api = {
 
 	analisisAi: (scanId) => req(`/scans/${scanId}/ai`, { method: 'POST' }),
 
+	getKomponen: (aplikasiId) => req(`/applications/${aplikasiId}/komponen`),
+	tambahKomponen: (aplikasiId, data) => req(`/applications/${aplikasiId}/komponen`, { method: 'POST', json: data }),
+	hapusKomponen: (aplikasiId, komponenId) => req(`/applications/${aplikasiId}/komponen/${komponenId}`, { method: 'DELETE' }),
+	cariKerentanan(filter) {
+		const q = new URLSearchParams();
+		for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== '' && v !== false) q.set(k, String(v));
+		return req(`/kerentanan?${q}`);
+	},
+	ringkasanKerentanan: () => req('/kerentanan/ringkasan'),
+	ubahStatusKerentanan: (id, data) => req(`/kerentanan/${id}/status`, { method: 'PATCH', json: data }),
+	statusSinkronIntel: () => req('/kerentanan/sinkron'),
+	mulaiSinkronIntel: async () => {
+		await req('/kerentanan/sinkron', { method: 'POST' });
+	},
+
 	getPengaturanAi: () => req('/settings/ai'),
 	simpanPengaturanAi: (p) => req('/settings/ai', { method: 'PUT', json: p })
 };

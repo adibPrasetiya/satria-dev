@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { requireRole } from '../../middleware/requireRole.js';
 import { validate } from '../../middleware/validate.js';
+import { komponenController } from '../komponen/komponen.controller.js';
+import { komponenParamsSchema, tambahKomponenSchema } from '../komponen/komponen.validation.js';
 import { applicationsController } from './applications.controller.js';
 import {
   applicationIdSchema,
@@ -35,3 +37,14 @@ applicationsRouter.post(
   validate(applicationIdSchema, 'params'),
   applicationsController.pulihkan,
 );
+
+// Inventaris komponen (dasar pencocokan CVE): semua peran dapat melihat aset yang terlihat olehnya; koreksi manual
+// oleh pemilik (aset satuannya), asesor, atau admin.
+applicationsRouter.get('/:id/komponen', validate(applicationIdSchema, 'params'), komponenController.list);
+applicationsRouter.post(
+  '/:id/komponen',
+  validate(applicationIdSchema, 'params'),
+  validate(tambahKomponenSchema),
+  komponenController.tambah,
+);
+applicationsRouter.delete('/:id/komponen/:komponenId', validate(komponenParamsSchema, 'params'), komponenController.hapus);

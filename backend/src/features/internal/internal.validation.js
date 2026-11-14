@@ -70,6 +70,22 @@ export const discoverySchema = Joi.object({
   ringkasan: Joi.object().unknown(true).default({}),
 }).unknown(true);
 
+// Komponen teknologi hasil fingerprint worker; teks diurai backend dengan parser yang sama dengan formulir aset.
+export const komponenSchema = Joi.object({
+  items: Joi.array()
+    .items(
+      Joi.object({
+        sumber: Joi.string().valid('banner', 'nuclei', 'bundle_js', 'tls').required(),
+        kategori: Joi.string().valid('frontend', 'backend', 'database', 'server', 'library', 'os', 'lainnya').default('lainnya'),
+        teks: Joi.string().trim().min(2).max(200).required(),
+        keyakinan: Joi.string().valid('tinggi', 'sedang', 'rendah').default('sedang'),
+        bukti: Joi.string().allow('').max(255).default(''),
+      }),
+    )
+    .max(100)
+    .required(),
+});
+
 export const logSchema = Joi.object({
   level: Joi.string().valid('info', 'peringatan', 'galat').default('info'),
   pesan: Joi.string().allow('').max(500).required(),

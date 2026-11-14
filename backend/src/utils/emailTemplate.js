@@ -166,3 +166,47 @@ export function emailVerifikasi({ nama, tautan, jam, appUrl }) {
     html: bingkaiEmail({ judul: subject, pratinjau: `Tautan verifikasi email berlaku ${jam} jam.`, isiHtml, appUrl }),
   };
 }
+
+/**
+ * Peringatan kerentanan baru pada aset (CVE dieksploitasi aktif/KEV atau kritis yang cocok dengan komponen aset).
+ * @param {{ nama: string, aplikasi: string, temuan: {cveId:string, namaKomponen:string, versi:?string, kev:boolean, severitas:?string}[], tautan: string, appUrl: string }} p
+ */
+export function emailKerentanan({ nama, aplikasi, temuan, tautan, appUrl }) {
+  const subject = `[${APP_NAME}] ${temuan.length} kerentanan mendesak pada ${aplikasi}`;
+  const baris = (t) =>
+    `${t.cveId} — ${t.namaKomponen}${t.versi ? ` ${t.versi}` : ''}${t.kev ? ' · DIEKSPLOITASI AKTIF (KEV)' : ''}${t.severitas ? ` · ${t.severitas}` : ''}`;
+  const text = [
+    `Halo ${nama},`,
+    '',
+    `Pencocokan intel kerentanan menemukan CVE mendesak yang berdampak pada komponen aplikasi "${aplikasi}":`,
+    ...temuan.map((t) => `- ${baris(t)}`),
+    '',
+    `Tinjau dan tindak lanjuti di: ${tautan}`,
+    '',
+    `— ${APP_NAME} · Asesmen Kelaikan Keamanan Aplikasi`,
+  ].join('\n');
+
+  const isiHtml = `
+        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:${WARNA.teks};">Kerentanan mendesak terdeteksi</h1>
+        <p style="margin:0 0 14px;">Halo <strong>${escapeHtml(nama)}</strong>,</p>
+        <p style="margin:0 0 16px;">Pencocokan intel kerentanan menemukan CVE mendesak yang berdampak pada komponen aplikasi <strong>${escapeHtml(aplikasi)}</strong>:</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;">
+          ${temuan
+            .map(
+              (t) => `<tr><td style="border-left:3px solid ${WARNA.aksen};background:${WARNA.aksenTipis};padding:10px 14px;font-size:13px;line-height:1.5;color:${WARNA.teks};">
+            <strong>${escapeHtml(t.cveId)}</strong> — ${escapeHtml(t.namaKomponen)}${t.versi ? ` ${escapeHtml(t.versi)}` : ''}
+            ${t.kev ? '<br><strong>Dieksploitasi aktif (CISA KEV)</strong>' : ''}${t.severitas ? ` · ${escapeHtml(t.severitas)}` : ''}
+          </td></tr><tr><td style="height:6px;"></td></tr>`,
+            )
+            .join('')}
+        </table>
+        ${tombol('Tinjau kerentanan', tautan)}
+        <hr style="border:0;border-top:1px solid ${WARNA.garis};margin:22px 0 18px;">
+        <p style="margin:0;font-size:13px;line-height:1.55;color:${WARNA.redup};">Hasil ini bersifat indikatif: dicocokkan dari versi komponen yang tercatat, bukan dari pengujian. Bila tambalan sudah diterapkan, tandai sebagai ditangani.</p>`;
+
+  return {
+    subject,
+    text,
+    html: bingkaiEmail({ judul: subject, pratinjau: `${temuan.length} CVE mendesak pada ${aplikasi}.`, isiHtml, appUrl }),
+  };
+}
