@@ -267,6 +267,25 @@ describe('kerentanan.service', () => {
     assert.deepEqual(status.at(-1), ['diberitahu', [7]]);
   });
 
+  it('waktu evaluasi tanpa milidetik (DATETIME membulatkan → hasil baru tertandai kedaluwarsa)', async () => {
+    let waktu;
+    service = createKerentananService({
+      repository: {
+        komponenAplikasi: async () => [],
+        idAplikasiAktif: async () => [1],
+        cpeUntukPasangan: async () => [],
+        paketUntuk: async () => [],
+        infoCve: async () => new Map(),
+        kunciHasil: async () => new Map(),
+        simpanHasil: async (_id, _baris, w) => {
+          waktu = w;
+        },
+      },
+    });
+    await service.cocokkanAplikasi(1);
+    assert.equal(waktu.getMilliseconds(), 0);
+  });
+
   it('daftar per aplikasi memeriksa cakupan', async () => {
     await assert.rejects(service.list(pemilikB, { page: 1, limit: 25, aplikasi_id: 1 }), { statusCode: 404 });
   });
