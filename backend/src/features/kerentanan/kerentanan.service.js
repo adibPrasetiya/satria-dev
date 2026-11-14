@@ -85,7 +85,9 @@ export function createKerentananService({
     }
 
     let baru = 0;
-    const waktu = new Date();
+    // Dibulatkan ke detik: kolom DATETIME membulatkan milidetik, sehingga baris yang baru disimpan bisa
+    // tercatat lebih awal dari `waktu` dan ikut tertandai 'kedaluwarsa' (terakhir_dievaluasi < waktu).
+    const waktu = new Date(Math.floor(Date.now() / 1000) * 1000);
     for (const [applicationId, komponen] of perAplikasi) {
       const hasil = [];
       for (const k of komponen) {
