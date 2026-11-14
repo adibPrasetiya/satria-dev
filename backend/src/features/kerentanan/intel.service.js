@@ -33,6 +33,8 @@ export function createIntelService({ repository = intelRepository, sumber = sumb
     const peta = new Map();
     for (const { vendor, produk } of await repository.produkInventaris()) {
       const { bagian, pasangan } = cpeTerkait(vendor, produk);
+      // OS tidak dicocokkan (lihat kerentanan.service pasanganCocok) → tak perlu disinkron dari NVD.
+      if (bagian === 'o') continue;
       for (const [v, p] of pasangan) peta.set(`${v}:${p}`, { bagian, vendor: v, produk: p });
     }
     return [...peta.values()];
