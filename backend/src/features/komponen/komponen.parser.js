@@ -110,3 +110,16 @@ const KATEGORI_FORMULIR = ['frontend', 'backend', 'database', 'server'];
 export function dariTeknologi(teknologi = {}) {
   return gabungUnik(KATEGORI_FORMULIR.flatMap((k) => uraiTeks(teknologi?.[k], k)));
 }
+
+// "vendor:produk" utama → semua pasangan CPE kerabatnya di kamus (mis. f5:nginx → [f5:nginx, nginx:nginx]).
+const KERABAT_CPE = new Map();
+for (const entri of KAMUS_KOMPONEN) {
+  const pasangan = (entri.cpe ?? []).map((c) => c.split(':'));
+  for (const [v, p] of pasangan) KERABAT_CPE.set(`${v}:${p}`, { bagian: entri.bagian ?? 'a', pasangan });
+}
+
+/** Pasangan [vendor, produk] yang setara untuk pencocokan CVE, beserta bagian CPE ('a'/'o'). */
+export function cpeTerkait(vendor, produk) {
+  if (!vendor) return { bagian: 'a', pasangan: [] };
+  return KERABAT_CPE.get(`${vendor}:${produk}`) ?? { bagian: 'a', pasangan: [[vendor, produk]] };
+}

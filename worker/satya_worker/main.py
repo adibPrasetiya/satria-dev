@@ -30,6 +30,7 @@ import httpx
 from . import keterjangkauan, koordinasi
 from .backend_client import BackendClient
 from .discovery import temukan
+from . import fingerprint
 from .models import HasilMetode, MetodeSpec, ScanContext
 from .runner import jalankan_metode
 
@@ -166,6 +167,9 @@ def _proses_metode(backend: BackendClient, task_id: str, ctx: ScanContext, metod
         # Baris "▶ metode" kini dipancarkan runner sebagai peristiwa uji `mulai`.
         hasil = jalankan_metode(ctx, metode, log=log_ke_ui, unggah=unggah_gambar)
         backend.kirim_hasil(task_id, hasil.to_dict())
+        # Mode terarah tak punya fase penemuan: fingerprint ringan (tanpa nuclei) menumpang cek banner server.
+        if metode.check_id == "headers.server_banner":
+            _kirim_fingerprint(backend, ctx, log_ke_ui, nuclei=False)
         print(f"[{hasil.status.upper():24}] {metode.id}  {hasil.ringkasan}", file=sys.stderr)
     except koordinasi.TargetTakTerjangkau as e:
         _akhiri_tak_terjangkau(backend, task_id, metode, e.alasan, host=keterjangkauan.host_port(ctx.base_url)[0])
@@ -185,6 +189,21 @@ def _proses_metode(backend: BackendClient, task_id: str, ctx: ScanContext, metod
     return True
 
 
+def _kirim_fingerprint(backend: BackendClient, ctx: ScanContext, log: Any, *, nuclei: bool) -> None:
+    """Fingerprint teknologi → inventaris komponen aset (dasar pencocokan CVE). Best-effort: kegagalan
+    tidak memengaruhi hasil uji."""
+    if os.environ.get("FINGERPRINT_ENABLE", "1").strip().lower() in ("0", "false", "no"):
+        return
+    try:
+        items = fingerprint.kumpulkan(ctx.base_url, nuclei=nuclei, log=log)
+        if items:
+            backend.kirim_komponen(ctx.scan_id, items)
+    except (koordinasi.Dibatalkan, koordinasi.TargetTakTerjangkau):
+        raise
+    except Exception as e:
+        print(f"Fingerprint teknologi gagal: {type(e).__name__}: {e}", file=sys.stderr)
+
+
 def proses_penemuan(backend: BackendClient, task_id: str, ctx: ScanContext, metode: MetodeSpec) -> bool:
     """Fase penemuan (engine discovery): crawl base_url, kirim hasil ke backend
     (yang menyemai task pengujian), lalu tandai task penemuan selesai."""
@@ -198,6 +217,7 @@ def proses_penemuan(backend: BackendClient, task_id: str, ctx: ScanContext, meto
     try:
         penemuan = temukan(ctx.base_url, openapi_url=ctx.openapi_url or None, ctx=ctx, log=log_ke_ui)
         data = backend.kirim_penemuan(ctx.scan_id, penemuan)
+        _kirim_fingerprint(backend, ctx, log_ke_ui, nuclei=True)
         disemai = data.get("disemai", 0)
         rk = penemuan["ringkasan"]
         titik = ", ".join(rk["titik_ditemukan"]) or "tidak ada"

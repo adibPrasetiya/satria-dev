@@ -181,6 +181,29 @@ describe('komponen.service', () => {
     assert.equal(events.at(-1)[0], 'komponen.hapus');
   });
 
+  it('simpanRecon mengurai teks worker & mengganti per sumber', async () => {
+    const n = await service.simpanRecon(1, 7, [
+      { sumber: 'banner', kategori: 'server', teks: 'Apache/2.4.41 (Ubuntu)', keyakinan: 'tinggi', bukti: 'Server: Apache/2.4.41 (Ubuntu)' },
+      { sumber: 'banner', kategori: 'backend', teks: 'PHP', keyakinan: 'rendah', bukti: 'cookie PHPSESSID' },
+      { sumber: 'bundle_js', kategori: 'library', teks: 'jQuery 3.4.1', keyakinan: 'tinggi', bukti: 'vendor.js' },
+    ]);
+    assert.equal(n, 4);
+    const banner = rows.filter((r) => r.sumber === 'banner').map((r) => [r.produk, r.versi, r.keyakinan]);
+    assert.deepEqual(banner, [
+      ['http_server', '2.4.41', 'tinggi'],
+      ['ubuntu_linux', null, 'tinggi'],
+      ['php', null, 'rendah'],
+    ]);
+    assert.equal(rows.find((r) => r.produk === 'jquery').purl, 'pkg:npm/jquery@3.4.1');
+
+    // Laporan berikutnya untuk sumber banner menggantikan seluruh banner lama; bundle_js tetap.
+    await service.simpanRecon(1, 8, [{ sumber: 'banner', kategori: 'server', teks: 'nginx/1.24.0', keyakinan: 'tinggi' }]);
+    assert.deepEqual(rows.map((r) => [r.sumber, r.produk]).sort(), [
+      ['banner', 'nginx'],
+      ['bundle_js', 'jquery'],
+    ]);
+  });
+
   it('komponen aplikasi lain dijawab 404', async () => {
     rows.push({ id: 99, applicationId: 3, sumber: 'manual', produk: 'x' });
     await assert.rejects(service.hapus(pemilikA, 1, 99), { statusCode: 404 });

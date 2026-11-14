@@ -1,31 +1,10 @@
 import { AppError } from '../../utils/AppError.js';
 import { audit } from '../../utils/audit.js';
 import { applicationsRepository } from '../applications/applications.repository.js';
-import { dariTeknologi, uraiTeks } from './komponen.parser.js';
+import { pilihEfektif } from './komponen.efektif.js';
+import { peristiwaKomponen } from './komponen.events.js';
+import { dariTeknologi, gabungUnik, uraiTeks } from './komponen.parser.js';
 import { komponenRepository } from './komponen.repository.js';
-
-// Urutan kepercayaan antarsumber untuk produk yang sama. 'manual' selalu menang; di luar itu
-// baris yang memiliki versi didahulukan (bukti recon berversi lebih berguna dari isian tanpa versi).
-const PERINGKAT_SUMBER = ['manual', 'formulir', 'nuclei', 'banner', 'bundle_js', 'tls'];
-
-const kunciProduk = (k) => `${k.vendor ?? ''}|${k.produk}`;
-
-/** Tandai satu baris "dipakai" per produk — baris inilah yang nanti dicocokkan ke CVE. */
-export function pilihEfektif(rows) {
-  const terbaik = new Map();
-  const skor = (k) => [k.sumber === 'manual' ? 0 : 1, k.versi ? 0 : 1, PERINGKAT_SUMBER.indexOf(k.sumber)];
-  const lebihBaik = (a, b) => {
-    const [x, y] = [skor(a), skor(b)];
-    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i];
-    return false;
-  };
-  for (const r of rows) {
-    const kunci = kunciProduk(r);
-    if (!terbaik.has(kunci) || lebihBaik(r, terbaik.get(kunci))) terbaik.set(kunci, r);
-  }
-  const dipakai = new Set([...terbaik.values()].map((r) => r.id));
-  return rows.map((r) => ({ ...r, dipakai: dipakai.has(r.id) }));
-}
 
 const toDto = (k) => ({
   id: String(k.id),
@@ -45,9 +24,21 @@ const toDto = (k) => ({
   dipakai: Boolean(k.dipakai),
 });
 
+const TINGKAT = ['rendah', 'sedang', 'tinggi'];
+const tingkatTerendah = (a, b) => TINGKAT[Math.min(TINGKAT.indexOf(a), TINGKAT.indexOf(b))];
+
 const seesAll = (actor) => actor.peran === 'asesor' || actor.peran === 'admin';
 
-export function createKomponenService({ repository = komponenRepository, aplikasi = applicationsRepository, auditor = audit } = {}) {
+export { pilihEfektif };
+
+export function createKomponenService({
+  repository = komponenRepository,
+  aplikasi = applicationsRepository,
+  auditor = audit,
+  peristiwa = peristiwaKomponen,
+} = {}) {
+  const berubah = (applicationId) => peristiwa.emit('berubah', applicationId);
+
   /** Sama dengan applications.service: aset di luar cakupan dijawab 404. */
   async function findVisible(actor, id) {
     const app = await aplikasi.findById(Number(id));
@@ -95,6 +86,7 @@ export function createKomponenService({ repository = komponenRepository, aplikas
       }
       const row = await repository.upsert(app.id, 'manual', { ...item, kategori, keyakinan: 'tinggi', bukti: teks });
       auditor('komponen.manual', { aplikasiId: app.id, komponenId: row?.id, produk: item.produk, versi: item.versi });
+      berubah(app.id);
       return daftar(app.id);
     },
 
@@ -111,6 +103,7 @@ export function createKomponenService({ repository = komponenRepository, aplikas
       }
       await repository.hapus(row.id);
       auditor('komponen.hapus', { aplikasiId: app.id, komponenId: row.id, produk: row.produk });
+      berubah(app.id);
       return daftar(app.id);
     },
 
@@ -118,7 +111,32 @@ export function createKomponenService({ repository = komponenRepository, aplikas
     async sinkronFormulir(applicationId, teknologi) {
       const items = dariTeknologi(teknologi);
       await repository.gantiSumber(applicationId, 'formulir', items);
+      berubah(applicationId);
       return items.length;
+    },
+
+    /**
+     * Komponen hasil recon worker: item {sumber, kategori, teks, keyakinan, bukti} diurai dengan parser yang sama,
+     * lalu tiap sumber yang dilaporkan diganti utuh (banner lama yang tak terlihat lagi ikut hilang).
+     */
+    async simpanRecon(applicationId, scanId, laporan) {
+      const perSumber = new Map();
+      for (const l of laporan) {
+        const items = uraiTeks(l.teks, l.kategori ?? 'lainnya').map((it) => ({
+          ...it,
+          keyakinan: tingkatTerendah(it.keyakinan, l.keyakinan ?? 'sedang'),
+          bukti: (l.bukti || l.teks).slice(0, 255),
+        }));
+        perSumber.set(l.sumber, [...(perSumber.get(l.sumber) ?? []), ...items]);
+      }
+      let total = 0;
+      for (const [sumber, items] of perSumber) {
+        const unik = gabungUnik(items);
+        await repository.gantiSumber(applicationId, sumber, unik, { scanId });
+        total += unik.length;
+      }
+      if (perSumber.size) berubah(applicationId);
+      return total;
     },
   };
 }

@@ -32,6 +32,7 @@ export const KAMUS_KOMPONEN = [
   { nama: 'Python', cpe: ['python:python'], alias: ['python', 'python3'] },
   { nama: 'Java', cpe: ['oracle:jdk', 'oracle:openjdk'], alias: ['java', 'jdk', 'openjdk'] },
   { nama: '.NET', cpe: ['microsoft:.net'], alias: ['.net', 'dotnet', '.net core'] },
+  { nama: '.NET Framework', cpe: ['microsoft:.net_framework'], alias: ['.net framework', 'dotnet framework'] },
 
   // --- Framework backend / CMS
   { nama: 'Laravel', cpe: ['laravel:framework'], purl: 'pkg:composer/laravel/framework', alias: ['laravel'] },
@@ -67,6 +68,8 @@ export const KAMUS_KOMPONEN = [
   { nama: 'SvelteKit', purl: 'pkg:npm/@sveltejs/kit', alias: ['sveltekit', 'svelte kit'] },
   { nama: 'jQuery', cpe: ['jquery:jquery'], purl: 'pkg:npm/jquery', alias: ['jquery'] },
   { nama: 'Bootstrap', cpe: ['getbootstrap:bootstrap'], purl: 'pkg:npm/bootstrap', alias: ['bootstrap'] },
+  { nama: 'Lodash', cpe: ['lodash:lodash'], purl: 'pkg:npm/lodash', alias: ['lodash'] },
+  { nama: 'Moment.js', cpe: ['momentjs:moment'], purl: 'pkg:npm/moment', alias: ['moment', 'moment.js', 'momentjs'] },
 
   // --- Basis data & penyimpanan
   { nama: 'MySQL', cpe: ['oracle:mysql', 'oracle:mysql_server'], alias: ['mysql', 'mysql server'] },

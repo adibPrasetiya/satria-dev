@@ -8,6 +8,7 @@ import {
   discoverySchema,
   evidenceUploadSchema,
   heartbeatSchema,
+  komponenSchema,
   logSchema,
   resultSchema,
   taskIdSchema,
@@ -27,6 +28,12 @@ internalRouter.post(
   validate(taskIdSchema, 'params'),
   validate(discoverySchema),
   internalController.discovery,
+);
+internalRouter.post(
+  '/scans/:id/komponen',
+  validate(taskIdSchema, 'params'),
+  validate(komponenSchema),
+  internalController.komponen,
 );
 internalRouter.post(
   '/scans/:id/evidence',

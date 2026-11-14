@@ -6,6 +6,7 @@ import { scansRepository } from '../scans/scans.repository.js';
 import { scansService } from '../scans/scans.service.js';
 import { applicationsRepository } from '../applications/applications.repository.js';
 import { workersService } from '../workers/workers.service.js';
+import { komponenService } from '../komponen/komponen.service.js';
 
 // Batas ukuran peristiwa terstruktur pada log (worker mengirim batch kecil).
 const MAKS_DATA_LOG = 64_000;
@@ -16,6 +17,7 @@ function mysqlUtc(date) {
 }
 
 export function createInternalService({
+  inventaris = komponenService,
   repository = scansRepository,
   applications = applicationsRepository,
   scans = scansService,
@@ -185,7 +187,16 @@ export function createInternalService({
     return { ok: true };
   }
 
-  return { claim, result, log, discovery };
+  /** Komponen teknologi hasil fingerprint recon (banner, nuclei tech-detect, bundle JS) → inventaris aset. */
+  async function komponen(scanId, { items }) {
+    const scan = await repository.findScanById(Number(scanId));
+    if (!scan) throw AppError.notFound('Pengujian tidak ditemukan');
+    if (scan.status !== 'berjalan') return { disimpan: 0, dibatalkan: true };
+    const disimpan = await inventaris.simpanRecon(scan.applicationId, scan.id, items);
+    return { disimpan };
+  }
+
+  return { claim, result, log, discovery, komponen };
 }
 
 export const internalService = createInternalService();

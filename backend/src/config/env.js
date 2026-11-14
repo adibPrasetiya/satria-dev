@@ -46,6 +46,15 @@ const schema = Joi.object({
   // Direktori penyimpanan bukti gambar (screenshot) yang diunggah worker; disajikan read-only.
   EVIDENCE_DIR: Joi.string().default('evidence'),
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'http', 'debug').allow(''),
+  // Intel kerentanan (CVE): sinkron NVD/KEV/EPSS/OSV & pencocokan ke komponen aset.
+  // Butuh akses keluar ke services.nvd.nist.gov, www.cisa.gov, api.first.org, api.osv.dev. Lewat proxy:
+  // set HTTPS_PROXY dan NODE_USE_ENV_PROXY=1 (fetch bawaan Node >= 24 lalu memakai proxy tersebut).
+  CVE_SYNC_ENABLED: Joi.boolean().default(true),
+  // Kunci API NVD (gratis): batas 50 request/30 detik; tanpa kunci hanya 5.
+  NVD_API_KEY: Joi.string().allow('').default(''),
+  CVE_OSV_ENABLED: Joi.boolean().default(true),
+  // Email ke pemilik aset saat muncul kecocokan baru yang dieksploitasi aktif (KEV) atau kritis.
+  CVE_NOTIF_EMAIL: Joi.boolean().default(true),
 }).unknown(true);
 
 const { value, error } = schema.validate(process.env, { abortEarly: false, convert: true });
@@ -96,4 +105,10 @@ export const env = Object.freeze({
     level: value.LOG_LEVEL || (value.NODE_ENV === 'production' ? 'info' : 'debug'),
   },
   evidenceDir: value.EVIDENCE_DIR,
+  cve: {
+    syncEnabled: value.CVE_SYNC_ENABLED,
+    nvdApiKey: value.NVD_API_KEY,
+    osvEnabled: value.CVE_OSV_ENABLED,
+    notifEmail: value.CVE_NOTIF_EMAIL,
+  },
 });
