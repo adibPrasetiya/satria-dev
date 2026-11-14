@@ -24,6 +24,15 @@ export const KAMUS_KOMPONEN = [
   { nama: 'WildFly', cpe: ['redhat:wildfly'], alias: ['wildfly'] },
   { nama: 'Gunicorn', cpe: ['gunicorn:gunicorn'], alias: ['gunicorn'] },
   { nama: 'OpenSSL', cpe: ['openssl:openssl'], alias: ['openssl'] },
+  {
+    nama: 'Apache Log4j',
+    cpe: ['apache:log4j'],
+    purl: 'pkg:maven/org.apache.logging.log4j/log4j-core',
+    alias: ['log4j', 'log4j2', 'log4j-core', 'apache log4j'],
+  },
+  { nama: 'Atlassian Confluence', cpe: ['atlassian:confluence_server', 'atlassian:confluence_data_center'], alias: ['confluence'] },
+  { nama: 'GitLab', cpe: ['gitlab:gitlab'], alias: ['gitlab'] },
+  { nama: 'Jenkins', cpe: ['jenkins:jenkins'], alias: ['jenkins'] },
 
   // --- Bahasa & runtime
   { nama: 'PHP', cpe: ['php:php'], alias: ['php', 'php-fpm'] },

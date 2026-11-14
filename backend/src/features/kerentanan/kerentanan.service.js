@@ -11,6 +11,16 @@ import { kerentananRepository } from './kerentanan.repository.js';
 import { evaluasiKomponen, hitungPrioritas, layakTanpaVersi, tingkatPrioritas } from './pencocokan.js';
 
 const seesAll = (actor) => actor.peran === 'asesor' || actor.peran === 'admin';
+
+/**
+ * Pasangan CPE yang dicocokkan untuk komponen. Sistem operasi (bagian 'o', mis. ubuntu_linux) dikecualikan:
+ * NVD mencantumkan distro sebagai "rentan" untuk ribuan CVE paket di dalamnya, sehingga "Ubuntu 22.04"
+ * akan membanjiri daftar dengan kecocokan yang tak relevan bagi aplikasi. Komponen OS tetap tercatat.
+ */
+export function pasanganCocok(k) {
+  const { bagian, pasangan } = cpeTerkait(k.vendor, k.produk);
+  return bagian === 'o' ? [] : pasangan;
+}
 const angka = (v) => (v === null || v === undefined ? null : Number(v));
 const jsonArr = (v) => (Array.isArray(v) ? v : typeof v === 'string' ? JSON.parse(v || '[]') : []);
 
@@ -69,7 +79,7 @@ export function createKerentananService({
 
     // Data CVE dimuat sekali untuk semua produk/paket yang terlibat.
     const pasangan = new Map();
-    for (const k of semua) for (const p of cpeTerkait(k.vendor, k.produk).pasangan) pasangan.set(p.join(':'), p);
+    for (const k of semua) for (const p of pasanganCocok(k)) pasangan.set(p.join(':'), p);
     const purlBerversi = [...new Set(semua.filter((k) => k.purl?.includes('@')).map((k) => k.purl))];
     const [cpeRows, paketRows] = await Promise.all([repository.cpeUntukPasangan([...pasangan.values()]), repository.paketUntuk(purlBerversi)]);
 
@@ -91,7 +101,7 @@ export function createKerentananService({
     for (const [applicationId, komponen] of perAplikasi) {
       const hasil = [];
       for (const k of komponen) {
-        const rows = cpeTerkait(k.vendor, k.produk).pasangan.flatMap((p) => cpePerPasangan.get(p.join(':')) ?? []);
+        const rows = pasanganCocok(k).flatMap((p) => cpePerPasangan.get(p.join(':')) ?? []);
         const evaluasi = evaluasiKomponen(k, rows, paketPerPurl.get(k.purl) ?? []);
         for (const [cveId, e] of evaluasi) hasil.push({ k, cveId, ...e });
       }

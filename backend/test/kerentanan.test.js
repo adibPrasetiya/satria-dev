@@ -267,6 +267,15 @@ describe('kerentanan.service', () => {
     assert.deepEqual(status.at(-1), ['diberitahu', [7]]);
   });
 
+  it('komponen sistem operasi tidak dicocokkan ke CPE (hindari banjir CVE paket distro)', async () => {
+    const { pasanganCocok } = await import('../src/features/kerentanan/kerentanan.service.js');
+    assert.deepEqual(pasanganCocok({ vendor: 'canonical', produk: 'ubuntu_linux' }), []);
+    assert.deepEqual(pasanganCocok({ vendor: 'f5', produk: 'nginx' }), [
+      ['f5', 'nginx'],
+      ['nginx', 'nginx'],
+    ]);
+  });
+
   it('waktu evaluasi tanpa milidetik (DATETIME membulatkan → hasil baru tertandai kedaluwarsa)', async () => {
     let waktu;
     service = createKerentananService({
