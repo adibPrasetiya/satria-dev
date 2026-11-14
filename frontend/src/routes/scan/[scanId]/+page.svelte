@@ -15,6 +15,8 @@
 	import PilihRiwayat from '#lib/components/operasi/PilihRiwayat.svelte';
 	import TabDetailAnalisis from '#lib/components/operasi/TabDetailAnalisis.svelte';
 	import TabTemuan from '#lib/components/operasi/TabTemuan.svelte';
+	import TabKerentanan from '#lib/components/operasi/TabKerentanan.svelte';
+	import Bug from '@lucide/svelte/icons/bug';
 	import TabLaporanSementara from '#lib/components/operasi/TabLaporanSementara.svelte';
 	import KeteranganBlokir from '#lib/components/operasi/KeteranganBlokir.svelte';
 	import { cariTerblokir } from '#lib/penemuan/terblokir.js';
@@ -64,6 +66,11 @@
 			if (batal) return;
 			scan = s;
 			app = await api.getAplikasi(s.aplikasi_id);
+			// Jumlah CVE aktif untuk lencana tab Kerentanan (data per aplikasi, bukan per pengujian).
+			api
+				.cariKerentanan({ aplikasi_id: s.aplikasi_id, limit: 10 })
+				.then((k) => (jumlahCve = k.meta.ringkasan.terdampak + k.meta.ringkasan.kemungkinan))
+				.catch(() => (jumlahCve = 0));
 			api
 				.listScan(s.aplikasi_id)
 				.then((xs) => (riwayat = xs))
@@ -219,7 +226,8 @@
 	// Tab: Topologi (hanya informasi topologi) · Operasi Uji (adegan pengujian, hanya saat berjalan) ·
 	// Detail Analisis · Temuan · Ringkasan Hasil. Saat fase pengujian dimulai, tab berpindah otomatis ke
 	// Operasi Uji sekali (pengguna tetap bebas kembali ke Topologi).
-	type TabUtama = 'topologi' | 'uji' | 'detail' | 'temuan' | 'laporan';
+	type TabUtama = 'topologi' | 'uji' | 'detail' | 'temuan' | 'kerentanan' | 'laporan';
+	let jumlahCve = $state(0);
 	let tabUtama = $state<TabUtama>('topologi');
 	let sudahPindahUji = false;
 	$effect(() => {
@@ -316,6 +324,7 @@
 		...(aktif ? [{ k: 'uji' as const, label: 'Operasi Uji', Ikon: Play }] : []),
 		{ k: 'detail' as const, label: 'Detail Analisis', Ikon: ClipboardList },
 		{ k: 'temuan' as const, label: 'Temuan', Ikon: ShieldAlert, jumlah: temuan.length },
+		{ k: 'kerentanan' as const, label: 'Kerentanan (CVE)', Ikon: Bug, jumlah: jumlahCve },
 		{
 			k: 'laporan' as const,
 			label: aktif ? 'Laporan Sementara' : 'Ringkasan Hasil',
@@ -587,6 +596,11 @@
 						<TabDetailAnalisis {baris} bind:sorot={sorotMetode} />
 					{:else if tabUtama === 'temuan'}
 						<TabTemuan {temuan} berjalan={scan.status === 'berjalan'} />
+					{:else if tabUtama === 'kerentanan'}
+						<TabKerentanan
+							aplikasiId={scan.aplikasi_id}
+							onringkasan={(r) => (jumlahCve = r.terdampak + r.kemungkinan)}
+						/>
 					{:else}
 						<TabLaporanSementara {scan} {temuan} ondetail={() => (tabUtama = 'temuan')} />
 					{/if}
