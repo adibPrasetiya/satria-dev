@@ -224,6 +224,8 @@
 	// ---------------------------------------------------------------------------
 	// Sorotan provinsi (dari panel bergilir atau klik provinsi di peta).
 	let sorotKode = $state<string | null>(null);
+	// Provinsi yang sedang disorot → panel Intel Kerentanan ikut menampilkan data provinsi itu.
+	const provinsiSorot = $derived(provinsi.find((p) => p.kode === sorotKode) ?? null);
 	// Kode provinsi hasil pemekaran digambar dengan bentuk provinsi induknya (lihat kodeBentuk).
 	const sorotJalur = $derived(
 		sorotKode ? PETA.provinsi.find((p) => p.kode === kodeBentuk(sorotKode!))?.d : undefined
@@ -488,7 +490,7 @@
 			class="absolute top-5 right-6 bottom-36 flex w-[340px] flex-col justify-start gap-3 overflow-y-auto"
 		>
 			<PanelSorotan daftar={provinsi} bind:kode={sorotKode} />
-			<PanelKerentanan />
+			<PanelKerentanan provinsi={provinsiSorot} />
 		</div>
 	{/if}
 

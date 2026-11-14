@@ -24,7 +24,7 @@ const DARI = `FROM aset_kerentanan k
   JOIN units u ON u.id = a.unit_id
   LEFT JOIN users du ON du.id = k.ditangani_oleh`;
 
-function where({ unitId, applicationId, status, kev, severitas, search }) {
+function where({ unitId, applicationId, provinsi, status, kev, severitas, search }) {
   const kondisi = ['a.archived_at IS NULL'];
   const params = [];
   const tambah = (k, ...v) => {
@@ -33,6 +33,7 @@ function where({ unitId, applicationId, status, kev, severitas, search }) {
   };
   if (unitId) tambah('a.unit_id = ?', unitId);
   if (applicationId) tambah('k.application_id = ?', applicationId);
+  if (provinsi) tambah('u.province_code = ?', provinsi);
   const daftarStatus = status?.length ? status : AKTIF;
   kondisi.push(`k.status IN (${daftarStatus.map(() => '?').join(', ')})`);
   params.push(...daftarStatus);
@@ -213,7 +214,7 @@ export const kerentananRepository = {
   },
 
   /** Ringkasan untuk strip statistik/dasbor (aset aktif dalam cakupan `unitId`). */
-  async ringkasan({ unitId, applicationId } = {}) {
+  async ringkasan({ unitId, applicationId, provinsi } = {}) {
     const params = [];
     let cakupan = 'a.archived_at IS NULL';
     if (unitId) {
@@ -223,6 +224,10 @@ export const kerentananRepository = {
     if (applicationId) {
       cakupan += ' AND k.application_id = ?';
       params.push(applicationId);
+    }
+    if (provinsi) {
+      cakupan += ' AND u.province_code = ?';
+      params.push(provinsi);
     }
     const [[r]] = await pool.query(
       `SELECT
@@ -235,6 +240,7 @@ export const kerentananRepository = {
          SUM(k.status IN ('terdampak', 'kemungkinan') AND k.pertama_ditemukan >= NOW() - INTERVAL 7 DAY) AS baru7hari,
          COUNT(DISTINCT IF(k.status IN ('terdampak', 'kemungkinan'), k.application_id, NULL)) AS aplikasi
        FROM aset_kerentanan k JOIN cve c ON c.id = k.cve_id JOIN applications a ON a.id = k.application_id
+       JOIN units u ON u.id = a.unit_id
        WHERE ${cakupan}`,
       params,
     );

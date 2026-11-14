@@ -135,10 +135,11 @@ export function createKerentananService({
     },
 
     /** Daftar kecocokan lintas aset (pemilik: aset satuannya saja). */
-    async list(actor, { page, limit, aplikasi_id, status, kev, severitas, search, sort }) {
+    async list(actor, { page, limit, aplikasi_id, provinsi, status, kev, severitas, search, sort }) {
       const filters = {
         unitId: seesAll(actor) ? undefined : Number(actor.satuan_id),
         applicationId: aplikasi_id ? Number(aplikasi_id) : undefined,
+        provinsi: provinsi || undefined,
         status: status ? status.split(',') : undefined,
         kev,
         severitas,
@@ -147,7 +148,7 @@ export function createKerentananService({
       if (filters.applicationId) await findVisible(actor, filters.applicationId);
       const [{ rows, total }, ringkasan] = await Promise.all([
         repository.list({ ...filters, offset: (page - 1) * limit, limit, sort }),
-        repository.ringkasan({ unitId: filters.unitId, applicationId: filters.applicationId }),
+        repository.ringkasan({ unitId: filters.unitId, applicationId: filters.applicationId, provinsi: filters.provinsi }),
       ]);
       return { items: rows.map(toDto), meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)), ringkasan } };
     },
