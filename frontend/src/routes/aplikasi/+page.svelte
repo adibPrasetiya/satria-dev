@@ -584,7 +584,7 @@
 											<ShieldAlert /> Komponen & CVE
 										</DropdownMenu.Item>
 										{#if !arsip && auth.bisaMenguji}
-											<DropdownMenu.Item onSelect={() => goto(`/aplikasi/${r.id}/persiapan`)}>
+											<DropdownMenu.Item onSelect={() => bukaAset(r)}>
 												<ClipboardList /> Persiapan uji
 											</DropdownMenu.Item>
 										{/if}
