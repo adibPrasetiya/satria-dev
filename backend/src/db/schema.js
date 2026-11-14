@@ -12,6 +12,7 @@ import {
   mysqlTable,
   smallint,
   text,
+  unique,
   varchar,
 } from 'drizzle-orm/mysql-core';
 import { ROLES } from '../config/app.js';
@@ -400,3 +401,42 @@ export const workers = mysqlTable('workers', {
   mulaiPada: datetime('mulai_pada').notNull().default(sql`CURRENT_TIMESTAMP`),
   terakhirTerlihat: datetime('terakhir_terlihat').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// ---------------------------------------------------------------------------
+// Inventaris komponen aplikasi (produk + versi) — dasar pencocokan CVE ke aset.
+
+export const KATEGORI_KOMPONEN = ['frontend', 'backend', 'database', 'server', 'library', 'os', 'lainnya'];
+// 'formulir' = disinkron otomatis dari field teknologi aset (ditimpa tiap kali field itu diubah);
+// 'manual' = koreksi/tambahan pengguna (tak pernah ditimpa otomatis); sisanya hasil recon worker.
+export const SUMBER_KOMPONEN = ['formulir', 'manual', 'banner', 'nuclei', 'bundle_js', 'tls'];
+export const KEYAKINAN_KOMPONEN = ['tinggi', 'sedang', 'rendah'];
+
+export const aplikasiKomponen = mysqlTable(
+  'aplikasi_komponen',
+  {
+    id: id(),
+    applicationId: bigint('application_id', { mode: 'number', unsigned: true })
+      .notNull()
+      .references(() => applications.id, { onDelete: 'cascade' }),
+    kategori: mysqlEnum('kategori', KATEGORI_KOMPONEN).notNull(),
+    // vendor/produk mengikuti penamaan CPE NVD (mis. f5/nginx); produk tak dikenal kamus → vendor NULL.
+    vendor: varchar('vendor', { length: 100 }),
+    produk: varchar('produk', { length: 100 }).notNull(),
+    nama: varchar('nama', { length: 100 }).notNull(),
+    versi: varchar('versi', { length: 60 }),
+    cpe: varchar('cpe', { length: 255 }),
+    purl: varchar('purl', { length: 255 }),
+    sumber: mysqlEnum('sumber', SUMBER_KOMPONEN).notNull(),
+    keyakinan: mysqlEnum('keyakinan', KEYAKINAN_KOMPONEN).notNull(),
+    // Teks asli yang menjadi dasar (isian formulir, nilai header, dsb.).
+    bukti: varchar('bukti', { length: 255 }),
+    scanId: bigint('scan_id', { mode: 'number', unsigned: true }).references(() => scans.id, { onDelete: 'set null' }),
+    terakhirTerlihat: datetime('terakhir_terlihat').notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique('aplikasi_komponen_unik').on(table.applicationId, table.produk, table.sumber),
+    index('aplikasi_komponen_vendor_produk_idx').on(table.vendor, table.produk),
+  ],
+);

@@ -130,10 +130,10 @@
 		{ value: 'rahasia', label: 'Rahasia' }
 	];
 	const TEKNOLOGI = [
-		{ k: 'frontend', label: 'Frontend', contoh: 'mis. React, Laravel Blade' },
-		{ k: 'backend', label: 'Backend', contoh: 'mis. Laravel 10, Spring Boot' },
-		{ k: 'database', label: 'Basis data', contoh: 'mis. MySQL 8, PostgreSQL' },
-		{ k: 'server', label: 'Server', contoh: 'mis. Nginx di Ubuntu 22.04' }
+		{ k: 'frontend', label: 'Frontend', contoh: 'mis. React 18.2, jQuery 3.6' },
+		{ k: 'backend', label: 'Backend', contoh: 'mis. Laravel 10.48 + PHP 8.2' },
+		{ k: 'database', label: 'Basis data', contoh: 'mis. MySQL 8.0.36' },
+		{ k: 'server', label: 'Server', contoh: 'mis. Nginx 1.24 di Ubuntu 22.04' }
 	] as const;
 
 </script>
@@ -222,7 +222,7 @@
 			</Field>
 			<div class="mt-2 border-t pt-4 sm:col-span-2">
 				<p class="text-sm font-medium">Teknologi <span class="font-normal text-muted-foreground">(opsional)</span></p>
-				<p class="text-xs text-muted-foreground">Membantu asesor menentukan metode uji yang relevan.</p>
+				<p class="text-xs text-muted-foreground">Membantu asesor menentukan metode uji yang relevan. Sertakan versi agar aset dapat dicocokkan dengan kerentanan (CVE) terbaru.</p>
 			</div>
 			{#each TEKNOLOGI as t (t.k)}
 				<Field label={t.label} id="aset-tek-{t.k}">

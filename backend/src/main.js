@@ -1,4 +1,5 @@
-// Entry tunggal aplikasi: `node src/main.js [serve|migrate|create-admin|seed-catalog|sync-catalog|seed-satuan]`.
+// Entry tunggal aplikasi: `node src/main.js [serve|migrate|create-admin|seed-catalog|sync-catalog|seed-satuan|backfill-komponen]`.
+import { backfillKomponen } from './cli/backfillKomponen.js';
 import { createAdmin } from './cli/createAdmin.js';
 import { seedCatalog } from './cli/seedCatalog.js';
 import { seedSatuan } from './cli/seedSatuan.js';
@@ -23,10 +24,12 @@ const COMMANDS = {
   'sync-catalog': () => syncCatalog(),
 
   'seed-satuan': () => seedSatuan(),
+
+  'backfill-komponen': () => backfillKomponen(),
 };
 
 // Perintah selain `serve` selesai sekali jalan, jadi koneksi DB ditutup setelahnya.
-const ONE_SHOT = new Set(['migrate', 'create-admin', 'seed-catalog', 'sync-catalog', 'seed-satuan']);
+const ONE_SHOT = new Set(['migrate', 'create-admin', 'seed-catalog', 'sync-catalog', 'seed-satuan', 'backfill-komponen']);
 
 const command = process.argv[2] ?? 'serve';
 const run = COMMANDS[command];

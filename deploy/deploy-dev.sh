@@ -19,7 +19,9 @@ echo "==> Backend: install dependensi + migrasi DB + sinkron katalog"
 # definisinya dari YAML tanpa menyentuh is_active atau butir non-YAML. Aman diulang tiap deploy.
 # satuan:seed idempoten — menambah hierarki satuan TNI yang belum ada & mengisi kolom lokasi yang masih
 # kosong; tidak menimpa isian admin dan tidak menghapus satuan.
-( cd backend && npm ci && npm run db:migrate && npm run catalog:sync && npm run satuan:seed )
+# komponen:backfill idempoten — membentuk ulang komponen aset bersumber formulir dari field teknologi
+# (dasar pencocokan CVE); komponen manual & hasil recon tidak disentuh.
+( cd backend && npm ci && npm run db:migrate && npm run catalog:sync && npm run satuan:seed && npm run komponen:backfill )
 
 # Rekonsiliasi backend/.env: AI penyusun laporan memakai konfigurasi AI yang sama dengan worker.
 # Variabel yang belum ada di backend/.env disalin dari worker/.env (nilai yang sudah diisi tidak ditimpa).

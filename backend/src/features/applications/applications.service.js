@@ -1,6 +1,8 @@
 import { AppError } from '../../utils/AppError.js';
 import { audit } from '../../utils/audit.js';
 import { isDuplicateEntry } from '../../utils/dbErrors.js';
+import { logger } from '../../utils/logger.js';
+import { komponenService } from '../komponen/komponen.service.js';
 import { unitsRepository } from '../units/units.repository.js';
 import { verdictService } from '../scans/verdict.service.js';
 import { applicationsRepository } from './applications.repository.js';
@@ -90,7 +92,18 @@ export function createApplicationsService({
   auditor = audit,
   // Pelengkap ringkasan penilaian scan lama (scans/verdict.service). Bawaan no-op agar tes tidak butuh DB.
   penilai = { lengkapiYangKosong: async () => 0 },
+  // Sinkron field teknologi → inventaris komponen (dasar pencocokan CVE). Bawaan no-op agar tes tidak butuh DB.
+  komponen = { sinkronFormulir: async () => 0 },
 } = {}) {
+  /** Kegagalan sinkron komponen tidak menggagalkan simpan aset; komponen dapat dibentuk ulang lewat backfill. */
+  async function sinkronKomponen(app) {
+    try {
+      await komponen.sinkronFormulir(app.id, toApplicationDto(app).teknologi);
+    } catch (error) {
+      logger.warn('Sinkron komponen aplikasi gagal', { aplikasiId: app.id, error: error.message });
+    }
+  }
+
   /** Aset di luar cakupan dijawab 404 (bukan 403) agar keberadaannya tidak bocor. */
   async function findVisible(actor, id) {
     const app = await repository.findById(Number(id));
@@ -161,6 +174,7 @@ export function createApplicationsService({
       if (unitId !== Number(actor.satuan_id)) await assertUnit(unitId);
       const app = await save(() => repository.create({ ...toColumns(data), unitId, ownerId: Number(actor.id) }), data.url_dasar);
       auditor('aplikasi.daftar', { aplikasiId: app.id, nama: app.name, url: app.baseUrl, unitId });
+      await sinkronKomponen(app);
       return toApplicationDto(app);
     },
 
@@ -181,6 +195,7 @@ export function createApplicationsService({
         changes.baseUrl,
       );
       auditor('aplikasi.ubah', { aplikasiId: app.id, nama: app.name, kolom: changed });
+      if (changed.some((key) => Object.values(TECH_COLUMNS).includes(key))) await sinkronKomponen(app);
       return toApplicationDto(app);
     },
 
@@ -210,4 +225,4 @@ export function createApplicationsService({
   };
 }
 
-export const applicationsService = createApplicationsService({ penilai: verdictService });
+export const applicationsService = createApplicationsService({ penilai: verdictService, komponen: komponenService });
