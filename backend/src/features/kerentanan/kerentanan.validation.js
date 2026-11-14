@@ -8,6 +8,8 @@ export const listKerentananSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().valid(10, 25, 50, 100).default(25),
   aplikasi_id: kosong(Joi.number().integer().positive()),
+  // Kode provinsi BPS 2 digit dari satuan pemilik aset (sama dengan dasar peta dasbor).
+  provinsi: kosong(Joi.string().pattern(/^\d{2}$/)).messages({ 'string.pattern.base': 'Kode provinsi tidak valid' }),
   // Daftar status dipisah koma; kosong = yang masih aktif (terdampak, kemungkinan).
   status: kosong(Joi.string().pattern(POLA_STATUS)).messages({ 'string.pattern.base': 'Status tidak valid' }),
   kev: Joi.boolean().default(false),

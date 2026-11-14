@@ -23,12 +23,15 @@
 
 	let {
 		aplikasiId,
+		provinsi,
 		tampilAplikasi = true,
 		muatUlang = 0,
 		onringkasan
 	}: {
 		/** Batasi ke satu aplikasi. */
 		aplikasiId?: string;
+		/** Batasi ke aset satuan di satu provinsi (kode 2 digit). */
+		provinsi?: string;
 		tampilAplikasi?: boolean;
 		/** Naikkan nilainya untuk memuat ulang dari luar (mis. setelah komponen berubah). */
 		muatUlang?: number;
@@ -115,6 +118,7 @@
 		page: halaman,
 		limit: 25,
 		aplikasi_id: aplikasiId,
+		provinsi,
 		status: fStatus || undefined,
 		severitas: (fSeveritas || '') as Severity | '',
 		kev: fKev,

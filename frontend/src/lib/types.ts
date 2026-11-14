@@ -631,6 +631,8 @@ export interface FilterKerentanan {
 	page?: number;
 	limit?: 10 | 25 | 50 | 100;
 	aplikasi_id?: string;
+	/** Kode provinsi (2 digit) satuan pemilik aset. */
+	provinsi?: string;
 	/** Dipisah koma; kosong = aktif (terdampak, kemungkinan). */
 	status?: string;
 	kev?: boolean;

@@ -5,6 +5,7 @@
 	import { api } from '#lib/api/client.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { relatif } from '#lib/format.js';
+	import { namaProvinsi } from '#lib/data/satuan.js';
 	import { cn } from '#lib/utils.js';
 	import type { RingkasanKerentanan, StatusSinkronIntel } from '#lib/types.js';
 	import PageHeader from '#lib/components/PageHeader.svelte';
@@ -14,6 +15,7 @@
 	import X from '@lucide/svelte/icons/x';
 
 	const aplikasiId = $derived(page.url.searchParams.get('aplikasi') ?? undefined);
+	const provinsi = $derived(page.url.searchParams.get('provinsi') ?? undefined);
 	let ringkasan = $state<RingkasanKerentanan | null>(null);
 	let namaAplikasi = $state<string | null>(null);
 	let sinkron = $state<StatusSinkronIntel | null>(null);
@@ -138,6 +140,18 @@
 	</div>
 {/if}
 
-{#key aplikasiId}
-	<DaftarKerentanan {aplikasiId} tampilAplikasi={!aplikasiId} {muatUlang} onringkasan={(r) => (ringkasan = r)} />
+{#if provinsi}
+	<div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+		<span class="text-muted-foreground">Provinsi:</span>
+		<span class="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-1">
+			{namaProvinsi(provinsi) ?? provinsi}
+			<button type="button" class="text-muted-foreground hover:text-foreground" aria-label="Tampilkan seluruh provinsi" onclick={() => goto('/kerentanan')}>
+				<X class="size-3.5" />
+			</button>
+		</span>
+	</div>
+{/if}
+
+{#key `${aplikasiId}|${provinsi}`}
+	<DaftarKerentanan {aplikasiId} {provinsi} tampilAplikasi={!aplikasiId} {muatUlang} onringkasan={(r) => (ringkasan = r)} />
 {/key}
