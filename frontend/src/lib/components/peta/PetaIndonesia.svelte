@@ -13,6 +13,7 @@
 	import { labelJenis, namaProvinsi } from '#lib/data/satuan.js';
 	import PanelSorotan from './PanelSorotan.svelte';
 	import PanelNasional from './PanelNasional.svelte';
+	import PanelKerentanan from './PanelKerentanan.svelte';
 	import { cn } from '#lib/utils.js';
 	import Crosshair from '@lucide/svelte/icons/crosshair';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -487,6 +488,7 @@
 			class="absolute top-5 right-6 bottom-36 flex w-[340px] flex-col justify-start gap-3 overflow-y-auto"
 		>
 			<PanelSorotan daftar={provinsi} bind:kode={sorotKode} />
+			<PanelKerentanan />
 		</div>
 	{/if}
 
@@ -529,6 +531,10 @@
 
 	<!-- Legenda & atribusi -->
 	<div class="absolute right-4 bottom-4 flex flex-col items-end gap-2 sm:right-6 sm:bottom-6">
+		{#if !ruangKanan}
+			<!-- Layar sempit: intel kerentanan cukup sebagai tautan ringkas di atas legenda -->
+			<PanelKerentanan ringkas />
+		{/if}
 		<div class="rounded-md border border-white/12 bg-black/50 px-3 py-2 backdrop-blur">
 			<p class="mb-1.5 text-[10.5px] font-semibold tracking-wider text-white/60 uppercase">
 				Indeks ketahanan
