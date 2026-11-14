@@ -15,10 +15,13 @@
 //
 // Domain dummy memakai TLD .test (tidak dapat di-resolve) agar tak ada target sungguhan yang terpindai.
 // Hasil uji dummy diberi penanda di ringkasan & log scan ("DATA DUMMY") agar tak tertukar dengan hasil asli.
-import { pool } from '../src/db/index.js';
-import { env } from '../src/config/env.js';
-import { komponenService } from '../src/features/komponen/komponen.service.js';
-import { verdictService } from '../src/features/scans/verdict.service.js';
+// Data dummy tidak boleh memicu email peringatan ke pemilik aset sungguhan. Harus diset sebelum
+// config/env.js dimuat (nilainya dibekukan saat impor), karena itu modul lain diimpor dinamis.
+process.env.CVE_NOTIF_EMAIL = 'false';
+const { pool } = await import('../src/db/index.js');
+const { env } = await import('../src/config/env.js');
+const { komponenService } = await import('../src/features/komponen/komponen.service.js');
+const { verdictService } = await import('../src/features/scans/verdict.service.js');
 
 // PRNG deterministik (mulberry32) → hasil seed sama tiap dijalankan.
 function acak(benih) {
@@ -155,6 +158,43 @@ const DUMMY = [
     { frontend: 'jQuery 1.12.4', backend: 'Ruby on Rails 5.2.3', database: 'PostgreSQL 9.6.17', server: 'nginx 1.16.1' }],
 ];
 
+/** Fisher–Yates deterministik. */
+function kocok(arr, r) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Satu aplikasi di SETIAP provinsi berlokasi (agar heatmap peta penuh), lalu DUMMY.length aplikasi tambahan
+ * di satuan lain. Satuan yang memiliki akun pemilik didahulukan agar pemilik ikut melihat data.
+ * Templat dipakai bergilir; nama diberi akhiran satuan bila templat sudah terpakai.
+ */
+function rencanakanPenempatan(satuan) {
+  const r = acak(7);
+  const perProvinsi = new Map();
+  for (const u of kocok(satuan, r)) {
+    if (!perProvinsi.has(u.provinsi)) perProvinsi.set(u.provinsi, []);
+    perProvinsi.get(u.provinsi).push(u);
+  }
+  const pilihan = [];
+  for (const daftar of perProvinsi.values()) {
+    daftar.sort((a, b) => Number(Boolean(b.pemilik)) - Number(Boolean(a.pemilik)));
+    pilihan.push(daftar.shift());
+  }
+  const sisa = kocok([...perProvinsi.values()].flat(), r);
+  const target = pilihan.length + DUMMY.length;
+  while (pilihan.length < target && sisa.length) pilihan.push(sisa.shift());
+  return pilihan.map((u, i) => {
+    const tpl = DUMMY[i % DUMMY.length];
+    const nama = (i < DUMMY.length ? tpl[0] : `${tpl[0]} — ${u.name}`).slice(0, 150);
+    return { u, tpl, nama };
+  });
+}
+
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const PIC = ['Mayor Inf. Budi Santoso', 'Kapten Chk. Rina Wulandari', 'Letkol Kav. Agus Pratama', 'Lettu Arh. Dewi Lestari',
   'Penata Muda Hendra Wijaya', 'Kapten Czi. Fajar Nugroho', 'Mayor Ckm. Sri Rahayu', 'Penata Andi Kurniawan'];
@@ -170,13 +210,15 @@ async function main() {
   const hapus = semua.filter((a) => a.id !== cuti[0].id);
   const [[{ nScan }]] = await pool.query('SELECT COUNT(*) AS nScan FROM scans WHERE application_id <> ?', [cuti[0].id]);
 
-  // Satuan berlokasi (agar tampil di peta); satuan milik akun pemilik didahulukan agar pemilik ikut melihat data.
+  // Satuan berlokasi (agar tampil di peta).
   const [satuan] = await pool.query(
-    `SELECT u.id, u.name, (SELECT MIN(us.id) FROM users us WHERE us.unit_id = u.id AND us.role = 'pemilik' AND us.is_active = 1) AS pemilik
-     FROM units u WHERE u.is_active = 1 AND u.latitude IS NOT NULL
-     ORDER BY (pemilik IS NULL), RAND()`,
+    `SELECT u.id, u.name, u.province_code AS provinsi,
+            (SELECT MIN(us.id) FROM users us WHERE us.unit_id = u.id AND us.role = 'pemilik' AND us.is_active = 1) AS pemilik
+     FROM units u WHERE u.is_active = 1 AND u.latitude IS NOT NULL ORDER BY u.id`,
   );
   if (!satuan.length) throw new Error('Tidak ada satuan aktif berlokasi untuk menempatkan aplikasi dummy.');
+  const rencana = rencanakanPenempatan(satuan);
+  const nProvinsi = new Set(rencana.map((x) => x.u.provinsi)).size;
 
   const [metode] = await pool.query(
     `SELECT code, name, check_id AS checkId, engine, kind, severity FROM catalog_methods WHERE is_active = TRUE ORDER BY code`,
@@ -185,8 +227,8 @@ async function main() {
 
   console.log(`\nDipertahankan : #${cuti[0].id} ${cuti[0].name}`);
   console.log(`Dihapus       : ${hapus.length} aplikasi beserta ${nScan} riwayat pengujian (hasil, log, laporan ikut terhapus)`);
-  console.log(`Dibuat        : ${DUMMY.length} aplikasi dummy di ${Math.min(DUMMY.length, satuan.length)} satuan berlokasi`);
-  console.log(`                + ${DUMMY.length * 2} pengujian dummy selesai × ${metode.length} metode katalog aktif`);
+  console.log(`Dibuat        : ${rencana.length} aplikasi dummy di ${rencana.length} satuan, mencakup ${nProvinsi} provinsi`);
+  console.log(`                + ${rencana.length * 2} pengujian dummy selesai × ${metode.length} metode katalog aktif`);
   if (!YA) {
     console.log('\nSIMULASI — tidak ada yang diubah. Jalankan ulang dengan --ya untuk mengeksekusi.');
     return;
@@ -199,14 +241,14 @@ async function main() {
     for (const ids of [hapus.map((a) => a.id)]) {
       if (ids.length) await conn.query('DELETE FROM applications WHERE id IN (?)', [ids]);
     }
-    for (const [i, [nama, deskripsi, lingkungan, klasifikasi, t]] of DUMMY.entries()) {
-      const u = satuan[i % satuan.length];
+    for (const [i, { u, tpl, nama }] of rencana.entries()) {
+      const [, deskripsi, lingkungan, klasifikasi, t] = tpl;
       const [r] = await conn.query(
         `INSERT INTO applications (name, description, unit_id, owner_id, pic_name, pic_contact, base_url, environment,
            data_classification, tech_frontend, tech_backend, tech_database, tech_server)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [nama, deskripsi, u.id, u.pemilik ?? null, PIC[i % PIC.length], `0812-${String(1000 + i * 37).padStart(4, '0')}-${String(2000 + i * 53).slice(-4)}`,
-          `https://${slug(nama)}.dummy.satria.test`, lingkungan, klasifikasi, t.frontend || null, t.backend || null, t.database || null, t.server || null],
+          `https://${slug(tpl[0])}-${u.id}.dummy.satria.test`, lingkungan, klasifikasi, t.frontend || null, t.backend || null, t.database || null, t.server || null],
       );
       baru.push({ id: r.insertId, nama, teknologi: t, profil: URUTAN_PROFIL[i % URUTAN_PROFIL.length] });
     }
@@ -241,6 +283,12 @@ async function main() {
   komponen += await komponenService.sinkronFormulir(cuti[0].id, c);
   console.log(`✓ ${komponen} komponen dibentuk dari field teknologi.`);
 
+  // Kecocokan aplikasi dummy ditandai "sudah diberitahu" agar sinkron terjadwal (email aktif) tak pernah
+  // mengirim peringatan untuk data dummy. Dicocokkan dulu dengan CVE lokal yang sudah ada, lalu sesudah sinkron.
+  const { kerentananService } = await import('../src/features/kerentanan/kerentanan.service.js');
+  await kerentananService.cocokkanSemua();
+  await tandaiDummyDiberitahu();
+
   if (TANPA_SINKRON) {
     console.log('Sinkron intel dilewati (--tanpa-sinkron). Jalankan: npm run cve:sync');
     return;
@@ -248,6 +296,21 @@ async function main() {
   console.log('\nSinkron intel kerentanan (NVD per produk baru, KEV, OSV, EPSS) + pencocokan — bisa beberapa menit…');
   const { syncCve } = await import('../src/cli/syncCve.js');
   await syncCve();
+  const n = await tandaiDummyDiberitahu();
+  console.log(`✓ ${n} kecocokan aplikasi dummy ditandai sudah diberitahu (tanpa email).`);
+}
+
+async function tandaiDummyDiberitahu() {
+  await pool.query(
+    `UPDATE aset_kerentanan k JOIN applications a ON a.id = k.application_id
+     SET k.diberitahu_pada = NOW()
+     WHERE a.base_url LIKE '%.dummy.satria.test' AND k.diberitahu_pada IS NULL`,
+  );
+  const [[{ n }]] = await pool.query(
+    `SELECT COUNT(*) AS n FROM aset_kerentanan k JOIN applications a ON a.id = k.application_id
+     WHERE a.base_url LIKE '%.dummy.satria.test'`,
+  );
+  return n;
 }
 
 main()
