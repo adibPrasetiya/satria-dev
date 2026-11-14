@@ -28,6 +28,15 @@ import type {
 	Status,
 	StatusAkun
 } from '#lib/types.js';
+import type {
+	FilterKerentanan,
+	HalamanKerentanan,
+	InventarisKomponen,
+	KategoriKomponen,
+	KerentananAset,
+	RingkasanKerentanan,
+	StatusSinkronIntel
+} from '#lib/types.js';
 import type { AkunTarget, TargetUji } from '#lib/persiapan/target.js';
 import type { DataPeta, RincianProvinsi } from '#lib/peta/tipe.js';
 
@@ -172,4 +181,20 @@ export interface Api {
 
 	getPengaturanAi(): Promise<PengaturanAi>;
 	simpanPengaturanAi(p: PengaturanAi): Promise<PengaturanAi>;
+
+	/** Inventaris komponen aset (dari formulir, koreksi manual, dan fingerprint recon) — dasar pencocokan CVE. */
+	getKomponen(aplikasiId: string): Promise<InventarisKomponen>;
+	/** Koreksi/tambahan manual dari teks ("nginx 1.18.0"); selalu mengalahkan formulir & recon. */
+	tambahKomponen(aplikasiId: string, data: { kategori: KategoriKomponen; teks: string }): Promise<InventarisKomponen>;
+	/** Hanya komponen manual; galat 409 untuk sumber lain. */
+	hapusKomponen(aplikasiId: string, komponenId: string): Promise<InventarisKomponen>;
+	/** Kecocokan CVE ↔ aset (pemilik: aset satuannya), terurut prioritas. */
+	cariKerentanan(filter: FilterKerentanan): Promise<HalamanKerentanan>;
+	ringkasanKerentanan(): Promise<RingkasanKerentanan>;
+	/** 'ditangani'/'dikecualikan' wajib catatan; 'buka' mengembalikan ke pencocokan otomatis. */
+	ubahStatusKerentanan(id: string, data: { status: 'ditangani' | 'dikecualikan' | 'buka'; catatan?: string }): Promise<KerentananAset>;
+	/** Status sinkron intel (asesor/admin). */
+	statusSinkronIntel(): Promise<StatusSinkronIntel>;
+	/** Picu sinkron intel di latar (admin). */
+	mulaiSinkronIntel(): Promise<void>;
 }

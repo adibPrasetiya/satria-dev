@@ -13,6 +13,7 @@
 	import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
 	import AppWindow from '@lucide/svelte/icons/app-window';
 	import BookOpen from '@lucide/svelte/icons/book-open';
+	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import Users from '@lucide/svelte/icons/users';
 	import Building from '@lucide/svelte/icons/building-2';
 	import Menu from '@lucide/svelte/icons/menu';
@@ -44,6 +45,7 @@
 				{ href: '/dashboard', label: 'Dasbor', ikon: LayoutDashboard, peran: SEMUA },
 				// Registrasi aplikasi dibuka dari tombol di halaman Aplikasi (bukan menu sidebar).
 				{ href: '/aplikasi', label: 'Aplikasi', ikon: AppWindow, peran: SEMUA },
+				{ href: '/kerentanan', label: 'Kerentanan (CVE)', ikon: ShieldAlert, peran: SEMUA },
 				{ href: '/katalog', label: 'Katalog Kontrol', ikon: BookOpen, peran: SEMUA }
 			]
 		},

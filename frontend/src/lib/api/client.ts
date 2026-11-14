@@ -50,7 +50,15 @@ const DI_BACKEND = [
 	'listSatuanAdmin',
 	'getSatuanAdmin',
 	'tambahSatuan',
-	'ubahSatuan'
+	'ubahSatuan',
+	'getKomponen',
+	'tambahKomponen',
+	'hapusKomponen',
+	'cariKerentanan',
+	'ringkasanKerentanan',
+	'ubahStatusKerentanan',
+	'statusSinkronIntel',
+	'mulaiSinkronIntel'
 ] as const satisfies readonly (keyof Api)[];
 
 export const api: Api = USE_MOCK

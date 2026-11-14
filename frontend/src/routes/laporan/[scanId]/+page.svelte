@@ -7,7 +7,7 @@
 	import { api } from '#lib/api/client.js';
 	import { katalog, LABEL_PUTUSAN, LABEL_STATUS, nilaiKelaikan } from '#lib/catalog.js';
 	import { durasi } from '#lib/format.js';
-	import type { Aplikasi, Scan } from '#lib/types.js';
+	import type { Aplikasi, HalamanKerentanan, Scan } from '#lib/types.js';
 	import {
 		barisMetode,
 		daftarTemuan,
@@ -66,11 +66,18 @@
 			.then(async (s) => {
 				app = await api.getAplikasi(s.aplikasi_id);
 				scan = s;
+				// Lampiran indikatif: kecocokan CVE aktif pada komponen aset (per saat laporan dibuka).
+				api.cariKerentanan({ aplikasi_id: s.aplikasi_id, limit: 50, sort: 'prioritas' }).then(
+					(k) => (kerentanan = k),
+					() => (kerentanan = null)
+				);
 				// Laporan tersimpan hanya untuk riwayat terakhir; selain itu (atau belum ada) → generate dulu.
 				if (!s.ai && s.status !== 'berjalan') void generate();
 			})
 			.catch((e) => (galat = e.message));
 	});
+
+	let kerentanan = $state<HalamanKerentanan | null>(null);
 
 	// --- Data turunan ---
 	const nilai = $derived(scan ? nilaiKelaikan(scan.hasil) : null);
@@ -682,6 +689,40 @@
 				</table>
 			{/each}
 		</section>
+
+		<!-- ================= LAMPIRAN: KERENTANAN KOMPONEN (INDIKATIF) ================= -->
+		{#if kerentanan && kerentanan.items.length}
+			<section class="lembar" id="kerentanan">
+				<h2 class="judul-bab tanpa-nomor">Lampiran — Kerentanan Komponen yang Diketahui</h2>
+				<p class="paragraf">
+					Daftar berikut adalah CVE (NVD, CISA KEV, EPSS, OSV) yang cocok dengan komponen dan versi aplikasi
+					yang tercatat, per {tgl(new Date().toISOString())}. Bersifat <strong>indikatif</strong>: dicocokkan dari
+					versi komponen, bukan hasil pengujian, dan tidak memengaruhi nilai kelaikan di atas.
+					{kerentanan.meta.ringkasan.kev
+						? `${kerentanan.meta.ringkasan.kev} di antaranya diketahui dieksploitasi aktif (CISA KEV).`
+						: ''}
+				</p>
+				<table class="tabel rapat">
+					<thead>
+						<tr><th>CVE</th><th>Komponen</th><th>Severitas</th><th>Status</th><th>Prioritas</th></tr>
+					</thead>
+					<tbody>
+						{#each kerentanan.items as k (k.id)}
+							<tr>
+								<td class="mono">{k.cve.id}{k.cve.kev ? ' · KEV' : ''}</td>
+								<td>{k.komponen.nama}{k.komponen.versi ? ` ${k.komponen.versi}` : ''}</td>
+								<td>{k.cve.severitas ?? '—'}{k.cve.cvss !== null ? ` (${k.cve.cvss})` : ''}</td>
+								<td>{k.status}</td>
+								<td>{k.tingkat} · {k.prioritas}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+				{#if kerentanan.meta.total > kerentanan.items.length}
+					<p class="catatan">Ditampilkan {kerentanan.items.length} dari {kerentanan.meta.total} kecocokan dengan prioritas tertinggi.</p>
+				{/if}
+			</section>
+		{/if}
 
 		<!-- ================= PENGESAHAN ================= -->
 		<section class="lembar" id="pengesahan">

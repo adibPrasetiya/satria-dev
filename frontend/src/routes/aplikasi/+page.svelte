@@ -43,6 +43,7 @@
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import History from '@lucide/svelte/icons/history';
 	import ClipboardList from '@lucide/svelte/icons/clipboard-list';
+	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Archive from '@lucide/svelte/icons/archive';
 	import ArchiveRestore from '@lucide/svelte/icons/archive-restore';
@@ -578,6 +579,9 @@
 									<DropdownMenu.Content align="end" class="w-52">
 										<DropdownMenu.Item onSelect={() => bukaRiwayat(r.id)}>
 											<History /> Riwayat pengujian
+										</DropdownMenu.Item>
+										<DropdownMenu.Item onSelect={() => goto(`/aplikasi/${r.id}/komponen`)}>
+											<ShieldAlert /> Komponen & CVE
 										</DropdownMenu.Item>
 										{#if !arsip && auth.bisaMenguji}
 											<DropdownMenu.Item onSelect={() => goto(`/aplikasi/${r.id}/persiapan`)}>
