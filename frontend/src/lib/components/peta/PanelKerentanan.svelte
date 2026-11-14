@@ -16,7 +16,7 @@
 		try {
 			const h = await api.cariKerentanan({ limit: 10, sort: 'prioritas' });
 			ringkasan = h.meta.ringkasan;
-			teratas = h.items.slice(0, 4);
+			teratas = h.items.slice(0, MAKS_DAFTAR);
 			galat = false;
 		} catch {
 			galat = true;
@@ -30,7 +30,10 @@
 	});
 
 	const aktif = $derived(ringkasan ? ringkasan.terdampak + ringkasan.kemungkinan : 0);
-	const WARNA_TINGKAT = { segera: '#e5484d', tinggi: '#ff7b6b', sedang: '#f5a524', rendah: '#8b9a8f' } as const;
+	// Daftar ringkas agar panel tak memanjang melewati kolom kanan peta; sisanya lewat "… dan N lainnya".
+	const MAKS_DAFTAR = 3;
+	const angka = (n: number | null | undefined) => (n ?? 0).toLocaleString('id-ID');
+	const WARNA_TINGKAT ={ segera: '#e5484d', tinggi: '#ff7b6b', sedang: '#f5a524', rendah: '#8b9a8f' } as const;
 </script>
 
 {#if ringkas}
@@ -58,9 +61,9 @@
 		{:else}
 			<div class="grid grid-cols-3 gap-2">
 				{#each [{ l: 'KEV aktif', n: ringkasan.kev, w: '#e5484d' }, { l: 'Terdampak', n: ringkasan.terdampak, w: '#ff7b6b' }, { l: 'Aplikasi', n: ringkasan.aplikasi, w: '#f5a524' }] as s (s.l)}
-					<div class="rounded-md border border-white/8 bg-white/[0.03] px-2.5 py-1.5">
-						<p class="text-[10px] tracking-wider uppercase" style="color:{s.w}">{s.l}</p>
-						<p class="text-xl leading-tight font-semibold tabular-nums">{s.n}</p>
+					<div class="min-w-0 rounded-md border border-white/8 bg-white/[0.03] px-2.5 py-1.5">
+						<p class="truncate text-[10px] tracking-wider uppercase" style="color:{s.w}">{s.l}</p>
+						<p class="truncate text-xl leading-tight font-semibold tabular-nums" title={angka(s.n)}>{angka(s.n)}</p>
 					</div>
 				{/each}
 			</div>
@@ -68,27 +71,31 @@
 			{#if teratas.length}
 				<ul class="mt-3 grid gap-1.5">
 					{#each teratas as k (k.id)}
-						<li>
+						{@const komponen = `${k.komponen.nama}${k.komponen.versi ? ` ${k.komponen.versi}` : ''}`}
+						<li class="min-w-0">
 							<a
 								href="/aplikasi/{k.aplikasi.id}/komponen"
-								class="flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-white/[0.06]"
-								title={k.cve.ringkasan ?? ''}
+								class="flex min-w-0 items-start gap-2 rounded-md px-1.5 py-1 hover:bg-white/[0.06]"
+								title="{k.cve.id} — {komponen} · {k.aplikasi.nama}{k.cve.ringkasan ? `\n\n${k.cve.ringkasan}` : ''}"
 							>
 								<span class="mt-1.5 size-2 shrink-0 rounded-full" style="background:{WARNA_TINGKAT[k.tingkat]}"></span>
 								<span class="min-w-0 flex-1">
-									<span class="flex items-center gap-1.5 font-mono text-[12.5px] font-semibold">
-										{k.cve.id}
-										{#if k.cve.kev}<Flame class="size-3 text-[#e5484d]" />{/if}
+									<span class="flex min-w-0 items-center gap-1.5 font-mono text-[12.5px] font-semibold">
+										<span class="truncate">{k.cve.id}</span>
+										{#if k.cve.kev}<Flame class="size-3 shrink-0 text-[#e5484d]" />{/if}
 									</span>
-									<span class="block truncate text-[11.5px] text-white/55">
-										{k.komponen.nama}{k.komponen.versi ? ` ${k.komponen.versi}` : ''} · {k.aplikasi.nama}
-									</span>
+									<span class="block truncate text-[11.5px] text-white/55">{komponen} · {k.aplikasi.nama}</span>
 								</span>
-								<span class="mt-0.5 text-[11px] text-white/45 tabular-nums">{k.prioritas}</span>
+								<span class="mt-0.5 shrink-0 text-[11px] text-white/45 tabular-nums">{k.prioritas}</span>
 							</a>
 						</li>
 					{/each}
 				</ul>
+				{#if aktif > teratas.length}
+					<a href="/kerentanan" class="mt-1 block truncate px-1.5 text-[11.5px] text-white/50 hover:text-white/80">
+						… dan {angka(aktif - teratas.length)} kecocokan lainnya
+					</a>
+				{/if}
 			{:else}
 				<p class="mt-3 text-[12.5px] text-white/50">
 					Belum ada CVE yang cocok dengan komponen aset. Isi teknologi beserta versinya atau jalankan recon.
